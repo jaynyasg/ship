@@ -82,12 +82,13 @@ The goal isn't to check boxes. It's to capture what your team learned so you can
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) 20 or newer
-- [pnpm](https://pnpm.io/) (`npm install -g pnpm`)
-- [Docker](https://www.docker.com/) (for the database)
+- [pnpm](https://pnpm.io/) 10.27.0 (`npm install -g pnpm@10.27.0`)
+- PostgreSQL 16 or newer with `psql` and `createdb` on your `PATH`
+- Optional: [Docker](https://www.docker.com/) for the full Docker Compose stack
 
 ### Setup
 
-```bash
+```powershell
 # 1. Clone the repository
 git clone https://github.com/US-Department-of-the-Treasury/ship.git
 cd ship
@@ -95,26 +96,21 @@ cd ship
 # 2. Install dependencies
 pnpm install
 
-# 3. Configure environment
-cp api/.env.example api/.env.local
-cp web/.env.example web/.env
-
-# 4. Start the database
-docker-compose up -d
-
-# 5. Create sample data
-pnpm db:seed
-
-# 6. Run database migrations
-pnpm db:migrate
-
-# 7. Start the application
+# 3. Make sure local PostgreSQL is running
+# pnpm dev creates api/.env.local, creates the local database if needed,
+# runs migrations, seeds fresh databases, builds shared types, and starts both servers.
 pnpm dev
+```
+
+For a Docker-only local stack instead, run:
+
+```powershell
+pnpm docker:up
 ```
 
 ### Open the App
 
-Once it's running, open your browser to:
+Once it's running, open the Web URL printed by `pnpm dev`. The default is:
 
 **http://localhost:5173**
 
@@ -126,21 +122,26 @@ Log in with the demo account:
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| Web app | http://localhost:5173 | The Ship interface |
-| API server | http://localhost:3000 | Backend services |
-| Swagger UI | http://localhost:3000/api/docs | Interactive API documentation |
-| OpenAPI spec | http://localhost:3000/api/openapi.json | OpenAPI 3.0 specification |
-| PostgreSQL | localhost:5432 | Database (via Docker) |
+| Web app | http://localhost:5173 by default | The Ship interface |
+| API server | http://localhost:3000 by default | Backend services |
+| Swagger UI | http://localhost:3000/api/docs by default | Interactive API documentation |
+| OpenAPI spec | http://localhost:3000/api/openapi.json by default | OpenAPI 3.0 specification |
+| PostgreSQL | local PostgreSQL database | Created from the repository folder name on first `pnpm dev` run |
+
+If those ports are busy, `pnpm dev` automatically chooses the next available ports and writes them to `.ports` while the dev servers are running.
 
 ### Common Commands
 
-```bash
-pnpm dev          # Start everything
-pnpm dev:web      # Start just the web app
-pnpm dev:api      # Start just the API
-pnpm db:seed      # Reset database with sample data
-pnpm db:migrate   # Run database migrations
-pnpm test         # Run tests
+```powershell
+pnpm dev           # Cross-platform first-run setup plus API + web dev servers
+pnpm dev:sh        # Legacy bash dev wrapper
+pnpm dev:web       # Start just the web app
+pnpm dev:api       # Start just the API
+pnpm build:shared  # Build shared types when running package servers manually
+pnpm db:migrate    # Run database migrations
+pnpm db:seed       # Reset database with sample data
+pnpm test          # Run API unit tests
+pnpm test:e2e      # Run Playwright E2E tests
 ```
 
 ---
@@ -201,18 +202,21 @@ ship/
 
 ## Testing
 
-```bash
-# Run all E2E tests
+```powershell
+# Run API unit tests
 pnpm test
 
-# Run tests with UI
-pnpm test:ui
+# Run type checks across all workspaces
+pnpm type-check
 
-# Run specific test file
-pnpm test e2e/documents.spec.ts
+# Run Playwright E2E tests
+pnpm test:e2e
+
+# Run Playwright with UI
+pnpm test:e2e:ui
 ```
 
-Ship uses Playwright for end-to-end testing with 73+ tests covering all major functionality.
+Ship uses Vitest for API unit tests and Playwright for end-to-end testing.
 
 ---
 

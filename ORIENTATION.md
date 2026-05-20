@@ -28,16 +28,16 @@ origin    https://github.com/jaynyasg/ship.git
 upstream  https://github.com/US-Department-of-the-Treasury/ship.git
 ```
 
-#### Setup steps that were NOT in the README
+#### Setup issues found during orientation
 
-The README's `Getting Started` section lists 7 setup steps. These additional steps were required on Windows:
+The original README's `Getting Started` section listed 7 setup steps. These additional steps were required on Windows during the baseline orientation. Phase 12 updates the README to match the current cross-platform workflow.
 
-1. **`pnpm@10.27.0` must be installed explicitly** — the README says `npm install -g pnpm` but the `packageManager` field in `package.json` pins to `10.27.0` and Corepack will fail with mismatched versions.
+1. **`pnpm@10.27.0` must be installed explicitly.** **Resolved in Phase 12:** the README now documents `npm install -g pnpm@10.27.0` to match the `packageManager` field.
 2. **`pnpm dev` did not work on Windows.** It ran `./scripts/dev.sh`, a bash-only script. **Resolved in Phase 11:** root `pnpm dev` now runs `node scripts/dev.mjs`; the original bash wrapper remains available as `pnpm dev:sh`.
-3. **`api/.env.local` port must be 5433, not 5432.** The README's setup tells you to `cp api/.env.example api/.env.local`, but the example file uses port 5432. The actual `docker-compose.local.yml` maps host port 5433 → container port 5432 (to avoid conflict with locally-installed Postgres). The env file must be edited from 5432 to 5433 for the "Postgres-in-Docker + API-on-host" workflow.
-4. **`pnpm build:shared` must be run before `pnpm dev:web`.** The `web/` workspace imports `@ship/shared`, whose `package.json` `main` field points to `dist/index.js`. Without a one-time build, Vite fails with: *"Failed to resolve entry for package '@ship/shared'"*. The bash `dev.sh` handles this automatically (line 53: `pnpm build:shared`) — Windows users running `pnpm dev:*` directly skip that step.
-5. **README's `pnpm test` description is misleading.** The README implies `pnpm test` runs Playwright. Actually `pnpm test` runs Vitest in the `api/` workspace (451 unit tests, 42.87s runtime). Playwright E2E tests are `pnpm test:e2e`.
-6. **Migration order in the README is unusual.** The README lists `pnpm db:seed` before `pnpm db:migrate`. Conventional order is migrate first (creates schema), then seed (populates data). Running the README's order against an unseeded database appears to work because the migration runs internally before seed.
+3. **`api/.env.local` port guidance was Docker-specific and confusing.** The README told users to copy `api/.env.example`, whose port did not match Docker Compose's host port. **Resolved in Phase 12:** host-side dev is documented as local PostgreSQL first, with Docker Compose as a separate full-stack option.
+4. **`pnpm build:shared` must be run before direct package dev servers.** The `web/` workspace imports `@ship/shared`, whose `package.json` `main` field points to `dist/index.js`. Without a one-time build, Vite fails with: *"Failed to resolve entry for package '@ship/shared'"*. **Resolved in Phase 11/12:** root `pnpm dev` builds shared types automatically, and README documents `pnpm build:shared` for manual package-level dev.
+5. **README's `pnpm test` description was misleading.** The README implied `pnpm test` runs Playwright. Actually `pnpm test` runs Vitest in the `api/` workspace. **Resolved in Phase 12:** README now separates `pnpm test`, `pnpm type-check`, `pnpm test:e2e`, and `pnpm test:e2e:ui`.
+6. **Migration order in the README was unusual.** The README listed `pnpm db:seed` before `pnpm db:migrate`. **Resolved in Phase 12:** README now relies on `pnpm dev` first-run setup and documents manual `db:migrate` before `db:seed`.
 
 #### `docs/` folder contents
 
@@ -69,7 +69,7 @@ The `docs/` folder is substantial (20+ files plus 4 subfolders). Key documents:
 - `api/src/` — server-side type safety on API responses
 - `web/src/` — client-side type safety on API consumption
 
-The package builds to `shared/dist/` and `web/`/`api/` consume the built artifact (not source). This is why `pnpm build:shared` is required before `pnpm dev:web` (see setup step 4 above).
+The package builds to `shared/dist/` and `web/`/`api/` consume the built artifact (not source). Root `pnpm dev`, `pnpm build:api`, and `pnpm build:web` build `shared/` first; developers running `pnpm dev:web` directly may still need a one-time `pnpm build:shared`.
 
 #### web ↔ api ↔ shared package relationships (Mermaid)
 
@@ -367,7 +367,8 @@ From `tsconfig.json`:
 #### Type sharing pattern
 
 `shared/` workspace exports TypeScript types built to `shared/dist/`. Both `web/` and `api/` consume the BUILT artifact (not source). This means:
-- `pnpm build:shared` must run before either `web/` or `api/` dev can start
+- root `pnpm dev`, `pnpm build:api`, and `pnpm build:web` run `pnpm build:shared` first
+- direct package-level dev commands may still need a one-time `pnpm build:shared`
 - Type changes in `shared/` require a rebuild (or running `pnpm dev:shared` in watch mode)
 - The build artifact includes `.d.ts` declarations for TypeScript and `.js` for runtime
 
@@ -421,7 +422,7 @@ This is a much larger unit test suite than the PDF described. The PDF mentions "
 
 **`pnpm test:e2e` (Playwright):**
 - Baseline attempt captured in `eval/results/e2e-test-baseline.txt`.
-- On Windows, the run was blocked before browser execution by `api/package.json` using POSIX `cp` in the `build` script. This is recorded as setup finding #20 below.
+- On Windows, the baseline run was blocked before browser execution by `api/package.json` using POSIX `cp` in the `build` script. **Resolved in Phase 10:** `pnpm build:api` now runs a Node build script.
 - Category 5 remediation therefore focused on the reproducible API unit suite and on eliminating silently passing empty Playwright tests.
 
 ---
@@ -449,7 +450,7 @@ From `docker-compose.local.yml`:
 
 Postgres `healthcheck` uses `pg_isready` (5s interval, 10 retries). The `api` service depends on `postgres` becoming healthy before starting.
 
-> **Note for Windows developers:** running `pnpm docker:up` starts ALL three services in Docker. For host-side dev (running `pnpm dev:api` and `pnpm dev:web` directly on Windows), start only the postgres service: `docker compose -f docker-compose.local.yml up postgres`. This is the workflow used during U1 setup.
+> **Note for Windows developers:** root `pnpm dev` now expects local PostgreSQL and handles env/database creation automatically. Running `pnpm docker:up` starts all three services in Docker; starting only the Docker Postgres service remains possible, but host-side env files must point at the Compose host port (`5433`).
 
 #### Terraform — cloud resources expected
 
@@ -501,10 +502,10 @@ The README states: "Manual deploys initially (scripts, not pipeline)" and the re
    - **Cost:** New contributors burn hours understanding that "sprint" usually means "week" except when it doesn't. Bug-prone surface during refactors.
    - **Where to focus improvement:** Rename via a phased migration — alias the old names, introduce new names, update one usage at a time. **Out of scope for the ShipShape audit** but documented here as a real maintenance burden.
 
-2. **README setup inaccuracies (especially for non-macOS developers)** — see Section 1.1 above. `pnpm dev` is bash-only, env file ports don't match docker-compose, `shared/` build step is invisible to the user, migration order is reversed.
+2. **README setup inaccuracies (especially for non-macOS developers)** — see Section 1.1 above. Baseline issues included bash-only `pnpm dev`, Docker-specific env port confusion, an invisible `shared/` build requirement, and seed-before-migrate instructions.
    - **Evidence:** All four issues blocked U1 setup on Windows. Each took 10-30 minutes to diagnose.
-   - **Cost:** Bounce rate for new contributors trying to run Ship locally. Mac developers don't see any of these issues.
-   - **Where to focus improvement:** README hardening — explicit Windows/Linux/macOS instructions, fix the port mismatch in `api/.env.example`, document the `pnpm build:shared` requirement, fix the seed/migrate order.
+   - **Cost:** Bounce rate for new contributors trying to run Ship locally. Mac developers were less likely to see these issues.
+   - **Status:** **Resolved across Phases 10-12.** Build/dev scripts are now cross-platform, and README now documents local PostgreSQL-first setup, `pnpm dev` first-run behavior, Docker Compose as an optional full-stack path, and correct test command meanings.
 
 3. **Schema in transition — explicit columns vs. JSONB properties is half-done** — `docs/unified-document-model.md` notes that the documented "pure JSONB" architecture is the target, but the current implementation still uses explicit columns. This creates two truths in the codebase: docs describe one model, code uses another.
    - **Evidence:** `docs/unified-document-model.md` line 503-509 explicitly calls this out: *"The current database schema uses explicit columns (state, priority, assignee_id, etc.) instead of a properties JSONB column. This works but requires schema migrations for new property types."*
@@ -556,10 +557,10 @@ If Ship had 10x more workspaces, documents, and concurrent WebSocket connections
 | # | Finding | Severity | Impact |
 |---|---|---|---|
 | 1 | `pnpm dev` is bash-only on Windows | Medium | **Resolved in Phase 11:** root `pnpm dev` now uses `scripts/dev.mjs`, a Node wrapper that preserves database setup, port detection, `.ports`, and parallel server startup across Windows/macOS/Linux. |
-| 2 | `api/.env.example` port 5432 mismatches `docker-compose.local.yml` mapping (5433 on host) | Medium | Migrations fail with `ECONNREFUSED` until env file edited |
-| 3 | `pnpm build:shared` is required before `pnpm dev:web`; not documented in README | Medium | Vite fails with cryptic "Failed to resolve entry for package '@ship/shared'" |
-| 4 | README setup order is `seed → migrate`; conventional order is `migrate → seed` | Low | Confusing for new developers but works in practice |
-| 5 | README says `pnpm test` runs Playwright (it runs Vitest in `api/`; Playwright is `pnpm test:e2e`) | Low | Misleading documentation |
+| 2 | `api/.env.example` port 5432 mismatches `docker-compose.local.yml` mapping (5433 on host) | Medium | **Resolved in Phase 12:** README no longer tells host-side developers to copy the Docker-mismatched env file as the primary path; `pnpm dev` creates a local PostgreSQL `DATABASE_URL`, while Docker Compose remains a separate full-stack option. |
+| 3 | `pnpm build:shared` is required before `pnpm dev:web`; not documented in README | Medium | **Resolved in Phase 12:** README documents that root `pnpm dev` handles `build:shared` and that manual package-level dev may need `pnpm build:shared`. |
+| 4 | README setup order is `seed -> migrate`; conventional order is `migrate -> seed` | Low | **Resolved in Phase 12:** README now relies on `pnpm dev` first-run setup and lists `db:migrate` before `db:seed` in manual commands. |
+| 5 | README says `pnpm test` runs Playwright (it runs Vitest in `api/`; Playwright is `pnpm test:e2e`) | Low | **Resolved in Phase 12:** README now separates API unit tests, type-checking, and Playwright E2E commands. |
 | 6 | `tsconfig.json` already has aggressive strict mode enabled | N/A (informational) | Invalidates U2's strict-mode-explosion contingency |
 | 7 | `@axe-core/playwright`, `vitest`, `supertest`, `testcontainers` already in devDependencies | N/A (informational) | U9 and U10 don't need to add these dependencies |
 | 8 | `GET /health` already exists in `api/src/app.ts` line 165 | N/A (informational) | U7's health route work is verification-only |
@@ -573,7 +574,7 @@ If Ship had 10x more workspaces, documents, and concurrent WebSocket connections
 | 16 | **74 known CVEs in dependency tree** — 2 Critical, 30 High, 38 Moderate, 4 Low. | High (informational) | Substantial supply-chain CVE exposure. Goes into THREAT_MODEL.md §6. Out of scope to fix during the audit, but documented as material risk. See `eval/results/dependency-summary-baseline.md`. |
 | 17 | **TypeScript itself was a major version behind** (5.9.3 → 6.0.3 available). **RESOLVED 2026-05-20:** Upgraded to TypeScript 6.0.3. Two tsconfig fixes were required: (1) removed deprecated `"baseUrl": "."` from `api/tsconfig.json` and `web/tsconfig.json` (TS5101); (2) added `"types": ["node", "vite/client"]` to `web/tsconfig.json` — TS 6.0 no longer ambient-imports `@types/*` packages without explicit declaration. All 3 workspaces pass `pnpm type-check` clean. | ~~Medium~~ → **Resolved** | Supply chain freshness signal. Upgrade turned out to be config-level only — zero source changes needed. |
 | 18 | **6 empty Playwright tests across 3 files silently pass.** Caught by Ship's own pre-commit hook (`scripts/check-empty-tests.sh`) — 2 in `e2e/autosave-race-conditions.spec.ts`, 2 in `e2e/critical-blockers.spec.ts`, 2 in `e2e/session-timeout.spec.ts`. Tests use `test(...)` (not `test.fixme`/`skip`/`todo`) but bodies contain no `expect(` or `page.` calls, so they pass without verifying anything. | High (Category 5 finding) | Major test quality issue. Tests exist in the suite but provide no actual verification — false confidence. The pre-commit hook is correctly flagging them; the tests must have been merged when the hook either wasn't yet in place or was bypassed. **Perfect target for U15 to fix:** convert to `test.fixme()` for stub tests (showing as deliberate placeholders) OR implement real assertions. Documented here so the audit captures the baseline state; fix is deferred to U15. |
-| 19 | **`web/` production build script uses bash-only env-var syntax.** `web/package.json` has `"build": "tsc && VITE_API_URL= vite build"` — the `VITE_API_URL=` inline assignment is POSIX-shell syntax; PowerShell fails with `'VITE_API_URL' is not recognized as an internal or external command`. | Medium | Blocks Windows developers from running `pnpm build:web`. Workaround: `$env:VITE_API_URL = ""; pnpm --filter @ship/web exec tsc; pnpm --filter @ship/web exec vite build`. Could be fixed by adopting `cross-env` package or by detecting the env-var differently in the script (out of scope for the audit but a real cross-platform DX gap). |
+| 19 | **`web/` production build script uses bash-only env-var syntax.** Baseline `web/package.json` had `"build": "tsc && VITE_API_URL= vite build"` — the `VITE_API_URL=` inline assignment is POSIX-shell syntax; PowerShell fails with `'VITE_API_URL' is not recognized as an internal or external command`. | Medium | **Resolved before Phase 12 and documented here:** `web/package.json` now runs `node scripts/build.mjs`, which invokes TypeScript and Vite through Node and sets `VITE_API_URL` cross-platform. |
 | 20 | **`api/` build script uses bash-only `cp` command.** `api/package.json` has `"build": "tsc && cp src/db/schema.sql dist/db/schema.sql && cp -r src/db/migrations dist/db/migrations"` — `cp` is a POSIX command that doesn't exist in Windows cmd.exe (where pnpm runs scripts by default). When invoked indirectly (e.g., via Playwright's `globalSetup` which calls `pnpm build:api`), the failure cascades and blocks the E2E test suite from running. | Medium | **Resolved in Phase 10:** `api/package.json` now runs `node scripts/build.mjs`, which invokes TypeScript and copies DB assets using Node filesystem APIs. Baseline workarounds were: (a) set `pnpm config set script-shell pwsh.exe`; (b) run the build steps manually; (c) adopt cross-platform file commands. |
 
 ---

@@ -60,6 +60,10 @@ The API build no longer depends on POSIX `cp`. `pnpm build:api`, which Playwrigh
 
 Root `pnpm dev` no longer depends on bash. It now runs a Node wrapper that preserves first-run database setup, `build:shared`, dynamic port selection, `.ports`, and parallel API/web startup on Windows, macOS, and Linux. The legacy shell wrapper remains available as `pnpm dev:sh`.
 
+## Phase 12 Setup Documentation Hardening
+
+The README and orientation notes now match the cross-platform setup path: local PostgreSQL-first host dev, `pnpm dev` first-run automation, optional full-stack Docker Compose, correct migrate/seed ordering, explicit pnpm version, and correct unit-vs-E2E test commands.
+
 ## Files To Read
 
 - `AUDIT.md` - full audit narrative with baseline, severity, and after status.
@@ -74,9 +78,11 @@ Root `pnpm dev` no longer depends on bash. It now runs a Node wrapper that prese
 - `docs/brainstorms/2026-05-20-phase-09-dependency-audit-gate.md` - Phase 09 CI audit gate evidence.
 - `docs/brainstorms/2026-05-20-phase-10-windows-e2e-build-unblock.md` - Phase 10 Windows E2E build unblock evidence.
 - `docs/brainstorms/2026-05-20-phase-11-cross-platform-dev-wrapper.md` - Phase 11 cross-platform `pnpm dev` evidence.
+- `docs/brainstorms/2026-05-20-phase-12-setup-docs-hardening.md` - Phase 12 setup documentation hardening evidence.
 - `eval/results/documents-pagination-contract.md` - concise API contract evidence for page-style `/api/documents` pagination.
 - `eval/results/e2e-windows-build-unblock.md` - verification note for the cross-platform API build.
 - `eval/results/cross-platform-dev-wrapper.md` - verification note for the Node dev wrapper.
+- `eval/results/setup-docs-hardening.md` - verification note for README/orientation setup doc alignment.
 
 ## Verification Commands
 
