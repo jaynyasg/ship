@@ -109,6 +109,33 @@ export const IssueResponseSchema = z.object({
 
 registry.register('Issue', IssueResponseSchema);
 
+export const IssueListPaginationSchema = z.object({
+  limit: z.number().int().min(1).max(500).openapi({
+    description: 'Maximum number of issues requested',
+  }),
+  offset: z.number().int().min(0).openapi({
+    description: 'Number of matching issues skipped',
+  }),
+  returned: z.number().int().min(0).openapi({
+    description: 'Number of issues returned in this page',
+  }),
+  has_more: z.boolean().openapi({
+    description: 'Whether more matching issues are available after this page',
+  }),
+  total: z.number().int().min(0).optional().openapi({
+    description: 'Total matching issues when include_total=true',
+  }),
+}).openapi('IssueListPagination');
+
+registry.register('IssueListPagination', IssueListPaginationSchema);
+
+export const PaginatedIssueListSchema = z.object({
+  items: z.array(IssueResponseSchema),
+  pagination: IssueListPaginationSchema,
+}).openapi('PaginatedIssueList');
+
+registry.register('PaginatedIssueList', PaginatedIssueListSchema);
+
 // ============== Create Issue ==============
 
 export const CreateIssueSchema = z.object({
@@ -235,7 +262,7 @@ registry.registerPath({
   path: '/issues',
   tags: ['Issues'],
   summary: 'List issues',
-  description: 'List issues with optional filtering by state, priority, assignee, program, sprint, and more.',
+  description: 'List issues with optional filtering by state, priority, assignee, program, sprint, and more. Supplying limit enables paginated response metadata.',
   request: {
     query: z.object({
       state: z.string().optional().openapi({
@@ -252,14 +279,23 @@ registry.registerPath({
       parent_filter: z.enum(['top_level', 'has_children', 'is_sub_issue']).optional().openapi({
         description: 'Filter by parent/child relationship',
       }),
+      limit: z.coerce.number().int().min(1).max(500).optional().openapi({
+        description: 'Maximum number of issues to return. Enables the paginated response shape.',
+      }),
+      offset: z.coerce.number().int().min(0).optional().openapi({
+        description: 'Number of matching issues to skip. Requires limit.',
+      }),
+      include_total: z.enum(['true', 'false']).optional().openapi({
+        description: 'Include total matching count in pagination metadata. Requires limit.',
+      }),
     }),
   },
   responses: {
     200: {
-      description: 'List of issues',
+      description: 'List of issues. Returns an array by default, or a paginated object when limit is supplied.',
       content: {
         'application/json': {
-          schema: z.array(IssueResponseSchema),
+          schema: z.union([z.array(IssueResponseSchema), PaginatedIssueListSchema]),
         },
       },
     },

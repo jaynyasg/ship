@@ -15,6 +15,45 @@ import { broadcastToUser } from '../collaboration/index.js';
 
 type RouterType = ReturnType<typeof Router>;
 const router: RouterType = Router();
+const MAX_ISSUE_LIST_LIMIT = 500;
+
+type IssueListParam = string | boolean | string[] | number | null;
+
+function getQueryString(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  if (rawValue === undefined) return undefined;
+  return String(rawValue);
+}
+
+function parseIntegerQuery(
+  value: unknown,
+  fieldName: string,
+  options: { min: number; max?: number }
+): { value?: number; error?: string } {
+  const rawValue = getQueryString(value);
+  if (rawValue === undefined) return {};
+
+  if (rawValue.trim() === '') {
+    return { error: `${fieldName} must be an integer` };
+  }
+
+  const parsed = Number(rawValue);
+  if (!Number.isInteger(parsed) || parsed < options.min || (options.max !== undefined && parsed > options.max)) {
+    const range = options.max === undefined ? `at least ${options.min}` : `between ${options.min} and ${options.max}`;
+    return { error: `${fieldName} must be an integer ${range}` };
+  }
+
+  return { value: parsed };
+}
+
+function parseBooleanQuery(value: unknown, fieldName: string): { value?: boolean; error?: string } {
+  const rawValue = getQueryString(value);
+  if (rawValue === undefined) return {};
+  if (rawValue === 'true') return { value: true };
+  if (rawValue === 'false') return { value: false };
+  return { error: `${fieldName} must be true or false` };
+}
 
 // BelongsTo entry schema for associations
 const belongsToEntrySchema = z.object({
@@ -133,12 +172,127 @@ function extractIssueFromRow(row: IssueRow) {
 // List issues with filters
 router.get('/', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { state, priority, assignee_id, program_id, sprint_id, source, parent_filter } = req.query;
+    const state = getQueryString(req.query.state);
+    const priority = getQueryString(req.query.priority);
+    const assigneeId = getQueryString(req.query.assignee_id);
+    const programId = getQueryString(req.query.program_id);
+    const sprintId = getQueryString(req.query.sprint_id);
+    const source = getQueryString(req.query.source);
+    const parentFilter = getQueryString(req.query.parent_filter);
+    const limitParse = parseIntegerQuery(req.query.limit, 'limit', { min: 1, max: MAX_ISSUE_LIST_LIMIT });
+    const offsetParse = parseIntegerQuery(req.query.offset, 'offset', { min: 0 });
+    const includeTotalParse = parseBooleanQuery(req.query.include_total, 'include_total');
+
+    if (limitParse.error || offsetParse.error || includeTotalParse.error) {
+      res.status(400).json({
+        error: limitParse.error || offsetParse.error || includeTotalParse.error,
+      });
+      return;
+    }
+
+    const limit = limitParse.value;
+    const offset = offsetParse.value ?? 0;
+    const includeTotal = includeTotalParse.value ?? false;
+
+    if (limit === undefined && (req.query.offset !== undefined || req.query.include_total !== undefined)) {
+      res.status(400).json({
+        error: 'limit is required when offset or include_total is provided',
+      });
+      return;
+    }
+
     const userId = req.userId!;
     const workspaceId = req.workspaceId!;
 
     // Get visibility context for filtering
     const { isAdmin } = await getVisibilityContext(userId, workspaceId);
+
+    const whereClauses = [
+      'd.workspace_id = $1',
+      "d.document_type = 'issue'",
+      VISIBILITY_FILTER_SQL('d', '$2', '$3'),
+      'd.archived_at IS NULL',
+      'd.deleted_at IS NULL',
+    ];
+    const params: IssueListParam[] = [workspaceId, userId, isAdmin];
+
+    // Filter by source if specified (internal or external)
+    if (source) {
+      whereClauses.push(`d.properties->>'source' = $${params.length + 1}`);
+      params.push(source);
+    }
+    // No default filtering - show all issues regardless of source
+
+    if (state) {
+      const states = state.split(',');
+      whereClauses.push(`d.properties->>'state' = ANY($${params.length + 1})`);
+      params.push(states);
+    }
+
+    if (priority) {
+      whereClauses.push(`d.properties->>'priority' = $${params.length + 1}`);
+      params.push(priority);
+    }
+
+    if (assigneeId) {
+      if (assigneeId === 'null' || assigneeId === 'unassigned') {
+        whereClauses.push(`(d.properties->>'assignee_id' IS NULL OR d.properties->>'assignee_id' = '')`);
+      } else {
+        whereClauses.push(`d.properties->>'assignee_id' = $${params.length + 1}`);
+        params.push(assigneeId);
+      }
+    }
+
+    // Filter by program via junction table
+    if (programId) {
+      whereClauses.push(`EXISTS (
+        SELECT 1 FROM document_associations da
+        WHERE da.document_id = d.id AND da.related_id = $${params.length + 1} AND da.relationship_type = 'program'
+      )`);
+      params.push(programId);
+    }
+
+    // Filter by sprint via junction table
+    if (sprintId) {
+      whereClauses.push(`EXISTS (
+        SELECT 1 FROM document_associations da
+        WHERE da.document_id = d.id AND da.related_id = $${params.length + 1} AND da.relationship_type = 'sprint'
+      )`);
+      params.push(sprintId);
+    }
+
+    // Filter by parent/sub-issue status
+    if (parentFilter) {
+      if (parentFilter === 'top_level') {
+        // Issues that have NO parent (not a sub-issue)
+        whereClauses.push(`NOT EXISTS (
+          SELECT 1 FROM document_associations da
+          WHERE da.document_id = d.id AND da.relationship_type = 'parent'
+        )`);
+      } else if (parentFilter === 'has_children') {
+        // Issues that HAVE at least one child (sub-issue)
+        whereClauses.push(`EXISTS (
+          SELECT 1 FROM document_associations da
+          WHERE da.related_id = d.id AND da.relationship_type = 'parent'
+        )`);
+      } else if (parentFilter === 'is_sub_issue') {
+        // Issues that ARE sub-issues (have a parent)
+        whereClauses.push(`EXISTS (
+          SELECT 1 FROM document_associations da
+          WHERE da.document_id = d.id AND da.relationship_type = 'parent'
+        )`);
+      }
+    }
+
+    const fromWhereSql = `
+      FROM documents d
+      LEFT JOIN users u ON (d.properties->>'assignee_id')::uuid = u.id
+      LEFT JOIN documents person_doc ON person_doc.workspace_id = d.workspace_id
+        AND person_doc.document_type = 'person'
+        AND person_doc.properties->>'user_id' = d.properties->>'assignee_id'
+      WHERE ${whereClauses.join('\n        AND ')}
+    `;
+    const filterParams = [...params];
 
     let query = `
       SELECT d.id, d.title, d.properties, d.ticket_number,
@@ -147,86 +301,8 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
              d.converted_from_id,
              u.name as assignee_name,
              CASE WHEN person_doc.archived_at IS NOT NULL THEN true ELSE false END as assignee_archived
-      FROM documents d
-      LEFT JOIN users u ON (d.properties->>'assignee_id')::uuid = u.id
-      LEFT JOIN documents person_doc ON person_doc.workspace_id = d.workspace_id
-        AND person_doc.document_type = 'person'
-        AND person_doc.properties->>'user_id' = d.properties->>'assignee_id'
-      WHERE d.workspace_id = $1 AND d.document_type = 'issue'
-        AND ${VISIBILITY_FILTER_SQL('d', '$2', '$3')}
+      ${fromWhereSql}
     `;
-    const params: (string | boolean | null)[] = [workspaceId, userId, isAdmin];
-
-    // Exclude archived and deleted issues by default
-    query += ` AND d.archived_at IS NULL AND d.deleted_at IS NULL`;
-
-    // Filter by source if specified (internal or external)
-    if (source) {
-      query += ` AND d.properties->>'source' = $${params.length + 1}`;
-      params.push(source as string);
-    }
-    // No default filtering - show all issues regardless of source
-
-    if (state) {
-      const states = (state as string).split(',');
-      query += ` AND d.properties->>'state' = ANY($${params.length + 1})`;
-      params.push(states as any);
-    }
-
-    if (priority) {
-      query += ` AND d.properties->>'priority' = $${params.length + 1}`;
-      params.push(priority as string);
-    }
-
-    if (assignee_id) {
-      if (assignee_id === 'null' || assignee_id === 'unassigned') {
-        query += ` AND (d.properties->>'assignee_id' IS NULL OR d.properties->>'assignee_id' = '')`;
-      } else {
-        query += ` AND d.properties->>'assignee_id' = $${params.length + 1}`;
-        params.push(assignee_id as string);
-      }
-    }
-
-    // Filter by program via junction table
-    if (program_id) {
-      query += ` AND EXISTS (
-        SELECT 1 FROM document_associations da
-        WHERE da.document_id = d.id AND da.related_id = $${params.length + 1} AND da.relationship_type = 'program'
-      )`;
-      params.push(program_id as string);
-    }
-
-    // Filter by sprint via junction table
-    if (sprint_id) {
-      query += ` AND EXISTS (
-        SELECT 1 FROM document_associations da
-        WHERE da.document_id = d.id AND da.related_id = $${params.length + 1} AND da.relationship_type = 'sprint'
-      )`;
-      params.push(sprint_id as string);
-    }
-
-    // Filter by parent/sub-issue status
-    if (parent_filter) {
-      if (parent_filter === 'top_level') {
-        // Issues that have NO parent (not a sub-issue)
-        query += ` AND NOT EXISTS (
-          SELECT 1 FROM document_associations da
-          WHERE da.document_id = d.id AND da.relationship_type = 'parent'
-        )`;
-      } else if (parent_filter === 'has_children') {
-        // Issues that HAVE at least one child (sub-issue)
-        query += ` AND EXISTS (
-          SELECT 1 FROM document_associations da
-          WHERE da.related_id = d.id AND da.relationship_type = 'parent'
-        )`;
-      } else if (parent_filter === 'is_sub_issue') {
-        // Issues that ARE sub-issues (have a parent)
-        query += ` AND EXISTS (
-          SELECT 1 FROM document_associations da
-          WHERE da.document_id = d.id AND da.relationship_type = 'parent'
-        )`;
-      }
-    }
 
     query += ` ORDER BY
       CASE d.properties->>'priority'
@@ -238,13 +314,20 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
       END,
       d.updated_at DESC`;
 
+    if (limit !== undefined) {
+      query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+      params.push(limit + 1, offset);
+    }
+
     const result = await pool.query(query, params);
+    const rows = limit === undefined ? result.rows : result.rows.slice(0, limit);
+    const hasMore = limit !== undefined && result.rows.length > limit;
 
     // Extract issues and batch-fetch associations to avoid N+1 queries
-    const issueIds = result.rows.map(row => row.id);
+    const issueIds = rows.map(row => row.id);
     const associationsMap = await getBelongsToAssociationsBatch(issueIds);
 
-    const issues = result.rows.map(row => {
+    const issues = rows.map(row => {
       const issue = extractIssueFromRow(row);
       return {
         ...issue,
@@ -252,6 +335,29 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
         belongs_to: associationsMap.get(row.id) || [],
       };
     });
+
+    if (limit !== undefined) {
+      let total: number | undefined;
+      if (includeTotal) {
+        const countResult = await pool.query(
+          `SELECT COUNT(*)::int AS total ${fromWhereSql}`,
+          filterParams
+        );
+        total = countResult.rows[0]?.total;
+      }
+
+      res.json({
+        items: issues,
+        pagination: {
+          limit,
+          offset,
+          returned: issues.length,
+          has_more: hasMore,
+          ...(total !== undefined ? { total } : {}),
+        },
+      });
+      return;
+    }
 
     res.json(issues);
   } catch (err) {

@@ -716,6 +716,60 @@
           "belongs_to"
         ]
       },
+      "IssueListPagination": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "description": "Maximum number of issues requested"
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of matching issues skipped"
+          },
+          "returned": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of issues returned in this page"
+          },
+          "has_more": {
+            "type": "boolean",
+            "description": "Whether more matching issues are available after this page"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Total matching issues when include_total=true"
+          }
+        },
+        "required": [
+          "limit",
+          "offset",
+          "returned",
+          "has_more"
+        ]
+      },
+      "PaginatedIssueList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/IssueListPagination"
+          }
+        },
+        "required": [
+          "items",
+          "pagination"
+        ]
+      },
       "CreateIssue": {
         "type": "object",
         "properties": {
@@ -5805,7 +5859,7 @@
           "Issues"
         ],
         "summary": "List issues",
-        "description": "List issues with optional filtering by state, priority, assignee, program, sprint, and more.",
+        "description": "List issues with optional filtering by state, priority, assignee, program, sprint, and more. Supplying limit enables paginated response metadata.",
         "parameters": [
           {
             "schema": {
@@ -5891,18 +5945,60 @@
             "required": false,
             "name": "parent_filter",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "description": "Maximum number of issues to return. Enables the paginated response shape."
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 0,
+              "description": "Number of matching issues to skip. Requires limit."
+            },
+            "required": false,
+            "name": "offset",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "description": "Include total matching count in pagination metadata. Requires limit."
+            },
+            "required": false,
+            "name": "include_total",
+            "in": "query"
           }
         ],
         "responses": {
           "200": {
-            "description": "List of issues",
+            "description": "List of issues. Returns an array by default, or a paginated object when limit is supplied.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Issue"
-                  }
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Issue"
+                      }
+                    },
+                    {
+                      "$ref": "#/components/schemas/PaginatedIssueList"
+                    }
+                  ]
                 }
               }
             }

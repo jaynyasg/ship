@@ -162,6 +162,51 @@ describe('Issues API', () => {
       expect(hasSprintIssue).toBe(true)
     })
 
+    it('should return paginated issue metadata when limit is supplied', async () => {
+      await pool.query(
+        `INSERT INTO documents (workspace_id, document_type, title, visibility, created_by, properties)
+         VALUES
+           ($1, 'issue', 'Paged External Issue 1', 'workspace', $2, $3),
+           ($1, 'issue', 'Paged External Issue 2', 'workspace', $2, $4),
+           ($1, 'issue', 'Paged External Issue 3', 'workspace', $2, $5)`,
+        [
+          testWorkspaceId,
+          testUserId,
+          JSON.stringify({ state: 'triage', priority: 'urgent', source: 'external' }),
+          JSON.stringify({ state: 'triage', priority: 'high', source: 'external' }),
+          JSON.stringify({ state: 'triage', priority: 'medium', source: 'external' }),
+        ]
+      )
+
+      const res = await request(app)
+        .get('/api/issues?source=external&state=triage&limit=2&include_total=true')
+        .set('Cookie', sessionCookie)
+
+      expect(res.status).toBe(200)
+      expect(res.body.items).toHaveLength(2)
+      expect(res.body.items.map((issue: { title: string }) => issue.title)).toEqual([
+        'Paged External Issue 1',
+        'Paged External Issue 2',
+      ])
+      expect(res.body.items[0]).not.toHaveProperty('content')
+      expect(res.body.pagination).toEqual({
+        limit: 2,
+        offset: 0,
+        returned: 2,
+        has_more: true,
+        total: 3,
+      })
+    })
+
+    it('should reject invalid issue list pagination values', async () => {
+      const res = await request(app)
+        .get('/api/issues?limit=0')
+        .set('Cookie', sessionCookie)
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toContain('limit')
+    })
+
     it('should reject unauthenticated request', async () => {
       const res = await request(app)
         .get('/api/issues')
