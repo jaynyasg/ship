@@ -37,6 +37,8 @@ for f in "$E2E_DIR"/*.spec.ts; do
     /^[[:space:]]*test\(/ && !/test\.fixme/ && !/test\.skip/ && !/test\.todo/ {
       in_test = 1
       has_content = 0
+      match($0, /^[[:space:]]*/)
+      test_indent = substr($0, RSTART, RLENGTH)
     }
     in_test && /expect\(/ {
       has_content = 1
@@ -44,11 +46,15 @@ for f in "$E2E_DIR"/*.spec.ts; do
     in_test && /page\./ {
       has_content = 1
     }
-    in_test && /^\s*}\);/ {
-      if (!has_content) {
-        empty_count++
+    in_test && /^[[:space:]]*}\);/ {
+      match($0, /^[[:space:]]*/)
+      close_indent = substr($0, RSTART, RLENGTH)
+      if (close_indent == test_indent) {
+        if (!has_content) {
+          empty_count++
+        }
+        in_test = 0
       }
-      in_test = 0
     }
     END { print empty_count + 0 }
   ' "$f")
