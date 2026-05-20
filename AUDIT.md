@@ -4,7 +4,7 @@
 > **Auditor:** Jay Godfrey
 > **Phase 1 Gate completed:** 2026-05-19
 > **Target repo:** `US-Department-of-the-Treasury/ship` (forked to `jaynyasg/ship`)
-> **Status:** Phase 2 measurement pass completed 2026-05-20. Baselines and after-measurements are in `eval/results/`; U13 and U17 are closed, while U11, U12, and U14 still need additional implementation to satisfy original targets.
+> **Status:** Phase 2 measurement pass completed 2026-05-20. Baselines and after-measurements are in `eval/results/`; U12, U13, and U17 are closed, while U11 and U14 still need additional implementation to satisfy original targets.
 
 This audit follows the **diagnostic-before-treatment** principle from the ShipShape PDF: every finding is measured first, classified by severity, and addressed by a targeted improvement with reproducible before/after evidence. **No source code changes have been made during this baseline phase** — only additive documentation and evidence artifacts.
 
@@ -482,7 +482,7 @@ If Ship grew 10× (more workspaces, more documents, more concurrent WebSocket co
 | Category | Baseline | PDF target | Improvement target met? |
 |---|---|---|---|
 | 1. Type Safety | 399 grep violations; 93.47% type-coverage | ≥25% violation reduction | **Not met** — after snapshot is 401 conservative violations; type-coverage 93.53% (`type-safety-after.json`, `type-coverage-after.txt`) |
-| 2. Bundle Size | 2,073 KB main chunk | ≥15% total OR ≥20% initial via splitting | **Close, not met** — 19.4% main chunk reduction to 1,671 KB (`bundle-after.json`) |
+| 2. Bundle Size | 2,073 KB main chunk | ≥15% total OR ≥20% initial via splitting | **Met** — route-level lazy loading reduced the entry script to 287 KB (-86.14%) with heavy app/editor/page code deferred (`bundle-after.json`) |
 | 3. API Response Time | documents P97.5 c=25 = 283 ms; issues P97.5 c=25 = 192 ms | ≥20% P95/P97.5 on ≥2 endpoints | **Met** — documents paginated improved 71.02% to 82 ms; issues paginated improved 39.58% to 116 ms (`api-benchmark-after.json`, `api-benchmark-documents-limit50-c25.json`, `api-benchmark-issues-limit50-c25.json`) |
 | 4. DB Query Efficiency | weeks query has 7 correlated subqueries | ≥20% query count OR ≥50% slowest query | **Partially evidenced, not met at endpoint** — migration `038` verified and EXPLAIN captured; weeks c=50 regressed in benchmark (`db-query-after.md`, `api-benchmark-after.json`) |
 | 5. Test Coverage | 451 unit + 73+ E2E; 6 empty/silent-pass tests | 3 new tests OR 3 flaky fixes | **Measured / hook gap closed** — 455/455 API tests pass, 41.27% line coverage, empty-test detector reports 0 (`test-coverage-after.json`, `empty-tests-after.json`) |
