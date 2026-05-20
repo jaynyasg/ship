@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-20  
 **Repo:** `jaynyasg/ship`  
-**Current main commit at Phase 03 readiness pass:** `28a4317 Document Phase 04 timeline planning`
+**Current main commit after Phase 04:** `5636709 Highlight Phase 04 critical path`
 
 This file is the reviewer-facing map for the ShipShape audit work. The detailed report remains `AUDIT.md`; the raw before/after evidence lives in `eval/results/`.
 
@@ -20,12 +20,24 @@ All seven PDF improvement categories have reproducible after-measurements:
 | Runtime errors | `eval/results/error-after.md` | Shared in-house error capture, Express error middleware, unhandled rejection hook, client listeners, and React top-level error boundary |
 | Accessibility | `eval/results/axe-after.json` | 0 axe violations across login, docs, projects, and team pages after contrast/landmark fixes |
 
+## Phase 04 Product Upgrade
+
+After the seven audit categories closed, Ship added a Microsoft Project-inspired planning surface while preserving the unified document model:
+
+| Phase | Result |
+|---|---|
+| 04A Dependency data model | `depends_on` document associations, dependency CRUD, workspace scoping, and cycle rejection |
+| 04B Timeline read model | Project/program timeline endpoint with related weeks, issues, dependency edges, blocked/overdue/at-risk flags, and measured timing evidence |
+| 04C Timeline UI | Lazy-loaded Timeline tab with timeline bars, health badges, dependency summaries, keyboard-openable rows, and baseline controls |
+| 04D Baseline variance | Project/program baseline snapshots and current-vs-baseline variance reporting |
+| 04E Critical path | Compact critical-path computation, API/shared/OpenAPI fields, ordered row badges, and highlighted critical timeline bars |
+
 ## Files To Read
 
 - `AUDIT.md` - full audit narrative with baseline, severity, and after status.
 - `ORIENTATION.md` - codebase orientation and architecture synthesis.
 - `eval/results/phase2-implementation-notes.md` - concise implementation and measurement log.
-- `docs/brainstorms/2026-05-20-phase-04-ms-project-inspired-improvements.md` - Phase 04 plan for Microsoft Project-inspired timeline/dependency improvements.
+- `docs/brainstorms/2026-05-20-phase-04-ms-project-inspired-improvements.md` - Phase 04 implementation evidence for Microsoft Project-inspired timeline/dependency improvements.
 
 ## Verification Commands
 
@@ -39,8 +51,19 @@ git diff --check
 
 Local PostgreSQL must be running for API tests and migrations. Docker was not available in this Windows environment, so the project used the user's local PostgreSQL installation.
 
+These were the core checks used during the Phase 04 completion pass:
+
+```powershell
+pnpm type-check
+pnpm --filter @ship/api test -- src/routes/timeline.test.ts src/routes/dependencies.test.ts
+pnpm --filter @ship/web test -- src/lib/document-tabs.test.ts
+pnpm build:web
+pnpm --filter @ship/api test
+git diff --check
+```
+
 ## Known Follow-Ups
 
 - WebSocket reconnect UI remains a stretch item for runtime resilience.
-- Playwright E2E execution on Windows was blocked at baseline by the API build script's POSIX `cp` usage; this is documented in `ORIENTATION.md` finding #20.
-- Phase 04 is intentionally documented, not implemented yet, so the project can proceed in order after Phase 03.
+- Playwright E2E execution on Windows was blocked at baseline by bash/POSIX script assumptions; this is documented in `ORIENTATION.md` finding #20.
+- Phase 05 candidate work should be selected from the remaining active improvement backlog, with ESLint quality gates and critical CVE remediation as the highest-leverage options.
