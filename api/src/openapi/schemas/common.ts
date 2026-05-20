@@ -60,6 +60,16 @@ export const BelongsToTypeSchema = z.enum(['program', 'project', 'sprint', 'pare
   description: 'Type of document association',
 });
 
+export const AssociationRelationshipTypeSchema = z.enum([
+  'program',
+  'project',
+  'sprint',
+  'parent',
+  'depends_on',
+]).openapi({
+  description: 'Type of document association. Dependency edges use depends_on as the canonical stored direction.',
+});
+
 export const BelongsToEntrySchema = z.object({
   id: UuidSchema.openapi({ description: 'ID of the related document' }),
   type: BelongsToTypeSchema,

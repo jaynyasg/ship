@@ -9,9 +9,12 @@ const router: RouterType = Router();
 // Validation schemas
 const createAssociationSchema = z.object({
   related_id: z.string().uuid(),
-  relationship_type: z.enum(['parent', 'project', 'sprint', 'program']),
+  relationship_type: z.enum(['parent', 'project', 'sprint', 'program', 'depends_on']),
   metadata: z.record(z.unknown()).optional(),
 });
+
+const dependencyDocumentTypes = ['issue', 'project', 'sprint'] as const;
+type DependencyDocumentType = typeof dependencyDocumentTypes[number];
 
 // Check if user can access document
 async function canAccessDocument(
@@ -30,11 +33,54 @@ async function canAccessDocument(
 }
 
 // Valid relationship types
-const validTypes = ['parent', 'project', 'sprint', 'program'] as const;
+const validTypes = ['parent', 'project', 'sprint', 'program', 'depends_on'] as const;
 type RelationshipType = typeof validTypes[number];
 
 function isValidRelationshipType(value: unknown): value is RelationshipType {
   return typeof value === 'string' && validTypes.includes(value as RelationshipType);
+}
+
+function isDependencyDocumentType(value: unknown): value is DependencyDocumentType {
+  return typeof value === 'string' && dependencyDocumentTypes.includes(value as DependencyDocumentType);
+}
+
+async function getAccessibleDocumentType(
+  docId: string,
+  userId: string,
+  workspaceId: string
+): Promise<string | null> {
+  const result = await pool.query(
+    `SELECT document_type FROM documents
+     WHERE id = $1 AND workspace_id = $2
+       AND (visibility = 'workspace' OR created_by = $3 OR
+            (SELECT role FROM workspace_memberships WHERE workspace_id = $2 AND user_id = $3) = 'admin')`,
+    [docId, workspaceId, userId]
+  );
+  return result.rows[0]?.document_type ?? null;
+}
+
+async function wouldCreateDependencyCycle(documentId: string, relatedId: string): Promise<boolean> {
+  const result = await pool.query(
+    `WITH RECURSIVE dependency_chain AS (
+       SELECT document_id, related_id
+       FROM document_associations
+       WHERE document_id = $2
+         AND relationship_type = 'depends_on'
+
+       UNION
+
+       SELECT da.document_id, da.related_id
+       FROM document_associations da
+       JOIN dependency_chain dc ON da.document_id = dc.related_id
+       WHERE da.relationship_type = 'depends_on'
+     )
+     SELECT 1
+     FROM dependency_chain
+     WHERE related_id = $1
+     LIMIT 1`,
+    [documentId, relatedId]
+  );
+  return result.rows.length > 0;
 }
 
 // GET /api/documents/:id/associations - List all associations for a document
@@ -103,7 +149,8 @@ router.post('/:id/associations', authMiddleware, async (req: Request, res: Respo
     const { related_id, relationship_type, metadata } = parseResult.data;
 
     // Check access to source document
-    if (!(await canAccessDocument(id, userId, workspaceId))) {
+    const sourceDocumentType = await getAccessibleDocumentType(id, userId, workspaceId);
+    if (!sourceDocumentType) {
       return res.status(404).json({ error: 'Document not found' });
     }
 
@@ -119,6 +166,27 @@ router.post('/:id/associations', authMiddleware, async (req: Request, res: Respo
     // Prevent self-reference
     if (id === related_id) {
       return res.status(400).json({ error: 'Cannot create self-referencing association' });
+    }
+
+    if (relationship_type === 'depends_on') {
+      const relatedDocumentType = await getAccessibleDocumentType(related_id, userId, workspaceId);
+      if (!relatedDocumentType) {
+        return res.status(400).json({ error: 'Related document not found' });
+      }
+
+      if (!isDependencyDocumentType(sourceDocumentType) || !isDependencyDocumentType(relatedDocumentType)) {
+        return res.status(400).json({
+          error: 'unsupported_dependency_type',
+          message: 'Dependencies are only supported between issues, projects, and weeks',
+        });
+      }
+
+      if (await wouldCreateDependencyCycle(id, related_id)) {
+        return res.status(400).json({
+          error: 'circular_dependency',
+          message: 'Cannot create dependency because it would create a cycle',
+        });
+      }
     }
 
     // Create association (ON CONFLICT handles duplicate check)

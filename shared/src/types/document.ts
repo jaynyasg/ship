@@ -6,6 +6,11 @@ export type DocumentVisibility = 'private' | 'workspace';
 // Association relationship types for belongs_to array
 export type BelongsToType = 'program' | 'project' | 'sprint' | 'parent';
 
+// Full document association relationship vocabulary.
+// Dependency edges are intentionally excluded from BelongsToType.
+export type RelationshipType = BelongsToType | 'depends_on';
+export type DependencyDisplayType = 'depends_on' | 'blocks' | 'blocked_by';
+
 // BelongsTo association entry - unified format for all document relationships
 export interface BelongsTo {
   id: string;
