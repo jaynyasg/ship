@@ -267,6 +267,46 @@ components:
         - document_type
         - created_at
         - updated_at
+    DocumentListPagination:
+      type: object
+      properties:
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 500
+          description: Maximum number of documents requested
+        offset:
+          type: integer
+          minimum: 0
+          description: Number of matching documents skipped
+        returned:
+          type: integer
+          minimum: 0
+          description: Number of documents returned in this page
+        has_more:
+          type: boolean
+          description: Whether more matching documents are available after this page
+        total:
+          type: integer
+          minimum: 0
+          description: Total matching documents when include_total=true
+      required:
+        - limit
+        - offset
+        - returned
+        - has_more
+    PaginatedDocumentList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DocumentListItem"
+        pagination:
+          $ref: "#/components/schemas/DocumentListPagination"
+      required:
+        - items
+        - pagination
     CreateDocument:
       type: object
       properties:
@@ -4147,7 +4187,7 @@ paths:
       tags:
         - Documents
       summary: List documents
-      description: List documents with optional filtering by type and parent.
+      description: List documents with optional filtering by type and parent. Supplying limit enables paginated response metadata.
       parameters:
         - schema:
                       type: string
@@ -4174,15 +4214,42 @@ paths:
                     required: false
                     name: parent_id
                     in: query
+        - schema:
+                      type: integer
+                      minimum: 1
+                      maximum: 500
+                      description: Maximum number of documents to return. Enables the paginated response shape.
+                    required: false
+                    name: limit
+                    in: query
+        - schema:
+                      type: integer
+                      nullable: true
+                      minimum: 0
+                      description: Number of matching documents to skip. Requires limit.
+                    required: false
+                    name: offset
+                    in: query
+        - schema:
+                      type: string
+                      enum:
+                        - true
+                        - false
+                      description: Include total matching count in pagination metadata. Requires limit.
+                    required: false
+                    name: include_total
+                    in: query
       responses:
         200:
-          description: List of documents
+          description: List of documents. Returns an array by default, or a paginated object when limit is supplied.
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/DocumentListItem"
+                anyOf:
+                  - type: array
+                                        items:
+                                          $ref: "#/components/schemas/DocumentListItem"
+                  - $ref: "#/components/schemas/PaginatedDocumentList"
         401:
           description: Unauthorized
           content:

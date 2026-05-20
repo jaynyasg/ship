@@ -203,6 +203,43 @@ describe('Document Visibility', () => {
       expect(res.status).toBe(200);
       expect(res.body).toHaveLength(0);
     });
+
+    it('returns paginated list metadata when limit is supplied', async () => {
+      await pool.query(
+        `INSERT INTO documents (workspace_id, document_type, title, visibility, position, created_by)
+         VALUES
+           ($1, 'wiki', 'Doc 1', 'workspace', 1, $2),
+           ($1, 'wiki', 'Doc 2', 'workspace', 2, $2),
+           ($1, 'wiki', 'Doc 3', 'workspace', 3, $2)`,
+        [testWorkspaceId, user1Id]
+      );
+
+      const res = await request(app)
+        .get('/api/documents?limit=2&include_total=true')
+        .set('Cookie', user1SessionCookie);
+
+      expect(res.status).toBe(200);
+      expect(res.body.items).toHaveLength(2);
+      expect(res.body.items.map((doc: { title: string }) => doc.title)).toEqual(['Doc 1', 'Doc 2']);
+      expect(res.body.items[0]).not.toHaveProperty('content');
+      expect(res.body.items[0]).not.toHaveProperty('yjs_state');
+      expect(res.body.pagination).toEqual({
+        limit: 2,
+        offset: 0,
+        returned: 2,
+        has_more: true,
+        total: 3,
+      });
+    });
+
+    it('rejects invalid document list pagination values', async () => {
+      const res = await request(app)
+        .get('/api/documents?limit=0')
+        .set('Cookie', user1SessionCookie);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('limit');
+    });
   });
 
   describe('Single document access', () => {

@@ -9,6 +9,45 @@ import { loadContentFromYjsState } from '../utils/yjsConverter.js';
 
 type RouterType = ReturnType<typeof Router>;
 const router: RouterType = Router();
+const MAX_DOCUMENT_LIST_LIMIT = 500;
+
+type DocumentListParam = string | boolean | number | null;
+
+function getQueryString(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  if (rawValue === undefined) return undefined;
+  return String(rawValue);
+}
+
+function parseIntegerQuery(
+  value: unknown,
+  fieldName: string,
+  options: { min: number; max?: number }
+): { value?: number; error?: string } {
+  const rawValue = getQueryString(value);
+  if (rawValue === undefined) return {};
+
+  if (rawValue.trim() === '') {
+    return { error: `${fieldName} must be an integer` };
+  }
+
+  const parsed = Number(rawValue);
+  if (!Number.isInteger(parsed) || parsed < options.min || (options.max !== undefined && parsed > options.max)) {
+    const range = options.max === undefined ? `at least ${options.min}` : `between ${options.min} and ${options.max}`;
+    return { error: `${fieldName} must be an integer ${range}` };
+  }
+
+  return { value: parsed };
+}
+
+function parseBooleanQuery(value: unknown, fieldName: string): { value?: boolean; error?: string } {
+  const rawValue = getQueryString(value);
+  if (rawValue === undefined) return {};
+  if (rawValue === 'true') return { value: true };
+  if (rawValue === 'false') return { value: false };
+  return { error: `${fieldName} must be true or false` };
+}
 
 // Check if user can access a document (visibility check)
 async function canAccessDocument(
@@ -93,45 +132,81 @@ const updateDocumentSchema = z.object({
 // List documents
 router.get('/', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { type, parent_id } = req.query;
+    const type = getQueryString(req.query.type);
+    const parentId = getQueryString(req.query.parent_id);
+    const limitParse = parseIntegerQuery(req.query.limit, 'limit', { min: 1, max: MAX_DOCUMENT_LIST_LIMIT });
+    const offsetParse = parseIntegerQuery(req.query.offset, 'offset', { min: 0 });
+    const includeTotalParse = parseBooleanQuery(req.query.include_total, 'include_total');
+
+    if (limitParse.error || offsetParse.error || includeTotalParse.error) {
+      res.status(400).json({
+        error: limitParse.error || offsetParse.error || includeTotalParse.error,
+      });
+      return;
+    }
+
+    const limit = limitParse.value;
+    const offset = offsetParse.value ?? 0;
+    const includeTotal = includeTotalParse.value ?? false;
+
+    if (limit === undefined && (req.query.offset !== undefined || req.query.include_total !== undefined)) {
+      res.status(400).json({
+        error: 'limit is required when offset or include_total is provided',
+      });
+      return;
+    }
+
     const userId = req.userId!;
     const workspaceId = req.workspaceId!;
 
     // Check if user is admin (admins can see all documents)
     const isAdmin = await isWorkspaceAdmin(userId, workspaceId);
 
+    const whereClauses = [
+      'workspace_id = $1',
+      'archived_at IS NULL',
+      'deleted_at IS NULL',
+      "(visibility = 'workspace' OR created_by = $2 OR $3 = TRUE)",
+    ];
+    const params: DocumentListParam[] = [workspaceId, userId, isAdmin];
+
+    if (type) {
+      whereClauses.push(`document_type = $${params.length + 1}`);
+      params.push(type);
+    }
+
+    if (req.query.parent_id !== undefined) {
+      if (parentId === 'null' || parentId === '') {
+        whereClauses.push('parent_id IS NULL');
+      } else {
+        whereClauses.push(`parent_id = $${params.length + 1}`);
+        params.push(parentId ?? null);
+      }
+    }
+
+    const whereSql = whereClauses.join('\n        AND ');
+    const filterParams = [...params];
+
     let query = `
       SELECT id, workspace_id, document_type, title, parent_id, position,
              ticket_number, properties,
              created_at, updated_at, created_by, visibility
       FROM documents
-      WHERE workspace_id = $1
-        AND archived_at IS NULL
-        AND deleted_at IS NULL
-        AND (visibility = 'workspace' OR created_by = $2 OR $3 = TRUE)
+      WHERE ${whereSql}
+      ORDER BY position ASC, created_at DESC
     `;
-    const params: (string | boolean | null)[] = [workspaceId, userId, isAdmin];
 
-    if (type) {
-      query += ` AND document_type = $${params.length + 1}`;
-      params.push(type as string);
+    if (limit !== undefined) {
+      query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+      params.push(limit + 1, offset);
     }
-
-    if (parent_id !== undefined) {
-      if (parent_id === 'null' || parent_id === '') {
-        query += ` AND parent_id IS NULL`;
-      } else {
-        query += ` AND parent_id = $${params.length + 1}`;
-        params.push(parent_id as string);
-      }
-    }
-
-    query += ` ORDER BY position ASC, created_at DESC`;
 
     const result = await pool.query(query, params);
+    const rows = limit === undefined ? result.rows : result.rows.slice(0, limit);
+    const hasMore = limit !== undefined && result.rows.length > limit;
 
     // Extract properties into flat fields for backwards compatibility
-    const documents = result.rows.map(row => {
+    const documents = rows.map(row => {
       const props = row.properties || {};
       return {
         ...row,
@@ -145,6 +220,29 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
         color: props.color,
       };
     });
+
+    if (limit !== undefined) {
+      let total: number | undefined;
+      if (includeTotal) {
+        const countResult = await pool.query(
+          `SELECT COUNT(*)::int AS total FROM documents WHERE ${whereSql}`,
+          filterParams
+        );
+        total = countResult.rows[0]?.total;
+      }
+
+      res.json({
+        items: documents,
+        pagination: {
+          limit,
+          offset,
+          returned: documents.length,
+          has_more: hasMore,
+          ...(total !== undefined ? { total } : {}),
+        },
+      });
+      return;
+    }
 
     res.json(documents);
   } catch (err) {

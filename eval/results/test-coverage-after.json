@@ -1,36 +1,36 @@
 {
-  "captured_at": "2026-05-20T18:32:57.8753165Z",
+  "captured_at": "2026-05-20T19:18:07.155Z",
   "command": "pnpm --filter @ship/api test:coverage; pnpm --filter @ship/api exec vitest run --coverage --coverage.reporter=json-summary --coverage.reportsDirectory=../eval/results/coverage-api-after",
   "result": "pass",
   "total_test_files": 28,
-  "total_tests": 451,
-  "passed": 451,
+  "total_tests": 453,
+  "passed": 453,
   "failed": 0,
   "coverage_summary_artifact": "eval/results/coverage-api-after/coverage-summary.json",
   "coverage": {
     "lines": {
-      "total": 7904,
-      "covered": 3207,
-      "skipped": 0,
-      "pct": 40.57
-    },
-    "statements": {
-      "total": 8161,
-      "covered": 3296,
-      "skipped": 0,
-      "pct": 40.38
-    },
-    "functions": {
-      "total": 597,
-      "covered": 244,
+      "total": 7953,
+      "covered": 3251,
       "skipped": 0,
       "pct": 40.87
     },
-    "branches": {
-      "total": 4379,
-      "covered": 1472,
+    "statements": {
+      "total": 8216,
+      "covered": 3344,
       "skipped": 0,
-      "pct": 33.61
+      "pct": 40.7
+    },
+    "functions": {
+      "total": 600,
+      "covered": 247,
+      "skipped": 0,
+      "pct": 41.16
+    },
+    "branches": {
+      "total": 4434,
+      "covered": 1513,
+      "skipped": 0,
+      "pct": 34.12
     },
     "branchesTrue": {
       "total": 0,
@@ -39,5 +39,5 @@
       "pct": 100
     }
   },
-  "note": "Coverage provider lockfile was refreshed from @vitest/coverage-v8 4.0.16 to 4.0.17 to match vitest 4.0.17 after the first coverage run exposed the mismatch."
+  "note": "Coverage provider lockfile was refreshed from @vitest/coverage-v8 4.0.16 to 4.0.17 to match vitest 4.0.17 after the first coverage run exposed the mismatch. Re-run after adding documents pagination tests."
 }
