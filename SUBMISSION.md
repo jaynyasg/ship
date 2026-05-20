@@ -52,6 +52,10 @@ The dependency audit now reports 0 critical, 0 high, 0 moderate, and 0 low advis
 
 The clean dependency baseline is now enforceable. `pnpm audit:ci` parses `pnpm audit --json` and fails on any advisory, with matching GitHub Actions and GitLab CI jobs for pull requests, default-branch pushes, schedules, and manual runs.
 
+## Phase 10 Windows E2E Build Unblock
+
+The API build no longer depends on POSIX `cp`. `pnpm build:api`, which Playwright global setup invokes before E2E workers start, now runs through a Node script that copies DB schema and migration assets cross-platform.
+
 ## Files To Read
 
 - `AUDIT.md` - full audit narrative with baseline, severity, and after status.
@@ -64,7 +68,9 @@ The clean dependency baseline is now enforceable. `pnpm audit:ci` parses `pnpm a
 - `docs/brainstorms/2026-05-20-phase-07-documents-pagination-contract.md` - Phase 07 documents pagination contract and compatibility decision.
 - `docs/brainstorms/2026-05-20-phase-08-dependency-audit-zero.md` - Phase 08 dependency remediation evidence.
 - `docs/brainstorms/2026-05-20-phase-09-dependency-audit-gate.md` - Phase 09 CI audit gate evidence.
+- `docs/brainstorms/2026-05-20-phase-10-windows-e2e-build-unblock.md` - Phase 10 Windows E2E build unblock evidence.
 - `eval/results/documents-pagination-contract.md` - concise API contract evidence for page-style `/api/documents` pagination.
+- `eval/results/e2e-windows-build-unblock.md` - verification note for the cross-platform API build.
 
 ## Verification Commands
 
@@ -92,5 +98,5 @@ git diff --check
 ## Known Follow-Ups
 
 - WebSocket reconnect UI remains a stretch item for runtime resilience.
-- Playwright E2E execution on Windows was blocked at baseline by bash/POSIX script assumptions; this is documented in `ORIENTATION.md` finding #20.
+- Full Playwright E2E should still be run through the dedicated E2E runner workflow to avoid output explosion.
 - Dependency overrides should be retired as upstream parent packages naturally absorb patched transitive versions.
