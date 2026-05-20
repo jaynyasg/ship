@@ -1,0 +1,18 @@
+{
+  "captured_at": "2026-05-20",
+  "unit": "U12",
+  "command": "pnpm build:web",
+  "baseline_main_chunk_kb": 2073.7,
+  "after_main_chunk_kb": 1671.09,
+  "reduction_kb": 402.61,
+  "reduction_percent": 19.4,
+  "meets_pdf_initial_load_target_20_percent": false,
+  "note": "Main index chunk only; UnifiedDocumentPage lazy chunk is 403.05 kB (99.43 kB gzip) loaded on document routes. Final rerun after accessibility CSS fixes kept the same result within rounding.",
+  "lazy_chunks": {
+    "UnifiedDocumentPage-d8Kmiwxc.js": {
+      "size_kb": 403.05,
+      "gzip_kb": 99.43
+    }
+  },
+  "mixed_import_warnings": "Resolved — SlashCommands uses static imports for upload.ts and FileAttachment.tsx"
+}
