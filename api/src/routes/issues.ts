@@ -78,25 +78,43 @@ const rejectIssueSchema = z.object({
   reason: z.string().min(1).max(1000),
 });
 
+type IssueRow = {
+  id: string;
+  title: string;
+  properties?: Record<string, unknown>;
+  ticket_number: number;
+  content?: unknown;
+  created_at: string;
+  updated_at: string;
+  created_by: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+  cancelled_at?: string | null;
+  reopened_at?: string | null;
+  converted_from_id?: string | null;
+  assignee_name?: string | null;
+  assignee_archived?: boolean;
+  created_by_name?: string;
+};
+
 // Helper to extract issue properties from row (without belongs_to - added separately)
-function extractIssueFromRow(row: any) {
-  const props = row.properties || {};
-  return {
+function extractIssueFromRow(row: IssueRow) {
+  const props = (row.properties || {}) as Record<string, unknown>;
+  const issue = {
     id: row.id,
     title: row.title,
-    state: props.state || 'backlog',
-    priority: props.priority || 'medium',
-    assignee_id: props.assignee_id || null,
-    estimate: props.estimate ?? null,
-    source: props.source || 'internal',
-    rejection_reason: props.rejection_reason || null,
+    state: (props.state as string) || 'backlog',
+    priority: (props.priority as string) || 'medium',
+    assignee_id: (props.assignee_id as string) || null,
+    estimate: (props.estimate as number | null) ?? null,
+    source: (props.source as string) || 'internal',
+    rejection_reason: (props.rejection_reason as string) || null,
     // Accountability fields for action_items issues
-    due_date: props.due_date || null,
-    is_system_generated: props.is_system_generated || false,
-    accountability_target_id: props.accountability_target_id || null,
-    accountability_type: props.accountability_type || null,
+    due_date: (props.due_date as string) || null,
+    is_system_generated: (props.is_system_generated as boolean) || false,
+    accountability_target_id: (props.accountability_target_id as string) || null,
+    accountability_type: (props.accountability_type as string) || null,
     ticket_number: row.ticket_number,
-    content: row.content,
     created_at: row.created_at,
     updated_at: row.updated_at,
     created_by: row.created_by,
@@ -109,6 +127,7 @@ function extractIssueFromRow(row: any) {
     assignee_archived: row.assignee_archived || false,
     created_by_name: row.created_by_name,
   };
+  return row.content !== undefined ? { ...issue, content: row.content } : issue;
 }
 
 // List issues with filters
@@ -123,7 +142,6 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 
     let query = `
       SELECT d.id, d.title, d.properties, d.ticket_number,
-             d.content,
              d.created_at, d.updated_at, d.created_by,
              d.started_at, d.completed_at, d.cancelled_at, d.reopened_at,
              d.converted_from_id,

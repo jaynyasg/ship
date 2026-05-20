@@ -325,29 +325,40 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
               (SELECT op.properties->>'reports_to' FROM documents op WHERE d.properties->>'owner_id' IS NOT NULL AND op.id = (d.properties->>'owner_id')::uuid AND op.document_type = 'person' AND op.workspace_id = d.workspace_id) as owner_reports_to,
               $5::timestamp as workspace_sprint_start_date,
               u.id as owner_id, u.name as owner_name, u.email as owner_email,
-              (SELECT COUNT(*) FROM documents i
-               JOIN document_associations ida ON ida.document_id = i.id AND ida.related_id = d.id AND ida.relationship_type = 'sprint'
-               WHERE i.document_type = 'issue') as issue_count,
-              (SELECT COUNT(*) FROM documents i
-               JOIN document_associations ida ON ida.document_id = i.id AND ida.related_id = d.id AND ida.relationship_type = 'sprint'
-               WHERE i.document_type = 'issue' AND i.properties->>'state' = 'done') as completed_count,
-              (SELECT COUNT(*) FROM documents i
-               JOIN document_associations ida ON ida.document_id = i.id AND ida.related_id = d.id AND ida.relationship_type = 'sprint'
-               WHERE i.document_type = 'issue' AND i.properties->>'state' IN ('in_progress', 'in_review')) as started_count,
-              (SELECT COUNT(*) > 0 FROM documents pl WHERE pl.parent_id = d.id AND pl.document_type = 'weekly_plan') as has_plan,
-              (SELECT COUNT(*) > 0 FROM documents rt
-               JOIN document_associations rda ON rda.document_id = rt.id AND rda.related_id = d.id AND rda.relationship_type = 'sprint'
-               WHERE rt.properties->>'outcome' IS NOT NULL) as has_retro,
-              (SELECT rt.properties->>'outcome' FROM documents rt
-               JOIN document_associations rda ON rda.document_id = rt.id AND rda.related_id = d.id AND rda.relationship_type = 'sprint'
-               WHERE rt.properties->>'outcome' IS NOT NULL LIMIT 1) as retro_outcome,
-              (SELECT rt.id FROM documents rt
-               JOIN document_associations rda ON rda.document_id = rt.id AND rda.related_id = d.id AND rda.relationship_type = 'sprint'
-               WHERE rt.properties->>'outcome' IS NOT NULL LIMIT 1) as retro_id
+              COALESCE(issue_stats.issue_count, 0) as issue_count,
+              COALESCE(issue_stats.completed_count, 0) as completed_count,
+              COALESCE(issue_stats.started_count, 0) as started_count,
+              COALESCE(plan_stats.has_plan, false) as has_plan,
+              COALESCE(retro_stats.has_retro, false) as has_retro,
+              retro_stats.retro_outcome,
+              retro_stats.retro_id
        FROM documents d
        LEFT JOIN document_associations prog_da ON prog_da.document_id = d.id AND prog_da.relationship_type = 'program'
        LEFT JOIN documents p ON prog_da.related_id = p.id
        LEFT JOIN users u ON (d.properties->'assignee_ids'->>0)::uuid = u.id
+       LEFT JOIN LATERAL (
+         SELECT
+           COUNT(*)::int AS issue_count,
+           COUNT(*) FILTER (WHERE i.properties->>'state' = 'done')::int AS completed_count,
+           COUNT(*) FILTER (WHERE i.properties->>'state' IN ('in_progress', 'in_review'))::int AS started_count
+         FROM documents i
+         JOIN document_associations ida ON ida.document_id = i.id AND ida.related_id = d.id AND ida.relationship_type = 'sprint'
+         WHERE i.document_type = 'issue'
+       ) issue_stats ON true
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*) > 0 AS has_plan
+         FROM documents pl
+         WHERE pl.parent_id = d.id AND pl.document_type = 'weekly_plan'
+       ) plan_stats ON true
+       LEFT JOIN LATERAL (
+         SELECT
+           COUNT(*) > 0 AS has_retro,
+           MAX(rt.properties->>'outcome') AS retro_outcome,
+           (array_agg(rt.id ORDER BY rt.updated_at DESC) FILTER (WHERE rt.properties->>'outcome' IS NOT NULL))[1] AS retro_id
+         FROM documents rt
+         JOIN document_associations rda ON rda.document_id = rt.id AND rda.related_id = d.id AND rda.relationship_type = 'sprint'
+         WHERE rt.properties->>'outcome' IS NOT NULL
+       ) retro_stats ON true
        WHERE d.workspace_id = $1 AND d.document_type = 'sprint'
          AND (d.properties->>'sprint_number')::int = $2
          AND ${VISIBILITY_FILTER_SQL('d', '$3', '$4')}

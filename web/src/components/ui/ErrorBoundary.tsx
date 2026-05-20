@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { captureError } from '@/lib/errorCapture';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -21,8 +22,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    console.error('[ErrorBoundary] Uncaught error:', error);
-    console.error('[ErrorBoundary] Component stack:', errorInfo.componentStack);
+    captureError(error, 'react.error-boundary', {
+      componentStack: errorInfo.componentStack,
+    });
   }
 
   handleReset = (): void => {

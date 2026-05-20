@@ -2,6 +2,7 @@ import { createServer } from 'http';
 import { config } from 'dotenv';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { captureError } from '@ship/shared';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -9,6 +10,11 @@ const __dirname = dirname(__filename);
 // Load environment variables (.env.local takes precedence)
 config({ path: join(__dirname, '../.env.local') });
 config({ path: join(__dirname, '../.env') });
+
+process.on('unhandledRejection', (reason) => {
+  const captured = captureError(reason, 'process.unhandledRejection');
+  console.error(`[error-capture:${captured.source}]`, captured.message);
+});
 
 async function main() {
   // Load secrets from SSM in production (before importing app)

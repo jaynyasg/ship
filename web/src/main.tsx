@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -33,7 +33,14 @@ import { AdminDashboardPage } from '@/pages/AdminDashboard';
 import { AdminWorkspaceDetailPage } from '@/pages/AdminWorkspaceDetail';
 import { WorkspaceSettingsPage } from '@/pages/WorkspaceSettings';
 import { ConvertedDocumentsPage } from '@/pages/ConvertedDocuments';
-import { UnifiedDocumentPage } from '@/pages/UnifiedDocumentPage';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { installClientErrorCapture } from '@/lib/errorCapture';
+
+const UnifiedDocumentPage = React.lazy(() =>
+  import('@/pages/UnifiedDocumentPage').then((m) => ({ default: m.UnifiedDocumentPage })),
+);
+
+installClientErrorCapture();
 import { StatusOverviewPage } from '@/pages/StatusOverviewPage';
 import { ReviewsPage } from '@/pages/ReviewsPage';
 import { OrgChartPage } from '@/pages/OrgChartPage';
@@ -216,7 +223,20 @@ function AppRoutes() {
         <Route path="my-week" element={<MyWeekPage />} />
         <Route path="docs" element={<DocumentsPage />} />
         <Route path="docs/:id" element={<DocumentRedirect />} />
-        <Route path="documents/:id/*" element={<UnifiedDocumentPage />} />
+        <Route
+          path="documents/:id/*"
+          element={
+            <Suspense
+              fallback={
+                <div className="flex h-full items-center justify-center text-muted">
+                  Loading document…
+                </div>
+              }
+            >
+              <UnifiedDocumentPage />
+            </Suspense>
+          }
+        />
         <Route path="issues" element={<IssuesPage />} />
         <Route path="issues/:id" element={<DocumentRedirect />} />
         <Route path="projects" element={<ProjectsPage />} />
@@ -250,6 +270,7 @@ function AppRoutes() {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
+    <ErrorBoundary>
     <PersistQueryClientProvider
       client={queryClient}
       persistOptions={{ persister: queryPersister }}
@@ -264,5 +285,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       </ToastProvider>
       <ReactQueryDevtools initialIsOpen={false} />
     </PersistQueryClientProvider>
+    </ErrorBoundary>
   </React.StrictMode>
 );
