@@ -32,12 +32,17 @@ After the seven audit categories closed, Ship added a Microsoft Project-inspired
 | 04D Baseline variance | Project/program baseline snapshots and current-vs-baseline variance reporting |
 | 04E Critical path | Compact critical-path computation, API/shared/OpenAPI fields, ordered row badges, and highlighted critical timeline bars |
 
+## Phase 05 Quality Gate
+
+Ship now has an executable ESLint baseline across `api`, `web`, and `shared`, using recommended TypeScript rules plus React Hooks and JSX accessibility checks for web code. The baseline is intentionally committed before cleanup so future work can burn it down against a measured starting point: 333 files checked, 116 files with findings, 487 errors, and 29 warnings.
+
 ## Files To Read
 
 - `AUDIT.md` - full audit narrative with baseline, severity, and after status.
 - `ORIENTATION.md` - codebase orientation and architecture synthesis.
 - `eval/results/phase2-implementation-notes.md` - concise implementation and measurement log.
 - `docs/brainstorms/2026-05-20-phase-04-ms-project-inspired-improvements.md` - Phase 04 implementation evidence for Microsoft Project-inspired timeline/dependency improvements.
+- `docs/brainstorms/2026-05-20-phase-05-eslint-quality-gate.md` - Phase 05 lint gate scope and baseline evidence.
 
 ## Verification Commands
 
@@ -66,4 +71,4 @@ git diff --check
 
 - WebSocket reconnect UI remains a stretch item for runtime resilience.
 - Playwright E2E execution on Windows was blocked at baseline by bash/POSIX script assumptions; this is documented in `ORIENTATION.md` finding #20.
-- Phase 05 candidate work should be selected from the remaining active improvement backlog, with ESLint quality gates and critical CVE remediation as the highest-leverage options.
+- Critical CVE remediation remains the highest-leverage next backlog item.
