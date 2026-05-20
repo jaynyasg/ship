@@ -108,3 +108,7 @@ Phase 02 was the measured audit-improvement pass across the 7 PDF categories. Ph
 4. Implement timeline API and benchmark it.
 5. Implement timeline UI and accessibility checks.
 6. Add baseline/variance reporting.
+
+## Detailed Specs
+
+- Phase 04A: `docs/brainstorms/2026-05-20-phase-04a-dependency-data-model-plan.md`
