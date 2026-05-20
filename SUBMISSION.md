@@ -44,6 +44,10 @@ The dependency audit critical count is now 0. Phase 06 used narrow `pnpm.overrid
 
 The remaining `/api/documents` pagination gap is closed with page-style query support: `page`, `per_page`, and `limit` now produce a paginated `{ items, pagination }` response with `total_count`. Bare `/api/documents` still returns the legacy array so existing React callers keep working until a frontend pagination UI is intentionally scoped.
 
+## Phase 08 Dependency Audit Zero
+
+The dependency audit now reports 0 critical, 0 high, 0 moderate, and 0 low advisories. Phase 08 used targeted `pnpm.overrides` for runtime, build, and dev-tooling transitive packages while keeping parent package API surfaces stable.
+
 ## Files To Read
 
 - `AUDIT.md` - full audit narrative with baseline, severity, and after status.
@@ -54,6 +58,7 @@ The remaining `/api/documents` pagination gap is closed with page-style query su
 - `docs/brainstorms/2026-05-20-phase-05-eslint-quality-gate.md` - Phase 05 lint gate scope and baseline evidence.
 - `docs/brainstorms/2026-05-20-phase-06-critical-cve-remediation.md` - Phase 06 critical CVE remediation evidence.
 - `docs/brainstorms/2026-05-20-phase-07-documents-pagination-contract.md` - Phase 07 documents pagination contract and compatibility decision.
+- `docs/brainstorms/2026-05-20-phase-08-dependency-audit-zero.md` - Phase 08 dependency remediation evidence.
 - `eval/results/documents-pagination-contract.md` - concise API contract evidence for page-style `/api/documents` pagination.
 
 ## Verification Commands
@@ -83,4 +88,4 @@ git diff --check
 
 - WebSocket reconnect UI remains a stretch item for runtime resilience.
 - Playwright E2E execution on Windows was blocked at baseline by bash/POSIX script assumptions; this is documented in `ORIENTATION.md` finding #20.
-- Remaining high/moderate dependency advisories should be reduced in future security batches.
+- Dependency overrides should be retired as upstream parent packages naturally absorb patched transitive versions.

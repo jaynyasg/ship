@@ -34,6 +34,7 @@ The original dependency audit baseline was captured on 2026-05-19 in `eval/resul
 | Original baseline | 2 | 30 | 38 | 4 |
 | Fresh pre-remediation audit after Phase 05 | 2 | 31 | 38 | 4 |
 | Phase 06 after remediation | 0 | 25 | 31 | 3 |
+| Phase 08 after remediation | 0 | 0 | 0 | 0 |
 
 ## Phase 06 Critical CVE Remediation
 
@@ -56,18 +57,34 @@ Evidence:
 
 ## Residual Risks
 
-No critical advisories remain after Phase 06. High and moderate advisories remain in the dependency tree and should be burned down in smaller batches after compatibility review.
+No dependency audit advisories remain after Phase 08. The remediation uses targeted `pnpm.overrides` to keep parent package APIs stable while forcing patched transitive versions.
 
 | Risk | Current Status | Rationale |
 |---|---|---|
-| High/moderate production dependency advisories | Accepted temporarily | Phase 06 was scoped to critical CVEs only. Remaining advisories need package-by-package testing. |
-| Testcontainers advisories outside critical path | Accepted temporarily | Testcontainers is dev/E2E tooling and Docker is not part of the deployed runtime. Keep it on the cleanup list. |
+| High/moderate production dependency advisories | Mitigated | Phase 08 reduces the audit count to zero while preserving the current API and frontend parent package surfaces. |
+| Testcontainers advisories outside critical path | Mitigated with overrides | Testcontainers remains dev/E2E tooling, but its audited transitive packages are now forced to patched versions. |
 | AWS SDK transitive XML parser drift | Mitigated with override | The patched parser is forced while preserving the current AWS SDK API surface. Revisit when AWS SDK parent packages naturally absorb the patched dependency. |
+| Override maintenance | Accepted temporarily | Overrides should be retired as upstream parent packages widen dependency ranges to patched versions. |
 | `pnpm approve-builds` pending for native build scripts | Accepted temporarily | Existing install flow already ignores these scripts; no new runtime code depends on approving them in this pass. |
+
+## Phase 08 High/Moderate Remediation
+
+Phase 08 cleared the remaining high, moderate, and low dependency advisories with targeted overrides and a refreshed lockfile.
+
+| Cluster | Patched packages |
+|---|---|
+| API runtime and MCP transitive deps | `express-rate-limit`, `ip-address`, `hono`, `@hono/node-server`, `ajv`, `fast-uri`, `path-to-regexp`, `uuid`, `ws` |
+| Web build/editor deps | `vite`, `rollup`, `postcss`, `markdown-it`, `svgo`, `picomatch` |
+| Test/dev tooling deps | `flatted`, `undici`, `lodash`, `qs`, `brace-expansion`, `minimatch`, `yaml` |
+
+Evidence:
+
+- `eval/results/dependency-audit-after.json`
+- `package.json` `pnpm.overrides`
+- `pnpm-lock.yaml`
 
 ## Recommended Follow-Up
 
-1. Burn down remaining high advisories in dependency clusters: `@modelcontextprotocol/sdk`, Vite/Rollup/PostCSS, and testcontainers.
-2. Replace overrides with normal parent dependency updates once upstream dependency ranges carry patched versions.
-3. Add a recurring dependency audit job after the high-severity count is low enough to make the gate actionable.
-4. Keep `eval/results/dependency-audit-after.json` refreshed whenever dependency security work lands.
+1. Replace overrides with normal parent dependency updates once upstream dependency ranges carry patched versions.
+2. Add a recurring dependency audit job now that the baseline is actionable.
+3. Keep `eval/results/dependency-audit-after.json` refreshed whenever dependency security work lands.
