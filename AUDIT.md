@@ -55,7 +55,7 @@ TypeScript's compile-time type safety as actually used. Specifically: explicit `
 
 | Metric | Value |
 |---|---|
-| TypeScript version | 5.9.3 |
+| TypeScript version | ~~5.9.3~~ → **6.0.3** (upgraded — see below) |
 | `tsconfig.json` strict mode | ✅ Aggressively enabled (`strict`, `noUncheckedIndexedAccess`, `noImplicitReturns`, `noFallthroughCasesInSwitch`) |
 | `tsc --strict --noEmit` result | ✅ Pass across all 3 workspaces |
 | Total explicit `: any` annotations | **99** (web: 24, api: 75, shared: 0) |
@@ -92,6 +92,19 @@ TypeScript's compile-time type safety as actually used. Specifically: explicit `
 **Stretch:** Add a baseline ESLint configuration with `@typescript-eslint/recommended` + `jsx-a11y/recommended` (the latter would catch some Category 7 a11y issues at lint-time).
 
 **Feasibility:** High — fixing just 2-3 of the top files satisfies the 25% target.
+
+### TypeScript upgrade (completed pre-Phase 2)
+
+**Upgrade:** TypeScript 5.9.3 → 6.0.3 across all 4 workspaces (root, web, api, shared). Completed 2026-05-20.
+
+**Breaking changes addressed:**
+
+| Fix | File | Change |
+|---|---|---|
+| `baseUrl` deprecated (TS5101) | `api/tsconfig.json`, `web/tsconfig.json` | Removed `"baseUrl": "."` — paths were already relative to tsconfig location |
+| Ambient `@types/*` no longer auto-included (TS 6.0 behavior change) | `web/tsconfig.json` | Added `"types": ["node", "vite/client"]` to explicitly declare required type roots |
+
+**Result:** All 3 workspaces (`shared`, `web`, `api`) pass `pnpm type-check` clean on TypeScript 6.0.3. Zero new type errors introduced. The upgrade does not alter the Category 1 grep violation count or type-coverage percentage — those baselines remain the U11 target.
 
 ---
 
