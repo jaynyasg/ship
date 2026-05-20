@@ -1,0 +1,17 @@
+stages:
+  - security
+
+dependency_audit:
+  stage: security
+  image: node:22-bookworm
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - when: never
+  before_script:
+    - corepack enable
+    - corepack prepare pnpm@10.27.0 --activate
+  script:
+    - pnpm install --frozen-lockfile --ignore-scripts
+    - pnpm audit:ci

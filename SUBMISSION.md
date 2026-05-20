@@ -48,6 +48,10 @@ The remaining `/api/documents` pagination gap is closed with page-style query su
 
 The dependency audit now reports 0 critical, 0 high, 0 moderate, and 0 low advisories. Phase 08 used targeted `pnpm.overrides` for runtime, build, and dev-tooling transitive packages while keeping parent package API surfaces stable.
 
+## Phase 09 Dependency Audit Gate
+
+The clean dependency baseline is now enforceable. `pnpm audit:ci` parses `pnpm audit --json` and fails on any advisory, with matching GitHub Actions and GitLab CI jobs for pull requests, default-branch pushes, schedules, and manual runs.
+
 ## Files To Read
 
 - `AUDIT.md` - full audit narrative with baseline, severity, and after status.
@@ -59,6 +63,7 @@ The dependency audit now reports 0 critical, 0 high, 0 moderate, and 0 low advis
 - `docs/brainstorms/2026-05-20-phase-06-critical-cve-remediation.md` - Phase 06 critical CVE remediation evidence.
 - `docs/brainstorms/2026-05-20-phase-07-documents-pagination-contract.md` - Phase 07 documents pagination contract and compatibility decision.
 - `docs/brainstorms/2026-05-20-phase-08-dependency-audit-zero.md` - Phase 08 dependency remediation evidence.
+- `docs/brainstorms/2026-05-20-phase-09-dependency-audit-gate.md` - Phase 09 CI audit gate evidence.
 - `eval/results/documents-pagination-contract.md` - concise API contract evidence for page-style `/api/documents` pagination.
 
 ## Verification Commands

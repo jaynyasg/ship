@@ -83,8 +83,18 @@ Evidence:
 - `package.json` `pnpm.overrides`
 - `pnpm-lock.yaml`
 
+## Phase 09 Dependency Audit Gate
+
+Phase 09 makes the zero-advisory baseline enforceable in both hosted remotes.
+
+| Surface | Control |
+|---|---|
+| Local/CI command | `pnpm audit:ci` runs `scripts/check-dependency-audit.mjs`, parses `pnpm audit --json`, and fails if any `info`, `low`, `moderate`, `high`, or `critical` advisory is present. |
+| GitHub | `.github/workflows/dependency-audit.yml` runs on pull requests, pushes to `main`, weekly schedule, and manual dispatch. |
+| GitLab | `.gitlab-ci.yml` runs the same audit job for merge requests, default-branch pushes, and scheduled pipelines. |
+
 ## Recommended Follow-Up
 
 1. Replace overrides with normal parent dependency updates once upstream dependency ranges carry patched versions.
-2. Add a recurring dependency audit job now that the baseline is actionable.
-3. Keep `eval/results/dependency-audit-after.json` refreshed whenever dependency security work lands.
+2. Keep `eval/results/dependency-audit-after.json` refreshed whenever dependency security work lands.
+3. Monitor the new GitHub/GitLab audit jobs after the next push to confirm both hosted environments have registry access.

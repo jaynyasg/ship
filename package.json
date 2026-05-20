@@ -55,6 +55,7 @@
     "build:web": "pnpm run build:shared && pnpm --filter @ship/web build",
     "type-check": "pnpm --recursive run type-check",
     "lint": "pnpm --recursive run lint",
+    "audit:ci": "node scripts/check-dependency-audit.mjs",
     "clean": "pnpm --recursive run clean && rm -rf node_modules",
     "test": "pnpm --filter @ship/api test",
     "test:e2e": "playwright test",
