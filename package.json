@@ -45,7 +45,7 @@
     "prettier": "^3.4.2",
     "supertest": "^7.1.4",
     "testcontainers": "^11.11.0",
-    "typescript": "^5.7.2",
+    "typescript": "^6.0.3",
     "vitest": "^4.0.16"
   }
 }
