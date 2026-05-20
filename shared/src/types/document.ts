@@ -11,6 +11,62 @@ export type BelongsToType = 'program' | 'project' | 'sprint' | 'parent';
 export type RelationshipType = BelongsToType | 'depends_on';
 export type DependencyDisplayType = 'depends_on' | 'blocks' | 'blocked_by';
 
+export type TimelineScopeType = 'project' | 'program';
+export type TimelineDocumentType = 'program' | 'project' | 'sprint' | 'issue';
+
+export interface TimelineDependencyEdge {
+  source_id: string;
+  target_id: string;
+  relationship_type: 'depends_on';
+  source_in_scope: boolean;
+  target_in_scope: boolean;
+  source_title?: string;
+  target_title?: string;
+  source_document_type?: TimelineDocumentType;
+  target_document_type?: TimelineDocumentType;
+  target_status?: string | null;
+  is_blocking: boolean;
+}
+
+export interface TimelineRow {
+  id: string;
+  title: string;
+  document_type: TimelineDocumentType;
+  status: string | null;
+  planned_start: string | null;
+  planned_end: string | null;
+  actual_start: string | null;
+  actual_end: string | null;
+  program_ids: string[];
+  project_ids: string[];
+  sprint_ids: string[];
+  dependency_ids: string[];
+  blocker_ids: string[];
+  blocks_ids: string[];
+  blocked: boolean;
+  overdue: boolean;
+  at_risk: boolean;
+  sprint_number?: number | null;
+}
+
+export interface TimelineResponse {
+  scope: {
+    id: string;
+    type: TimelineScopeType;
+    title: string;
+  };
+  generated_at: string;
+  rows: TimelineRow[];
+  dependencies: TimelineDependencyEdge[];
+  summary: {
+    total_rows: number;
+    dependency_count: number;
+    blocked_count: number;
+    overdue_count: number;
+    at_risk_count: number;
+  };
+}
+
 // BelongsTo association entry - unified format for all document relationships
 export interface BelongsTo {
   id: string;

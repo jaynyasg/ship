@@ -7,6 +7,7 @@ import { DEFAULT_PROJECT_PROPERTIES, computeICEScore } from '@ship/shared';
 import { checkDocumentCompleteness } from '../utils/extractHypothesis.js';
 import { logDocumentChange, getLatestDocumentFieldHistory } from '../utils/document-crud.js';
 import { broadcastToUser } from '../collaboration/index.js';
+import { getProjectTimeline } from '../services/timeline.js';
 
 type RouterType = ReturnType<typeof Router>;
 const router: RouterType = Router();
@@ -458,6 +459,27 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
     res.json(result.rows.map(extractProjectFromRow));
   } catch (err) {
     console.error('List projects error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/projects/:id/timeline - Project timeline read model
+router.get('/:id/timeline', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const userId = req.userId!;
+    const workspaceId = req.workspaceId!;
+    const { isAdmin } = await getVisibilityContext(userId, workspaceId);
+
+    const timeline = await getProjectTimeline(id, workspaceId, userId, isAdmin);
+    if (!timeline) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
+
+    res.json(timeline);
+  } catch (err) {
+    console.error('Get project timeline error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

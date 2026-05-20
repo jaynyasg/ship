@@ -112,3 +112,7 @@ Phase 02 was the measured audit-improvement pass across the 7 PDF categories. Ph
 ## Detailed Specs
 
 - Phase 04A: `docs/brainstorms/2026-05-20-phase-04a-dependency-data-model-plan.md`
+
+## Implementation Evidence
+
+- Phase 04B timeline read-model timing: `eval/results/phase04b-timeline-benchmark.json`

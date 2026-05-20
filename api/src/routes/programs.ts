@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { getVisibilityContext, VISIBILITY_FILTER_SQL } from '../middleware/visibility.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { logAuditEvent } from '../services/audit.js';
+import { getProgramTimeline } from '../services/timeline.js';
 
 type RouterType = ReturnType<typeof Router>;
 const router: RouterType = Router();
@@ -95,6 +96,27 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
     res.json(result.rows.map(extractProgramFromRow));
   } catch (err) {
     console.error('List programs error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/programs/:id/timeline - Program timeline read model
+router.get('/:id/timeline', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const userId = req.userId!;
+    const workspaceId = req.workspaceId!;
+    const { isAdmin } = await getVisibilityContext(userId, workspaceId);
+
+    const timeline = await getProgramTimeline(id, workspaceId, userId, isAdmin);
+    if (!timeline) {
+      res.status(404).json({ error: 'Program not found' });
+      return;
+    }
+
+    res.json(timeline);
+  } catch (err) {
+    console.error('Get program timeline error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
