@@ -47,6 +47,8 @@ export const TimelineRowSchema = z.object({
   blocked: z.boolean(),
   overdue: z.boolean(),
   at_risk: z.boolean(),
+  critical_path: z.boolean(),
+  critical_path_order: z.number().int().positive().nullable(),
   sprint_number: z.number().int().positive().nullable().optional(),
 }).openapi('TimelineRow');
 
@@ -67,6 +69,7 @@ export const TimelineResponseSchema = z.object({
     blocked_count: z.number().int(),
     overdue_count: z.number().int(),
     at_risk_count: z.number().int(),
+    critical_path_count: z.number().int(),
   }),
 }).openapi('TimelineResponse');
 
@@ -98,6 +101,7 @@ export const TimelineBaselineSnapshotSchema = z.object({
     blocked_count: z.number().int(),
     overdue_count: z.number().int(),
     at_risk_count: z.number().int(),
+    critical_path_count: z.number().int(),
     planned_start: DateSchema.nullable(),
     planned_end: DateSchema.nullable(),
   }),

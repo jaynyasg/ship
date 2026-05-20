@@ -1,7 +1,7 @@
 ---
 title: "Phase 04 - Microsoft Project-Inspired Timeline and Dependency Planning"
 date: 2026-05-20
-status: planned
+status: completed
 origin: conversation - post-Phase 02 improvement roadmap
 depends_on: Phase 03 readiness/submission polish
 ---
@@ -71,6 +71,12 @@ Phase 02 was the measured audit-improvement pass across the 7 PDF categories. Ph
 - Compare baseline dates against current dates and completion state.
 - Summarize variance at project/program level.
 
+### Phase 04E - Critical Path Highlight
+
+- Compute a compact critical path from unresolved in-scope dependency chains.
+- Surface critical-path count, row membership, and path order in the timeline API.
+- Highlight critical rows in the timeline tab without introducing a scheduling engine.
+
 ## Out Of Scope For First Pass
 
 - Full Microsoft Project import/export.
@@ -108,6 +114,7 @@ Phase 02 was the measured audit-improvement pass across the 7 PDF categories. Ph
 4. Implement timeline API and benchmark it.
 5. Implement timeline UI and accessibility checks.
 6. Add baseline/variance reporting.
+7. Add compact critical-path highlighting.
 
 ## Detailed Specs
 
@@ -120,3 +127,5 @@ Phase 02 was the measured audit-improvement pass across the 7 PDF categories. Ph
 - Phase 04C bundle evidence: Vite emits the lazy `TimelineTab` chunk at about 11.39 kB minified / 3.69 kB gzip
 - Phase 04D baseline/variance verification: `pnpm type-check`, `pnpm --filter @ship/api test -- src/routes/timeline.test.ts src/routes/dependencies.test.ts`, `pnpm --filter @ship/web test -- src/lib/document-tabs.test.ts`, and `pnpm build:web`
 - Phase 04D bundle evidence: Vite emits the lazy `TimelineTab` chunk at about 15.45 kB minified / 4.49 kB gzip after baseline controls
+- Phase 04E critical-path verification: `pnpm type-check`, `pnpm --filter @ship/api test -- src/routes/timeline.test.ts src/routes/dependencies.test.ts`, `pnpm --filter @ship/web test -- src/lib/document-tabs.test.ts`, and `pnpm build:web`
+- Phase 04E bundle evidence: Vite emits the lazy `TimelineTab` chunk at about 15.90 kB minified / 4.62 kB gzip after critical-path highlighting

@@ -40,6 +40,8 @@ interface TimelineRow {
   blocked: boolean;
   overdue: boolean;
   at_risk: boolean;
+  critical_path: boolean;
+  critical_path_order: number | null;
   sprint_number?: number | null;
 }
 
@@ -58,6 +60,7 @@ interface TimelineResponse {
     blocked_count: number;
     overdue_count: number;
     at_risk_count: number;
+    critical_path_count: number;
   };
 }
 
@@ -83,6 +86,7 @@ interface TimelineBaselineSnapshot {
     blocked_count: number;
     overdue_count: number;
     at_risk_count: number;
+    critical_path_count: number;
     planned_start: string | null;
     planned_end: string | null;
   };
@@ -157,6 +161,7 @@ const TYPE_STYLES: Record<TimelineDocumentType, string> = {
 };
 
 const STATUS_STYLES: Record<string, string> = {
+  critical: 'bg-rose-500/15 text-rose-300 ring-rose-500/30',
   blocked: 'bg-red-500/15 text-red-300 ring-red-500/30',
   overdue: 'bg-orange-500/15 text-orange-300 ring-orange-500/30',
   at_risk: 'bg-amber-500/15 text-amber-200 ring-amber-500/30',
@@ -296,10 +301,18 @@ function getVarianceTone(value: number | null): string {
 }
 
 function getRowBadges(row: TimelineRow): Array<{ label: string; style: string }> {
-  if (row.blocked) return [{ label: 'Blocked', style: STATUS_STYLES.blocked }];
-  if (row.overdue) return [{ label: 'Overdue', style: STATUS_STYLES.overdue }];
-  if (row.at_risk) return [{ label: 'At risk', style: STATUS_STYLES.at_risk }];
-  return [{ label: 'Clear', style: STATUS_STYLES.clear }];
+  const badges: Array<{ label: string; style: string }> = [];
+  if (row.critical_path) {
+    badges.push({
+      label: row.critical_path_order ? `Critical ${row.critical_path_order}` : 'Critical',
+      style: STATUS_STYLES.critical,
+    });
+  }
+  if (row.blocked) badges.push({ label: 'Blocked', style: STATUS_STYLES.blocked });
+  else if (row.overdue) badges.push({ label: 'Overdue', style: STATUS_STYLES.overdue });
+  else if (row.at_risk) badges.push({ label: 'At risk', style: STATUS_STYLES.at_risk });
+  else badges.push({ label: 'Clear', style: STATUS_STYLES.clear });
+  return badges;
 }
 
 function getBarStyle(row: TimelineRow): string {
@@ -326,10 +339,11 @@ function SummaryMetric({
 }: {
   label: string;
   value: number;
-  tone?: 'default' | 'blocked' | 'overdue' | 'risk';
+  tone?: 'default' | 'blocked' | 'overdue' | 'risk' | 'critical';
 }) {
   const toneClass = {
     default: 'border-border bg-surface',
+    critical: 'border-rose-500/30 bg-rose-500/10',
     blocked: 'border-red-500/30 bg-red-500/10',
     overdue: 'border-orange-500/30 bg-orange-500/10',
     risk: 'border-amber-500/30 bg-amber-500/10',
@@ -629,9 +643,10 @@ export default function TimelineTab({ documentId, document }: DocumentTabProps) 
           </div>
         </div>
 
-        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
           <SummaryMetric label="Rows" value={data.summary.total_rows} />
           <SummaryMetric label="Dependencies" value={data.summary.dependency_count} />
+          <SummaryMetric label="Critical" value={data.summary.critical_path_count} tone="critical" />
           <SummaryMetric label="Blocked" value={data.summary.blocked_count} tone="blocked" />
           <SummaryMetric label="Overdue" value={data.summary.overdue_count} tone="overdue" />
           <SummaryMetric label="At risk" value={data.summary.at_risk_count} tone="risk" />
@@ -676,6 +691,7 @@ export default function TimelineTab({ documentId, document }: DocumentTabProps) 
                 TYPE_LABELS[row.document_type],
                 formatStatus(row.status),
                 formatDateRange(row.planned_start, row.planned_end),
+                row.critical_path ? 'critical path' : null,
                 row.blocked ? `${row.blocker_ids.length} blocker${row.blocker_ids.length === 1 ? '' : 's'}` : null,
               ].filter(Boolean).join(', ');
 
@@ -712,7 +728,11 @@ export default function TimelineTab({ documentId, document }: DocumentTabProps) 
                     {hasAnyDates ? (
                       <>
                         <span
-                          className={cn('absolute top-3 h-5 rounded-sm shadow-sm', getBarStyle(row))}
+                          className={cn(
+                            'absolute top-3 h-5 rounded-sm shadow-sm',
+                            getBarStyle(row),
+                            row.critical_path && 'ring-2 ring-rose-200 ring-offset-1 ring-offset-background'
+                          )}
                           style={plannedStyle}
                         />
                         {(row.actual_start || row.actual_end) ? (

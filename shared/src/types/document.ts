@@ -46,6 +46,8 @@ export interface TimelineRow {
   blocked: boolean;
   overdue: boolean;
   at_risk: boolean;
+  critical_path: boolean;
+  critical_path_order: number | null;
   sprint_number?: number | null;
 }
 
@@ -64,6 +66,7 @@ export interface TimelineResponse {
     blocked_count: number;
     overdue_count: number;
     at_risk_count: number;
+    critical_path_count: number;
   };
 }
 
@@ -91,6 +94,7 @@ export interface TimelineBaselineSnapshot {
     blocked_count: number;
     overdue_count: number;
     at_risk_count: number;
+    critical_path_count: number;
     planned_start: string | null;
     planned_end: string | null;
   };

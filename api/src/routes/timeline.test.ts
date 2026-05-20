@@ -136,10 +136,16 @@ describe('Timeline read model API', () => {
       planned_end: '2026-01-18',
       blocked: true,
       at_risk: true,
+      critical_path: true,
+      critical_path_order: 2,
     })
     expect(blockedIssue?.blocker_ids).toContain(issue1Id)
 
     const blockerIssue = rows.find(row => row.id === issue1Id)
+    expect(blockerIssue).toMatchObject({
+      critical_path: true,
+      critical_path_order: 1,
+    })
     expect(blockerIssue?.blocks_ids).toContain(issue2Id)
 
     expect(response.body.dependencies).toEqual([
@@ -157,6 +163,7 @@ describe('Timeline read model API', () => {
       dependency_count: 1,
       blocked_count: 1,
       at_risk_count: expect.any(Number),
+      critical_path_count: 2,
     })
   })
 

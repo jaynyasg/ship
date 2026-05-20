@@ -78,6 +78,8 @@ export interface TimelineRow {
   blocked: boolean;
   overdue: boolean;
   at_risk: boolean;
+  critical_path: boolean;
+  critical_path_order: number | null;
   sprint_number?: number | null;
 }
 
@@ -96,6 +98,7 @@ export interface TimelineResponse {
     blocked_count: number;
     overdue_count: number;
     at_risk_count: number;
+    critical_path_count: number;
   };
 }
 
@@ -123,6 +126,7 @@ export interface TimelineBaselineSnapshot {
     blocked_count: number;
     overdue_count: number;
     at_risk_count: number;
+    critical_path_count: number;
     planned_start: string | null;
     planned_end: string | null;
   };
@@ -552,6 +556,8 @@ function buildBaseRows(documents: TimelineDocumentRow[], associations: Associati
       blocked: false,
       overdue: false,
       at_risk: false,
+      critical_path: false,
+      critical_path_order: null,
       sprint_number: document.document_type === 'sprint' ? sprintNumber : undefined,
     };
   });
@@ -645,6 +651,71 @@ function applyDependencyFlags(rows: TimelineRow[], edges: TimelineDependencyEdge
   }
 }
 
+function comparePathCandidates(
+  current: string[],
+  candidate: string[],
+  rowById: Map<string, TimelineRow>
+): string[] {
+  if (candidate.length > current.length) return candidate;
+  if (candidate.length < current.length) return current;
+
+  const currentEnd = rowById.get(current[current.length - 1] ?? '')?.planned_end ?? '';
+  const candidateEnd = rowById.get(candidate[candidate.length - 1] ?? '')?.planned_end ?? '';
+  return candidateEnd > currentEnd ? candidate : current;
+}
+
+function applyCriticalPath(rows: TimelineRow[], edges: TimelineDependencyEdge[]): void {
+  const rowById = new Map(rows.map(row => [row.id, row]));
+  const blockersBySource = new Map<string, string[]>();
+
+  for (const edge of edges) {
+    if (!edge.is_blocking || !edge.source_in_scope || !edge.target_in_scope) continue;
+    const blockers = blockersBySource.get(edge.source_id) ?? [];
+    blockers.push(edge.target_id);
+    blockersBySource.set(edge.source_id, blockers);
+  }
+
+  const memo = new Map<string, string[]>();
+  const visiting = new Set<string>();
+
+  function longestBlockingPathTo(rowId: string): string[] {
+    const cached = memo.get(rowId);
+    if (cached) return cached;
+    if (visiting.has(rowId)) return [rowId];
+
+    visiting.add(rowId);
+    let bestPath = [rowId];
+    const blockers = blockersBySource.get(rowId) ?? [];
+
+    for (const blockerId of blockers) {
+      if (!rowById.has(blockerId)) continue;
+      const candidate = [...longestBlockingPathTo(blockerId), rowId];
+      bestPath = comparePathCandidates(bestPath, candidate, rowById);
+    }
+
+    visiting.delete(rowId);
+    memo.set(rowId, bestPath);
+    return bestPath;
+  }
+
+  const candidates = rows.filter(row => row.at_risk || row.blocked || row.overdue);
+  let criticalPath: string[] = [];
+
+  for (const row of candidates) {
+    const path = longestBlockingPathTo(row.id);
+    criticalPath = comparePathCandidates(criticalPath, path, rowById);
+  }
+
+  if (criticalPath.length === 0) return;
+
+  const criticalPathIds = new Set(criticalPath);
+  for (const row of rows) {
+    if (!criticalPathIds.has(row.id)) continue;
+    row.critical_path = true;
+    row.critical_path_order = criticalPath.indexOf(row.id) + 1;
+  }
+}
+
 function sortRows(rows: TimelineRow[]): TimelineRow[] {
   const rank: Record<TimelineDocumentType, number> = {
     program: 0,
@@ -682,6 +753,7 @@ async function getTimeline(
   const rows = buildBaseRows(documents, associations);
   const dependencies = buildDependencyEdges(dependencyRows, rows);
   applyDependencyFlags(rows, dependencies);
+  applyCriticalPath(rows, dependencies);
 
   const sortedRows = sortRows(rows);
 
@@ -700,6 +772,7 @@ async function getTimeline(
       blocked_count: sortedRows.filter(row => row.blocked).length,
       overdue_count: sortedRows.filter(row => row.overdue).length,
       at_risk_count: sortedRows.filter(row => row.at_risk).length,
+      critical_path_count: sortedRows.filter(row => row.critical_path).length,
     },
   };
 }
@@ -729,6 +802,7 @@ function buildBaselineSnapshot(timeline: TimelineResponse, capturedBy: string): 
       blocked_count: timeline.summary.blocked_count,
       overdue_count: timeline.summary.overdue_count,
       at_risk_count: timeline.summary.at_risk_count,
+      critical_path_count: timeline.summary.critical_path_count,
       planned_start: earliest(rows.map(row => row.planned_start)),
       planned_end: latest(rows.map(row => row.planned_end)),
     },
@@ -786,6 +860,7 @@ function parseBaselineSnapshot(value: unknown): TimelineBaselineSnapshot | null 
       blocked_count: typeof summary.blocked_count === 'number' ? summary.blocked_count : 0,
       overdue_count: typeof summary.overdue_count === 'number' ? summary.overdue_count : 0,
       at_risk_count: typeof summary.at_risk_count === 'number' ? summary.at_risk_count : 0,
+      critical_path_count: typeof summary.critical_path_count === 'number' ? summary.critical_path_count : 0,
       planned_start: toDateOnly(summary.planned_start) ?? earliest(rows.map(row => row.planned_start)),
       planned_end: toDateOnly(summary.planned_end) ?? latest(rows.map(row => row.planned_end)),
     },
