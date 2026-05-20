@@ -56,6 +56,10 @@ The clean dependency baseline is now enforceable. `pnpm audit:ci` parses `pnpm a
 
 The API build no longer depends on POSIX `cp`. `pnpm build:api`, which Playwright global setup invokes before E2E workers start, now runs through a Node script that copies DB schema and migration assets cross-platform.
 
+## Phase 11 Cross-Platform Dev Wrapper
+
+Root `pnpm dev` no longer depends on bash. It now runs a Node wrapper that preserves first-run database setup, `build:shared`, dynamic port selection, `.ports`, and parallel API/web startup on Windows, macOS, and Linux. The legacy shell wrapper remains available as `pnpm dev:sh`.
+
 ## Files To Read
 
 - `AUDIT.md` - full audit narrative with baseline, severity, and after status.
@@ -69,8 +73,10 @@ The API build no longer depends on POSIX `cp`. `pnpm build:api`, which Playwrigh
 - `docs/brainstorms/2026-05-20-phase-08-dependency-audit-zero.md` - Phase 08 dependency remediation evidence.
 - `docs/brainstorms/2026-05-20-phase-09-dependency-audit-gate.md` - Phase 09 CI audit gate evidence.
 - `docs/brainstorms/2026-05-20-phase-10-windows-e2e-build-unblock.md` - Phase 10 Windows E2E build unblock evidence.
+- `docs/brainstorms/2026-05-20-phase-11-cross-platform-dev-wrapper.md` - Phase 11 cross-platform `pnpm dev` evidence.
 - `eval/results/documents-pagination-contract.md` - concise API contract evidence for page-style `/api/documents` pagination.
 - `eval/results/e2e-windows-build-unblock.md` - verification note for the cross-platform API build.
+- `eval/results/cross-platform-dev-wrapper.md` - verification note for the Node dev wrapper.
 
 ## Verification Commands
 

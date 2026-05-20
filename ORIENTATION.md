@@ -33,7 +33,7 @@ upstream  https://github.com/US-Department-of-the-Treasury/ship.git
 The README's `Getting Started` section lists 7 setup steps. These additional steps were required on Windows:
 
 1. **`pnpm@10.27.0` must be installed explicitly** — the README says `npm install -g pnpm` but the `packageManager` field in `package.json` pins to `10.27.0` and Corepack will fail with mismatched versions.
-2. **`pnpm dev` does not work on Windows.** It runs `./scripts/dev.sh`, a bash-only script. On Windows, use `pnpm dev:api` and `pnpm dev:web` in separate terminals.
+2. **`pnpm dev` did not work on Windows.** It ran `./scripts/dev.sh`, a bash-only script. **Resolved in Phase 11:** root `pnpm dev` now runs `node scripts/dev.mjs`; the original bash wrapper remains available as `pnpm dev:sh`.
 3. **`api/.env.local` port must be 5433, not 5432.** The README's setup tells you to `cp api/.env.example api/.env.local`, but the example file uses port 5432. The actual `docker-compose.local.yml` maps host port 5433 → container port 5432 (to avoid conflict with locally-installed Postgres). The env file must be edited from 5432 to 5433 for the "Postgres-in-Docker + API-on-host" workflow.
 4. **`pnpm build:shared` must be run before `pnpm dev:web`.** The `web/` workspace imports `@ship/shared`, whose `package.json` `main` field points to `dist/index.js`. Without a one-time build, Vite fails with: *"Failed to resolve entry for package '@ship/shared'"*. The bash `dev.sh` handles this automatically (line 53: `pnpm build:shared`) — Windows users running `pnpm dev:*` directly skip that step.
 5. **README's `pnpm test` description is misleading.** The README implies `pnpm test` runs Playwright. Actually `pnpm test` runs Vitest in the `api/` workspace (451 unit tests, 42.87s runtime). Playwright E2E tests are `pnpm test:e2e`.
@@ -555,7 +555,7 @@ If Ship had 10x more workspaces, documents, and concurrent WebSocket connections
 
 | # | Finding | Severity | Impact |
 |---|---|---|---|
-| 1 | `pnpm dev` is bash-only on Windows | Medium | Blocks Windows developers; requires using `pnpm dev:api` + `pnpm dev:web` in separate terminals |
+| 1 | `pnpm dev` is bash-only on Windows | Medium | **Resolved in Phase 11:** root `pnpm dev` now uses `scripts/dev.mjs`, a Node wrapper that preserves database setup, port detection, `.ports`, and parallel server startup across Windows/macOS/Linux. |
 | 2 | `api/.env.example` port 5432 mismatches `docker-compose.local.yml` mapping (5433 on host) | Medium | Migrations fail with `ECONNREFUSED` until env file edited |
 | 3 | `pnpm build:shared` is required before `pnpm dev:web`; not documented in README | Medium | Vite fails with cryptic "Failed to resolve entry for package '@ship/shared'" |
 | 4 | README setup order is `seed → migrate`; conventional order is `migrate → seed` | Low | Confusing for new developers but works in practice |

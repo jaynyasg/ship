@@ -40,7 +40,7 @@ pnpm db:migrate       # Run database migrations
 pnpm test             # Runs api unit tests via vitest
 ```
 
-**What `pnpm dev` does** (via `scripts/dev.sh`):
+**What `pnpm dev` does** (via `scripts/dev.mjs`; legacy bash wrapper is `pnpm dev:sh`):
 1. Creates `api/.env.local` with DATABASE_URL if missing
 2. Creates database (e.g., `ship_auth_jan_6`) if it doesn't exist
 3. Runs migrations and seeds on fresh databases

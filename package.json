@@ -41,7 +41,8 @@
     "pnpm": ">=9.0.0"
   },
   "scripts": {
-    "dev": "./scripts/dev.sh",
+    "dev": "node scripts/dev.mjs",
+    "dev:sh": "./scripts/dev.sh",
     "docker:up": "docker compose -f docker-compose.local.yml up --build",
     "docker:down": "docker compose -f docker-compose.local.yml down",
     "docker:clean": "docker compose -f docker-compose.local.yml down -v",
