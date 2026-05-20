@@ -116,3 +116,5 @@ Phase 02 was the measured audit-improvement pass across the 7 PDF categories. Ph
 ## Implementation Evidence
 
 - Phase 04B timeline read-model timing: `eval/results/phase04b-timeline-benchmark.json`
+- Phase 04C timeline UI verification: `pnpm type-check`, `pnpm --filter @ship/web test -- src/lib/document-tabs.test.ts`, and `pnpm build:web`
+- Phase 04C bundle evidence: Vite emits the lazy `TimelineTab` chunk at about 11.39 kB minified / 3.69 kB gzip

@@ -53,6 +53,7 @@ const ProjectDetailsTab = React.lazy(() => import('@/components/document-tabs/Pr
 const ProjectIssuesTab = React.lazy(() => import('@/components/document-tabs/ProjectIssuesTab'));
 const ProjectWeeksTab = React.lazy(() => import('@/components/document-tabs/ProjectWeeksTab'));
 const ProjectRetroTab = React.lazy(() => import('@/components/document-tabs/ProjectRetroTab'));
+const TimelineTab = React.lazy(() => import('@/components/document-tabs/TimelineTab'));
 
 const ProgramOverviewTab = React.lazy(() => import('@/components/document-tabs/ProgramOverviewTab'));
 const ProgramIssuesTab = React.lazy(() => import('@/components/document-tabs/ProgramIssuesTab'));
@@ -84,6 +85,11 @@ export const documentTabConfigs: Record<string, DocumentTabConfig[]> = {
       component: ProjectDetailsTab,
     },
     {
+      id: 'timeline',
+      label: 'Timeline',
+      component: TimelineTab,
+    },
+    {
       id: 'weeks',
       label: 'Weeks',
       component: ProjectWeeksTab,
@@ -100,6 +106,11 @@ export const documentTabConfigs: Record<string, DocumentTabConfig[]> = {
       id: 'overview',
       label: 'Overview',
       component: ProgramOverviewTab,
+    },
+    {
+      id: 'timeline',
+      label: 'Timeline',
+      component: TimelineTab,
     },
     {
       id: 'issues',
