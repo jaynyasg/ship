@@ -301,8 +301,8 @@ When a client opens a document:
 1. Vite-served web app loads
 2. TipTap editor initializes with a `Y.Doc`
 3. `y-indexeddb` provider loads cached state (instant)
-4. `y-websocket` provider connects to `ws://localhost:3000/collab` (approximate path — verified at audit time)
-5. Auth check via cookie or query parameter (TBD on exact implementation)
+4. `y-websocket` provider connects to `/collaboration/{docType}:{docId}` (proxied by Vite in development or pointed at `VITE_API_URL` in deployed environments)
+5. Auth check via the `session_id` cookie. `api/src/collaboration/index.ts` parses the cookie header, validates the session, checks workspace access, and refreshes `sessions.last_activity`.
 6. Server loads canonical Yjs state from `documents.yjs_state` (BYTEA)
 7. Bidirectional sync begins
 
@@ -373,21 +373,21 @@ From `tsconfig.json`:
 
 #### TypeScript pattern examples in the codebase
 
-**Generics in use:** `[BASELINE: TBD — locate via grep during audit]`
+**Generics in use:** common and healthy. Examples include `request<T>()` in `web/src/lib/api.ts`, `useQuery<T>()` wrappers throughout the frontend, `SelectableList<T extends { id: string }>` in `web/src/components/SelectableList.tsx`, `pool.query<RowType>()` in API routes, and `PaginatedResponseSchema<T extends z.ZodTypeAny>()` in `api/src/openapi/schemas/common.ts`.
 
 **Discriminated union:** The `Document` type with `document_type` field is a discriminated union — different `document_type` values imply different `properties` shape.
 - Location: `shared/src/types/document.ts` (to be confirmed)
 - Example: `IssueProperties` vs `WeekProperties` vs `PersonProperties` interfaces in `docs/unified-document-model.md` lines 243-284
 
-**Utility types (`Pick`/`Omit`/`Partial`/`Required`/`Readonly`):** `[BASELINE: TBD — locate during audit]`
+**Utility types (`Pick`/`Omit`/`Partial`/`Required`/`Readonly`):** `Partial<T>` and `Record<K, V>` are used heavily for PATCH-style payloads, document properties, lookup maps, and optimistic updates. Examples include `Partial<Project>`, `Partial<Issue>`, `Partial<UnifiedDocument>`, and `Record<string, unknown>` in both API and frontend code.
 
-**Type guard function (`x is Y`):** `[BASELINE: TBD — locate during audit]`
+**Type guard function (`x is Y`):** present in both app layers. Examples include `isSelectableDocumentType()` / `isPanelDocument()` in `web/src/components/UnifiedEditor.tsx`, sidebar property guards in `web/src/components/sidebars/PropertiesPanel.tsx`, `isCascadeWarningError()` in `web/src/hooks/useIssuesQuery.ts`, `isValidIconName()` in `web/src/components/icons/uswds/types.ts`, `isTipTapDoc()` in `api/src/utils/yjsConverter.ts`, and `isRecord()` in `api/src/routes/weeks.ts`.
 
-These will be filled in during U2 (Type Safety baseline measurement) when we grep the codebase for positive patterns.
+These positive patterns shaped the U11 implementation: preserve the strict TypeScript posture, replace externally parsed `any` with `unknown` plus guards where possible, and use discriminated document shapes for editor and route helpers.
 
 #### TypeScript patterns not previously recognized
 
-`[BASELINE: TBD — to be filled in during audit as new patterns are encountered]`
+Ship's strongest type pattern is not just strict mode; it is the combination of strict mode with a single shared document vocabulary. The safest refactors during Phase 2 were the ones that narrowed `UnifiedDocument` by `document_type`, kept route rows explicit, and converted untrusted JSON/Yjs payloads at the boundary.
 
 ---
 
@@ -403,7 +403,7 @@ These will be filled in during U2 (Type Safety baseline measurement) when we gre
 
 #### Test fixtures
 
-`[BASELINE: TBD — to be read at U24 baseline time from e2e/fixtures/ or playwright config]`
+E2E fixtures live in `e2e/fixtures/`. `isolated-env.ts` is the main data factory for Playwright's isolated test mode, with supporting helpers in `dev-server.ts` and `test-helpers.ts`. The repo also has `playwright.isolated.config.ts`, which is intended to run tests against per-worker isolated environments.
 
 #### Test database lifecycle
 
@@ -420,7 +420,9 @@ These will be filled in during U2 (Type Safety baseline measurement) when we gre
 This is a much larger unit test suite than the PDF described. The PDF mentions "73+ Playwright tests" — those are the E2E tests, separate from this Vitest suite. Combined: ~524+ tests.
 
 **`pnpm test:e2e` (Playwright):**
-- `[BASELINE: TBD — to be captured during U5]`
+- Baseline attempt captured in `eval/results/e2e-test-baseline.txt`.
+- On Windows, the run was blocked before browser execution by `api/package.json` using POSIX `cp` in the `build` script. This is recorded as setup finding #20 below.
+- Category 5 remediation therefore focused on the reproducible API unit suite and on eliminating silently passing empty Playwright tests.
 
 ---
 
@@ -431,9 +433,9 @@ This is a much larger unit test suite than the PDF described. The PDF mentions "
 Three Dockerfiles in the repo:
 - `Dockerfile` — production API image (single-process Node server)
 - `Dockerfile.dev` — development API image (used by `docker-compose.local.yml`)
-- `Dockerfile.web` — Web frontend image (Vite build output served via nginx — TBD)
+- `Dockerfile.web` — Web frontend development image. It installs only `web` and `shared` workspace dependencies, runs `pnpm build:shared`, exposes port 5173, and starts Vite with `pnpm dev --host 0.0.0.0`.
 
-`[BASELINE: TBD — read Dockerfile details during U24 audit]`
+`Dockerfile` is the production API image. `Dockerfile.dev` is the Docker Compose API image. `Dockerfile.web` is for local/full-stack development rather than the S3/CloudFront production frontend described in the architecture docs.
 
 #### docker-compose services
 
@@ -466,9 +468,9 @@ Cloud provider: **AWS GovCloud** for production (per README "Production: AWS Gov
 
 #### CI/CD pipeline
 
-`[BASELINE: TBD — check `.github/workflows/` and `.gitlab-ci.yml` during U24]`
+No `.github/workflows/` directory or `.gitlab-ci.yml` file was present during the audit. This matches the README's "manual deploys initially" posture. Deployment automation is script-based (`scripts/deploy.sh`, `scripts/deploy-frontend.sh`) rather than CI/CD pipeline-based.
 
-The README states: "Manual deploys initially (scripts, not pipeline)" but the repo has `deploy-api-ship-api-*.zip` files at root, suggesting an active deployment pipeline.
+The README states: "Manual deploys initially (scripts, not pipeline)" and the repository structure matches that.
 
 ---
 
