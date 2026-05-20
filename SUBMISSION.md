@@ -36,13 +36,19 @@ After the seven audit categories closed, Ship added a Microsoft Project-inspired
 
 Ship now has an executable ESLint baseline across `api`, `web`, and `shared`, using recommended TypeScript rules plus React Hooks and JSX accessibility checks for web code. The baseline is intentionally committed before cleanup so future work can burn it down against a measured starting point: 333 files checked, 116 files with findings, 487 errors, and 29 warnings.
 
+## Phase 06 Security Remediation
+
+The dependency audit critical count is now 0. Phase 06 used narrow `pnpm.overrides` to lift `fast-xml-parser`, `protobufjs`, and `@protobufjs/utf8` to patched versions, preserving the current AWS SDK and testcontainers parent APIs. The after-audit artifact is `eval/results/dependency-audit-after.json`, and the rationale is documented in `THREAT_MODEL.md`.
+
 ## Files To Read
 
 - `AUDIT.md` - full audit narrative with baseline, severity, and after status.
 - `ORIENTATION.md` - codebase orientation and architecture synthesis.
+- `THREAT_MODEL.md` - dependency security status, Phase 06 remediation, and residual risk.
 - `eval/results/phase2-implementation-notes.md` - concise implementation and measurement log.
 - `docs/brainstorms/2026-05-20-phase-04-ms-project-inspired-improvements.md` - Phase 04 implementation evidence for Microsoft Project-inspired timeline/dependency improvements.
 - `docs/brainstorms/2026-05-20-phase-05-eslint-quality-gate.md` - Phase 05 lint gate scope and baseline evidence.
+- `docs/brainstorms/2026-05-20-phase-06-critical-cve-remediation.md` - Phase 06 critical CVE remediation evidence.
 
 ## Verification Commands
 
@@ -71,4 +77,4 @@ git diff --check
 
 - WebSocket reconnect UI remains a stretch item for runtime resilience.
 - Playwright E2E execution on Windows was blocked at baseline by bash/POSIX script assumptions; this is documented in `ORIENTATION.md` finding #20.
-- Critical CVE remediation remains the highest-leverage next backlog item.
+- Remaining high/moderate dependency advisories should be reduced in future security batches.

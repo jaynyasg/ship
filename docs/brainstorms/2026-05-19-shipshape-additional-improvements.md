@@ -157,6 +157,8 @@ Include companion down migration: `DROP INDEX IF EXISTS idx_documents_sort;`
 
 **Outcome is the deliverable regardless of which path is taken.**
 
+**Phase 06 outcome:** Completed on 2026-05-20. Critical advisories dropped from 2 to 0 using narrow `pnpm.overrides` for `fast-xml-parser`, `protobufjs`, and `@protobufjs/utf8`. Evidence is in `eval/results/dependency-audit-after.json`; rationale and residual risks are documented in `THREAT_MODEL.md`.
+
 ---
 
 ## Scope Boundaries
