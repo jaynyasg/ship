@@ -10,6 +10,7 @@ declare global {
       sessionId?: string;
       userId?: string;
       workspaceId?: string;
+      workspaceRole?: string;
       isSuperAdmin?: boolean;
       isApiToken?: boolean; // True when authenticated via API token
     }
@@ -180,13 +181,15 @@ export async function authMiddleware(
     }
 
     // Verify user still has access to the workspace (unless super-admin)
+    let workspaceRole: string | undefined;
     if (session.workspace_id && !session.is_super_admin) {
       const membershipResult = await pool.query(
-        'SELECT id FROM workspace_memberships WHERE workspace_id = $1 AND user_id = $2',
+        'SELECT id, role FROM workspace_memberships WHERE workspace_id = $1 AND user_id = $2',
         [session.workspace_id, session.user_id]
       );
 
-      if (!membershipResult.rows[0]) {
+      const membership = membershipResult.rows[0];
+      if (!membership) {
         // User no longer has access - delete session
         await pool.query('DELETE FROM sessions WHERE id = $1', [sessionId]);
 
@@ -199,18 +202,19 @@ export async function authMiddleware(
         });
         return;
       }
-    }
 
-    // Update last activity
-    await pool.query(
-      'UPDATE sessions SET last_activity = $1 WHERE id = $2',
-      [now, sessionId]
-    );
+      workspaceRole = membership.role;
+    }
 
     // Refresh cookie with sliding expiration (throttled to avoid overhead)
     // Only refresh if more than 60 seconds since last activity
     const COOKIE_REFRESH_THRESHOLD_MS = 60 * 1000;
     if (inactivityMs > COOKIE_REFRESH_THRESHOLD_MS) {
+      await pool.query(
+        'UPDATE sessions SET last_activity = $1 WHERE id = $2',
+        [now, sessionId]
+      );
+
       res.cookie('session_id', sessionId, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -224,6 +228,7 @@ export async function authMiddleware(
     req.sessionId = session.id;
     req.userId = session.user_id;
     req.workspaceId = session.workspace_id;
+    req.workspaceRole = workspaceRole;
     req.isSuperAdmin = session.is_super_admin;
 
     next();

@@ -127,4 +127,27 @@ Captured: 2026-05-20T18:31:48.1899602Z
 - The seeded local database starts at `sprint_number = 11`, so this EXPLAIN uses `11` to exercise matching rows.
 - The seeded local database is small, so PostgreSQL may still prefer sequential scans on `documents`; index existence is verified separately above.
 
+## U14 Follow-Up: Query Count Reduction
+
+Captured: 2026-05-20T20:34:19.812Z
+
+The endpoint benchmark showed that the rewritten weeks SQL was already sub-millisecond in PostgreSQL, but request latency still regressed under c=50. The remaining pressure was request-level database work around the route:
+
+| Flow | Before | After | Reduction |
+|---|---:|---:|---:|
+| `GET /api/weeks` with seeded `dev@ship.local` super-admin session | 5 DB statements | 3 DB statements | 40.00% |
+| `GET /api/weeks` with normal workspace member session | 6 DB statements | 4 DB statements | 33.33% |
+
+Before, every authenticated request updated `sessions.last_activity`, and the weeks route performed a second workspace-role lookup through `getVisibilityContext`. After:
+
+- `sessions.last_activity` is updated only when the existing 60-second sliding-cookie threshold is crossed, avoiding a write and row lock on every request.
+- `authMiddleware` reads the workspace membership role during the required access check.
+- `GET /api/weeks` and `GET /api/weeks/my-week` pass the authenticated role/super-admin flag into `getVisibilityContext`, avoiding the duplicate role query.
+
+Focused verification:
+
+- `pnpm --filter @ship/api test -- src/__tests__/auth.test.ts src/routes/weeks.test.ts` passed: 56/56 tests.
+- Auth unit tests now assert that `last_activity` is written beyond the 60-second threshold and not written inside it.
+- `GET /api/weeks` c=50 rerun improved from the previous after-run P97.5 of 154 ms to 130 ms, with 0 non-2xx responses (`api-benchmark-weeks-u14-after.json`). This is essentially flat against the original c=50 baseline of 131 ms, but the PDF DB efficiency target is met by the measured query-count reduction.
+
 

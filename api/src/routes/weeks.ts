@@ -344,7 +344,7 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
     const workspaceId = req.workspaceId!;
 
     // Get visibility context for filtering
-    const { isAdmin } = await getVisibilityContext(userId, workspaceId);
+    const { isAdmin } = await getVisibilityContext(userId, workspaceId, req.workspaceRole, req.isSuperAdmin);
 
     // First, get the workspace sprint_start_date to calculate current sprint number
     const workspaceResult = await pool.query(
@@ -628,7 +628,7 @@ router.get('/my-week', authMiddleware, async (req: Request, res: Response) => {
     const { state, assignee, show_mine, sprint_number: requestedSprintNumber } = req.query;
 
     // Get visibility context for filtering
-    const { isAdmin } = await getVisibilityContext(userId, workspaceId);
+    const { isAdmin } = await getVisibilityContext(userId, workspaceId, req.workspaceRole, req.isSuperAdmin);
 
     // Get workspace sprint_start_date to calculate current sprint number
     const workspaceResult = await pool.query(
