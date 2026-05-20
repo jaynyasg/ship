@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-20  
 **Repo:** `jaynyasg/ship`  
-**Current main commit after Phase 04:** `5636709 Highlight Phase 04 critical path`
+**Latest verified main before Phase 07:** `bd83a30 Remediate critical dependency CVEs`
 
 This file is the reviewer-facing map for the ShipShape audit work. The detailed report remains `AUDIT.md`; the raw before/after evidence lives in `eval/results/`.
 
@@ -40,6 +40,10 @@ Ship now has an executable ESLint baseline across `api`, `web`, and `shared`, us
 
 The dependency audit critical count is now 0. Phase 06 used narrow `pnpm.overrides` to lift `fast-xml-parser`, `protobufjs`, and `@protobufjs/utf8` to patched versions, preserving the current AWS SDK and testcontainers parent APIs. The after-audit artifact is `eval/results/dependency-audit-after.json`, and the rationale is documented in `THREAT_MODEL.md`.
 
+## Phase 07 API Pagination Contract
+
+The remaining `/api/documents` pagination gap is closed with page-style query support: `page`, `per_page`, and `limit` now produce a paginated `{ items, pagination }` response with `total_count`. Bare `/api/documents` still returns the legacy array so existing React callers keep working until a frontend pagination UI is intentionally scoped.
+
 ## Files To Read
 
 - `AUDIT.md` - full audit narrative with baseline, severity, and after status.
@@ -49,6 +53,8 @@ The dependency audit critical count is now 0. Phase 06 used narrow `pnpm.overrid
 - `docs/brainstorms/2026-05-20-phase-04-ms-project-inspired-improvements.md` - Phase 04 implementation evidence for Microsoft Project-inspired timeline/dependency improvements.
 - `docs/brainstorms/2026-05-20-phase-05-eslint-quality-gate.md` - Phase 05 lint gate scope and baseline evidence.
 - `docs/brainstorms/2026-05-20-phase-06-critical-cve-remediation.md` - Phase 06 critical CVE remediation evidence.
+- `docs/brainstorms/2026-05-20-phase-07-documents-pagination-contract.md` - Phase 07 documents pagination contract and compatibility decision.
+- `eval/results/documents-pagination-contract.md` - concise API contract evidence for page-style `/api/documents` pagination.
 
 ## Verification Commands
 

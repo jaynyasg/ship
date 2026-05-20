@@ -1,7 +1,7 @@
 ---
 title: "ShipShape — Additional Improvements Beyond U11-U17"
 date: 2026-05-19
-status: active
+status: completed
 origin: brainstorm — Phase 1 audit gap analysis
 parent_plan: docs/plans/2026-05-18-001-feat-shipshape-audit-enhancement-plan.md
 ---
@@ -24,6 +24,17 @@ Six additions across 4 of the 7 audit categories. Three slot into existing units
 | A | Cat 1 — Type Safety | ESLint config: `@typescript-eslint/recommended` + `jsx-a11y/recommended` | New U26 | Low-medium |
 | B | Cat 3 — API Response Time | API-layer pagination (LIMIT/OFFSET + total_count) on `/api/documents` | Expand U13 | Medium |
 | F | Cross-cutting | Best-effort Critical CVE remediation (2 CVEs from ORIENTATION finding #16) | Expand U18 | Medium-high, uncertain |
+
+## Implementation Status
+
+| ID | Status | Outcome |
+|---|---|---|
+| D | Complete | Coverage baseline and after artifacts were committed in `eval/results/test-coverage-baseline.json` and `eval/results/test-coverage-after.json`. |
+| C | Complete | `idx_documents_sort` shipped in migration `038_shipshape_query_perf_indexes.sql` and appears in `eval/results/db-query-after.md`. |
+| E | Complete | The login landmark gap is closed; `eval/results/axe-after.json` records 0 axe violations across audited pages. |
+| A | Complete | Phase 05 added the ESLint flat config, workspace lint scripts, and baseline artifacts. |
+| B | Complete | Phase 07 adds page-style `/api/documents` pagination while preserving the legacy array response for existing callers. |
+| F | Complete | Phase 06 reduced critical dependency advisories from 2 to 0 and documented the residual risk in `THREAT_MODEL.md`. |
 
 ---
 
@@ -124,16 +135,18 @@ Include companion down migration: `DROP INDEX IF EXISTS idx_documents_sort;`
 **Scope:** API layer only. No frontend pagination UI. The frontend continues to fetch page 1 — the improvement is measured by comparing the paginated response size and P95 to the baseline.
 
 **Files:**
-- `api/src/routes/documents.ts` — add `?page=N&limit=50` query params; return `{ data: [...], total: N, page: N, per_page: 50 }`
+- `api/src/routes/documents.ts` — add `?page=N&limit=50` and `?page=N&per_page=50` query params; return `{ items: [...], pagination: { total_count, page, per_page, ... } }`
 - `eval/results/api-benchmark-after.json` — re-run after both U13 projection + B pagination land
 
 **Acceptance criteria:**
-- `GET /api/documents?page=1&limit=50` returns first 50 documents with `total` count
-- `GET /api/documents` (no params) defaults to page 1 limit 50 (not all documents)
+- `GET /api/documents?page=1&limit=50` returns first 50 documents with `total` and `total_count`
+- `GET /api/documents` (no params) remains a legacy array response for existing frontend and command-palette callers
 - P95 at c=25 measurably lower than the 283 ms baseline (target: ≥20% per PDF + additional gain from smaller payload)
 - All existing Playwright tests pass (verify they don't assert on document list length or specific page behavior)
 
 **Risk:** Existing Playwright tests may rely on all documents being returned in one request. Check `e2e/` for any test that asserts on document count or iterates over the full document list before implementing.
+
+**Phase 07 outcome:** Completed on 2026-05-20. The route now supports page-style pagination with `page`, `limit`, and `per_page`, includes `total_count` by default for page requests, rejects ambiguous `offset` + page combinations, and preserves the no-query array response for backward compatibility.
 
 ---
 

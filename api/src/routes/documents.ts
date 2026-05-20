@@ -10,6 +10,7 @@ import { loadContentFromYjsState } from '../utils/yjsConverter.js';
 type RouterType = ReturnType<typeof Router>;
 const router: RouterType = Router();
 const MAX_DOCUMENT_LIST_LIMIT = 500;
+const DEFAULT_DOCUMENT_PAGE_SIZE = 50;
 
 type DocumentListParam = string | boolean | number | null;
 
@@ -136,18 +137,45 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
     const parentId = getQueryString(req.query.parent_id);
     const limitParse = parseIntegerQuery(req.query.limit, 'limit', { min: 1, max: MAX_DOCUMENT_LIST_LIMIT });
     const offsetParse = parseIntegerQuery(req.query.offset, 'offset', { min: 0 });
+    const pageParse = parseIntegerQuery(req.query.page, 'page', { min: 1 });
+    const perPageParse = parseIntegerQuery(req.query.per_page, 'per_page', { min: 1, max: MAX_DOCUMENT_LIST_LIMIT });
     const includeTotalParse = parseBooleanQuery(req.query.include_total, 'include_total');
 
-    if (limitParse.error || offsetParse.error || includeTotalParse.error) {
+    if (limitParse.error || offsetParse.error || pageParse.error || perPageParse.error || includeTotalParse.error) {
       res.status(400).json({
-        error: limitParse.error || offsetParse.error || includeTotalParse.error,
+        error: limitParse.error || offsetParse.error || pageParse.error || perPageParse.error || includeTotalParse.error,
       });
       return;
     }
 
-    const limit = limitParse.value;
-    const offset = offsetParse.value ?? 0;
-    const includeTotal = includeTotalParse.value ?? false;
+    const usesPagePagination = req.query.page !== undefined || req.query.per_page !== undefined;
+
+    if (
+      usesPagePagination &&
+      req.query.limit !== undefined &&
+      req.query.per_page !== undefined &&
+      limitParse.value !== perPageParse.value
+    ) {
+      res.status(400).json({
+        error: 'limit and per_page must match when both are provided',
+      });
+      return;
+    }
+
+    if (usesPagePagination && req.query.offset !== undefined) {
+      res.status(400).json({
+        error: 'offset cannot be combined with page or per_page',
+      });
+      return;
+    }
+
+    const page = usesPagePagination ? (pageParse.value ?? 1) : undefined;
+    const pageSize = usesPagePagination
+      ? (perPageParse.value ?? limitParse.value ?? DEFAULT_DOCUMENT_PAGE_SIZE)
+      : limitParse.value;
+    const limit = pageSize;
+    const offset = usesPagePagination ? ((page ?? 1) - 1) * (pageSize ?? DEFAULT_DOCUMENT_PAGE_SIZE) : (offsetParse.value ?? 0);
+    const includeTotal = usesPagePagination ? (includeTotalParse.value ?? true) : (includeTotalParse.value ?? false);
 
     if (limit === undefined && (req.query.offset !== undefined || req.query.include_total !== undefined)) {
       res.status(400).json({
@@ -236,9 +264,11 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
         pagination: {
           limit,
           offset,
+          ...(usesPagePagination ? { page, per_page: limit } : {}),
           returned: documents.length,
           has_more: hasMore,
           ...(total !== undefined ? { total } : {}),
+          ...(usesPagePagination && total !== undefined ? { total_count: total } : {}),
         },
       });
       return;

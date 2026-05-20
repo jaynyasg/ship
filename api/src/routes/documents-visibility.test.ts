@@ -232,6 +232,35 @@ describe('Document Visibility', () => {
       });
     });
 
+    it('returns page-style metadata and total_count when page pagination is supplied', async () => {
+      await pool.query(
+        `INSERT INTO documents (workspace_id, document_type, title, visibility, position, created_by)
+         VALUES
+           ($1, 'wiki', 'Doc 1', 'workspace', 1, $2),
+           ($1, 'wiki', 'Doc 2', 'workspace', 2, $2),
+           ($1, 'wiki', 'Doc 3', 'workspace', 3, $2)`,
+        [testWorkspaceId, user1Id]
+      );
+
+      const res = await request(app)
+        .get('/api/documents?page=2&per_page=2')
+        .set('Cookie', user1SessionCookie);
+
+      expect(res.status).toBe(200);
+      expect(res.body.items).toHaveLength(1);
+      expect(res.body.items.map((doc: { title: string }) => doc.title)).toEqual(['Doc 3']);
+      expect(res.body.pagination).toEqual({
+        limit: 2,
+        offset: 2,
+        page: 2,
+        per_page: 2,
+        returned: 1,
+        has_more: false,
+        total: 3,
+        total_count: 3,
+      });
+    });
+
     it('rejects invalid document list pagination values', async () => {
       const res = await request(app)
         .get('/api/documents?limit=0')

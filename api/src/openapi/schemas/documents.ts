@@ -68,6 +68,12 @@ export const DocumentListPaginationSchema = z.object({
   offset: z.number().int().min(0).openapi({
     description: 'Number of matching documents skipped',
   }),
+  page: z.number().int().min(1).optional().openapi({
+    description: 'Current 1-based page when page-style pagination is used',
+  }),
+  per_page: z.number().int().min(1).max(500).optional().openapi({
+    description: 'Requested page size when page-style pagination is used',
+  }),
   returned: z.number().int().min(0).openapi({
     description: 'Number of documents returned in this page',
   }),
@@ -76,6 +82,9 @@ export const DocumentListPaginationSchema = z.object({
   }),
   total: z.number().int().min(0).optional().openapi({
     description: 'Total matching documents when include_total=true',
+  }),
+  total_count: z.number().int().min(0).optional().openapi({
+    description: 'Total matching documents when page-style pagination includes count metadata',
   }),
 }).openapi('DocumentListPagination');
 
@@ -128,7 +137,7 @@ registry.registerPath({
   path: '/documents',
   tags: ['Documents'],
   summary: 'List documents',
-  description: 'List documents with optional filtering by type and parent. Supplying limit enables paginated response metadata.',
+  description: 'List documents with optional filtering by type and parent. Supplying limit enables offset pagination; supplying page or per_page enables page-style pagination with total_count by default.',
   request: {
     query: z.object({
       type: DocumentTypeSchema.optional().openapi({
@@ -138,19 +147,25 @@ registry.registerPath({
         description: 'Filter by parent document ID',
       }),
       limit: z.coerce.number().int().min(1).max(500).optional().openapi({
-        description: 'Maximum number of documents to return. Enables the paginated response shape.',
+        description: 'Maximum number of documents to return. Enables the paginated response shape, or acts as page size when page is supplied.',
       }),
       offset: z.coerce.number().int().min(0).optional().openapi({
         description: 'Number of matching documents to skip. Requires limit.',
       }),
+      page: z.coerce.number().int().min(1).optional().openapi({
+        description: '1-based page number. Enables page-style pagination and defaults per_page to 50.',
+      }),
+      per_page: z.coerce.number().int().min(1).max(500).optional().openapi({
+        description: 'Page size for page-style pagination. Enables page-style pagination and defaults page to 1.',
+      }),
       include_total: z.enum(['true', 'false']).optional().openapi({
-        description: 'Include total matching count in pagination metadata. Requires limit.',
+        description: 'Include total matching count in pagination metadata. Requires limit unless page or per_page is supplied.',
       }),
     }),
   },
   responses: {
     200: {
-      description: 'List of documents. Returns an array by default, or a paginated object when limit is supplied.',
+      description: 'List of documents. Returns an array by default, or a paginated object when limit, page, or per_page is supplied.',
       content: {
         'application/json': {
           schema: z.union([z.array(DocumentListItemSchema), PaginatedDocumentListSchema]),
