@@ -5,12 +5,22 @@
  */
 import { Node, mergeAttributes } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
-import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react';
+import type * as pmModel from '@tiptap/pm/model';
+import { ReactNodeViewRenderer, NodeViewWrapper, Editor } from '@tiptap/react';
+import type { NodeViewProps } from '@tiptap/react';
 import { uploadFile, isAllowedFileType, getMimeTypeFromExtension, isImageFile, MAX_FILE_SIZE, MAX_FILE_SIZE_DISPLAY } from '@/services/upload';
 import { registerUpload, updateUploadProgress, unregisterUpload } from '@/services/uploadTracker';
 import { useState } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
+
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    fileAttachment: {
+      setFileAttachment: (options: { filename: string; url: string; size: number; mimeType: string; uploading?: boolean }) => ReturnType;
+    };
+  }
+}
 
 // File type icons mapping
 const FILE_ICONS: Record<string, string> = {
@@ -43,7 +53,7 @@ function formatFileSize(bytes: number): string {
 }
 
 // React component for rendering file attachment
-function FileAttachmentComponent({ node }: { node: any }) {
+function FileAttachmentComponent({ node }: NodeViewProps) {
   const { filename, url, size, mimeType, uploading } = node.attrs;
   const [uploadProgress, setUploadProgress] = useState(uploading ? 0 : 100);
 
@@ -131,12 +141,12 @@ export const FileAttachmentExtension = Node.create({
     return {
       setFileAttachment:
         (options: { filename: string; url: string; size: number; mimeType: string }) =>
-        ({ commands }: any) =>
+        ({ commands }) =>
           commands.insertContent({
             type: this.name,
             attrs: options,
           }),
-    } as any;
+    };
   },
 
   addProseMirrorPlugins() {
@@ -200,7 +210,7 @@ export const FileAttachmentExtension = Node.create({
  * @param file - File to upload
  * @param signal - Optional AbortSignal for cancelling uploads on navigation/cleanup
  */
-async function handleFileUpload(editor: any, file: File, signal?: AbortSignal) {
+async function handleFileUpload(editor: Editor, file: File, signal?: AbortSignal) {
   // Check if already aborted
   if (signal?.aborted) {
     return;
@@ -258,7 +268,7 @@ async function handleFileUpload(editor: any, file: File, signal?: AbortSignal) {
     const { state, view } = editor;
     let attachmentPos: number | null = null;
 
-    state.doc.descendants((node: any, nodePos: number) => {
+    state.doc.descendants((node: pmModel.Node, nodePos: number) => {
       if (
         node.type.name === 'fileAttachment' &&
         node.attrs.filename === file.name &&
@@ -306,7 +316,7 @@ async function handleFileUpload(editor: any, file: File, signal?: AbortSignal) {
     const { state, view } = editor;
     let attachmentPos: number | null = null;
 
-    state.doc.descendants((node: any, nodePos: number) => {
+    state.doc.descendants((node: pmModel.Node, nodePos: number) => {
       if (
         node.type.name === 'fileAttachment' &&
         node.attrs.filename === file.name &&
@@ -330,7 +340,7 @@ async function handleFileUpload(editor: any, file: File, signal?: AbortSignal) {
  * @param editor - TipTap editor instance
  * @param signal - Optional AbortSignal for cancelling uploads on navigation/cleanup
  */
-export function triggerFileUpload(editor: any, signal?: AbortSignal) {
+export function triggerFileUpload(editor: Editor, signal?: AbortSignal) {
   // Check if already aborted
   if (signal?.aborted) {
     return;

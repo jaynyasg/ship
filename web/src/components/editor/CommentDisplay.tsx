@@ -1,5 +1,6 @@
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
+import type { Node } from '@tiptap/pm/model';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { createRoot, Root } from 'react-dom/client';
 import { Comment } from '@/hooks/useCommentsQuery';
@@ -23,10 +24,10 @@ function groupByThread(comments: Comment[]): Map<string, Comment[]> {
  * Find all comment mark positions in the document.
  * Returns a map of commentId -> end position of the containing block.
  */
-function findCommentPositions(doc: any): Map<string, number> {
+function findCommentPositions(doc: Node): Map<string, number> {
   const positions = new Map<string, number>();
 
-  doc.descendants((node: any, pos: number) => {
+  doc.descendants((node: Node, pos: number) => {
     if (node.isText) {
       for (const mark of node.marks) {
         if (mark.type.name === 'commentMark' && mark.attrs.commentId) {
@@ -183,8 +184,10 @@ export const CommentDisplayExtension = Extension.create<Record<string, never>, C
                   `;
                   // Auto-focus the input after it's added to the DOM
                   requestAnimationFrame(() => {
-                    const input = container.querySelector('.comment-pending-field') as HTMLInputElement;
-                    input?.focus();
+                    const input = container.querySelector('.comment-pending-field');
+                    if (input instanceof HTMLInputElement) {
+                      input.focus();
+                    }
                   });
                   return container;
                 }, {
@@ -210,7 +213,7 @@ export const CommentDisplayExtension = Extension.create<Record<string, never>, C
             for (const [commentId, thread] of threads.entries()) {
               const isResolved = thread[0].resolved_at !== null;
               if (isResolved) {
-                doc.descendants((node: any, pos: number) => {
+                doc.descendants((node: Node, pos: number) => {
                   if (node.isText) {
                     for (const mark of node.marks) {
                       if (mark.type.name === 'commentMark' && mark.attrs.commentId === commentId) {
@@ -232,7 +235,7 @@ export const CommentDisplayExtension = Extension.create<Record<string, never>, C
 
               // Find the quoted text for this comment
               let quotedText = '';
-              doc.descendants((node: any, pos: number) => {
+              doc.descendants((node: Node) => {
                 if (node.isText) {
                   for (const mark of node.marks) {
                     if (
@@ -265,12 +268,13 @@ export const CommentDisplayExtension = Extension.create<Record<string, never>, C
 
           handleDOMEvents: {
             click: (view, event) => {
-              const target = event.target as HTMLElement;
+              if (!(event.target instanceof HTMLElement)) return false;
+              const target = event.target;
 
               // Handle resolve button click
-              const resolveBtn = target.closest('.comment-resolve-btn') as HTMLElement;
+              const resolveBtn = target.closest('.comment-resolve-btn');
               if (resolveBtn) {
-                const commentId = resolveBtn.dataset.commentId;
+                const commentId = resolveBtn instanceof HTMLElement ? resolveBtn.dataset.commentId : undefined;
                 if (commentId && storage.onResolve) {
                   storage.onResolve(commentId, true);
                 }
@@ -279,11 +283,11 @@ export const CommentDisplayExtension = Extension.create<Record<string, never>, C
               }
 
               // Handle "Show thread" click on resolved comments
-              const resolvedToggle = target.closest('.comment-resolved-toggle') as HTMLElement;
+              const resolvedToggle = target.closest('.comment-resolved-toggle');
               if (resolvedToggle) {
-                const threadEl = resolvedToggle.closest('.comment-thread-inline') as HTMLElement;
+                const threadEl = resolvedToggle.closest('.comment-thread-inline');
                 if (threadEl) {
-                  const commentId = threadEl.dataset.commentThread;
+                  const commentId = threadEl instanceof HTMLElement ? threadEl.dataset.commentThread : undefined;
                   if (commentId && storage.onResolve) {
                     storage.onResolve(commentId, false);
                   }
@@ -296,15 +300,15 @@ export const CommentDisplayExtension = Extension.create<Record<string, never>, C
             },
 
             keydown: (view, event) => {
-              const target = event.target as HTMLElement;
+              if (!(event.target instanceof HTMLElement)) return false;
+              const target = event.target;
 
               // Handle Enter/Escape on pending comment input
-              if (target.classList.contains('comment-pending-field')) {
-                const input = target as HTMLInputElement;
-                const commentId = input.dataset.pendingCommentId;
+              if (target instanceof HTMLInputElement && target.classList.contains('comment-pending-field')) {
+                const commentId = target.dataset.pendingCommentId;
 
                 if (event.key === 'Enter' && !event.shiftKey) {
-                  const content = input.value.trim();
+                  const content = target.value.trim();
                   if (commentId && content && storage.onSubmitComment) {
                     storage.onSubmitComment(commentId, content);
                   }
@@ -327,17 +331,17 @@ export const CommentDisplayExtension = Extension.create<Record<string, never>, C
 
               // Handle Enter on reply input
               if (
+                target instanceof HTMLInputElement &&
                 target.classList.contains('comment-reply-input') &&
                 event.key === 'Enter' &&
                 !event.shiftKey
               ) {
-                const input = target as HTMLInputElement;
-                const commentId = input.dataset.commentId;
-                const content = input.value.trim();
+                const commentId = target.dataset.commentId;
+                const content = target.value.trim();
 
                 if (commentId && content && storage.onReply) {
                   storage.onReply(commentId, content);
-                  input.value = '';
+                  target.value = '';
                 }
                 event.preventDefault();
                 return true;

@@ -8,38 +8,38 @@
   "reduction_kb": 1786.34,
   "reduction_percent": 86.14,
   "meets_pdf_initial_load_target_20_percent": true,
-  "entry_script": "index-UU2zm8c_.js",
+  "entry_script": "index-DNGLRLDB.js",
   "note": "Main entry script from web/dist/index.html after lazy-loading route pages and AppLayout. Heavy app/editor/page code is deferred into async route chunks.",
   "deferred_chunks": {
-    "App-Btbst61H.js": {
+    "App-ClkILDQ1.js": {
       "size_kb": 86.33,
-      "gzip_kb": 18.95
+      "gzip_kb": 18.96
     },
-    "UnifiedDocumentPage-BzQpB7ag.js": {
-      "size_kb": 394.87,
-      "gzip_kb": 97.5
+    "UnifiedDocumentPage-CMJnMfpS.js": {
+      "size_kb": 395.34,
+      "gzip_kb": 97.74
     },
-    "PropertyRow-ChwM-Bgd.js": {
-      "size_kb": 816.3,
-      "gzip_kb": 255.47
+    "PropertyRow-D15WAC5T.js": {
+      "size_kb": 816.53,
+      "gzip_kb": 255.51
     },
-    "Login-AX1Ioato.js": {
+    "Login-DqLOaDIx.js": {
       "size_kb": 50.79,
       "gzip_kb": 10.35
     },
-    "IssuesList-DYheKqE5.js": {
+    "IssuesList-B0XdFHuK.js": {
       "size_kb": 52.9,
       "gzip_kb": 15.51
     },
-    "ReviewsPage-CWqFbTSp.js": {
+    "ReviewsPage-CasZWJQh.js": {
       "size_kb": 27.73,
-      "gzip_kb": 7.04
+      "gzip_kb": 7.05
     },
-    "TeamMode-DxrPC5xs.js": {
+    "TeamMode-CmpsVuN9.js": {
       "size_kb": 21.33,
       "gzip_kb": 6.41
     },
-    "WorkspaceSettings-B-mmu7X0.js": {
+    "WorkspaceSettings-BoGX08GS.js": {
       "size_kb": 17.1,
       "gzip_kb": 4.28
     }

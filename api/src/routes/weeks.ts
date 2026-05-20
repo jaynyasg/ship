@@ -15,6 +15,67 @@ import { extractText } from '../utils/document-content.js';
 type RouterType = ReturnType<typeof Router>;
 const router: RouterType = Router();
 
+interface SprintRouteRow extends Record<string, unknown> {
+  id: string;
+  title: string;
+  properties?: Record<string, unknown> | null;
+}
+
+interface MyWeekIssue {
+  id: string;
+  title: string;
+  state: string;
+  priority: string;
+  assignee_id: unknown;
+  assignee_name: unknown;
+  assignee_archived: unknown;
+  estimate: unknown;
+  ticket_number: unknown;
+  display_id: string;
+  created_at: unknown;
+  updated_at: unknown;
+}
+
+interface StandupRow extends Record<string, unknown> {
+  id: string;
+  parent_id: string;
+  title: string;
+  content: unknown;
+  author_id: string | null;
+  author_name: string | null;
+  author_email: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ReviewIssueRow {
+  id: string;
+  title: string;
+  ticket_number: number | null;
+  properties?: Record<string, unknown> | null;
+}
+
+interface ReviewSprintData {
+  sprint_number: unknown;
+  program_name: unknown;
+  plan: string | null;
+}
+
+type TipTapContent = {
+  type: 'doc';
+  content: Array<Record<string, unknown>>;
+};
+
+function toCount(value: unknown): number {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') return parseInt(value, 10) || 0;
+  return 0;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object';
+}
+
 /**
  * Look up the reports_to user_id for a sprint's owner.
  * The sprint's owner_id is a person document ID; this resolves their supervisor's user_id.
@@ -47,7 +108,11 @@ function parseApprovalComment(body: unknown): { provided: boolean; value: string
     return { provided: false, value: null };
   }
 
-  const raw = (body as Record<string, unknown>).comment;
+  if (!isRecord(body)) {
+    return { provided: false, value: null };
+  }
+
+  const raw = body.comment;
   if (raw === null || raw === undefined) {
     return { provided: true, value: null };
   }
@@ -183,7 +248,7 @@ const updatePlanSchema = z.object({
 
 // Helper to extract sprint from row
 // Dates and status are computed on frontend from sprint_number + workspace.sprint_start_date
-function extractSprintFromRow(row: any) {
+function extractSprintFromRow(row: SprintRouteRow) {
   const props = row.properties || {};
   return {
     id: row.id,
@@ -201,9 +266,9 @@ function extractSprintFromRow(row: any) {
     program_accountable_id: row.program_accountable_id || null,
     owner_reports_to: row.owner_reports_to || null,
     workspace_sprint_start_date: row.workspace_sprint_start_date,
-    issue_count: parseInt(row.issue_count) || 0,
-    completed_count: parseInt(row.completed_count) || 0,
-    started_count: parseInt(row.started_count) || 0,
+    issue_count: toCount(row.issue_count),
+    completed_count: toCount(row.completed_count),
+    started_count: toCount(row.started_count),
     has_plan: row.has_plan === true || row.has_plan === 't',
     has_retro: row.has_retro === true || row.has_retro === 't',
     // Retro outcome summary (populated if retro exists)
@@ -617,7 +682,7 @@ router.get('/my-week', authMiddleware, async (req: Request, res: Response) => {
     const daysRemaining = isHistorical ? 0 : Math.max(0, Math.ceil((targetSprintEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) + 1);
 
     // Build dynamic WHERE clause for issue filters
-    const params: any[] = [workspaceId, targetSprintNumber, userId, isAdmin];
+    const params: unknown[] = [workspaceId, targetSprintNumber, userId, isAdmin];
     let filterConditions = '';
 
     if (state && typeof state === 'string') {
@@ -675,7 +740,7 @@ router.get('/my-week', authMiddleware, async (req: Request, res: Response) => {
     const groupedData: Record<string, {
       sprint: { id: string; name: string; sprint_number: number };
       program: { id: string; name: string; prefix: string } | null;
-      issues: any[];
+      issues: MyWeekIssue[];
     }> = {};
 
     for (const row of result.rows) {
@@ -720,9 +785,9 @@ router.get('/my-week', authMiddleware, async (req: Request, res: Response) => {
     // Calculate totals
     const totalIssues = groups.reduce((sum, g) => sum + g.issues.length, 0);
     const completedIssues = groups.reduce((sum, g) =>
-      sum + g.issues.filter((i: any) => i.state === 'done').length, 0);
+      sum + g.issues.filter((issue) => issue.state === 'done').length, 0);
     const inProgressIssues = groups.reduce((sum, g) =>
-      sum + g.issues.filter((i: any) => i.state === 'in_progress' || i.state === 'in_review').length, 0);
+      sum + g.issues.filter((issue) => issue.state === 'in_progress' || issue.state === 'in_review').length, 0);
 
     res.json({
       groups,
@@ -1061,7 +1126,7 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response) => {
     const currentProps = existing.rows[0].properties || {};
     const programId = existing.rows[0].program_id;
     const updates: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
     let paramIndex = 1;
 
     const data = parsed.data;
@@ -1801,7 +1866,7 @@ const createStandupSchema = z.object({
 });
 
 // Helper to format standup response
-function formatStandupResponse(row: any) {
+function formatStandupResponse(row: StandupRow) {
   return {
     id: row.id,
     sprint_id: row.parent_id,
@@ -2030,7 +2095,7 @@ const sprintReviewSchema = z.object({
 });
 
 // Helper to generate pre-filled sprint review content
-async function generatePrefilledReviewContent(sprintData: any, issues: any[]) {
+async function generatePrefilledReviewContent(sprintData: ReviewSprintData, issues: ReviewIssueRow[]) {
   // Categorize issues
   const issuesPlanned = issues.filter(i => {
     const props = i.properties || {};
@@ -2055,7 +2120,7 @@ async function generatePrefilledReviewContent(sprintData: any, issues: any[]) {
   });
 
   // Build TipTap content with suggested sections
-  const content: any = {
+  const content: TipTapContent = {
     type: 'doc',
     content: [
       {
@@ -2437,7 +2502,7 @@ router.patch('/:id/review', authMiddleware, async (req: Request, res: Response) 
 
     // Build update query
     const updates: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
     let paramIndex = 1;
 
     if (content !== undefined) {

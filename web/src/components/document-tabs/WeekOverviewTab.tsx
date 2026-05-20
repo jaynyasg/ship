@@ -124,7 +124,7 @@ export default function SprintOverviewTab({ documentId, document }: DocumentTabP
     start_date: (document.start_date as string) || '',
     end_date: (document.end_date as string) || '',
     status: ((document.status as string) || 'planning') as 'planning' | 'active' | 'completed',
-    program_id: programId,
+    program_id: programId ?? null,
     plan: (document.plan as string) || '',
     owner_id: document.owner_id as string | null | undefined,
   }), [document, programId]);
