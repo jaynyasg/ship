@@ -1,9 +1,10 @@
 import { pool } from '../db/client.js';
 import { VISIBILITY_FILTER_SQL } from '../middleware/visibility.js';
 
-type TimelineScopeType = 'project' | 'program';
-type TimelineDocumentType = 'program' | 'project' | 'sprint' | 'issue';
+export type TimelineScopeType = 'project' | 'program';
+export type TimelineDocumentType = 'program' | 'project' | 'sprint' | 'issue';
 
+const DAY_MS = 24 * 60 * 60 * 1000;
 interface TimelineDocumentRow {
   id: string;
   title: string;
@@ -98,6 +99,80 @@ export interface TimelineResponse {
   };
 }
 
+export interface TimelineBaselineRow {
+  id: string;
+  title: string;
+  document_type: TimelineDocumentType;
+  planned_start: string | null;
+  planned_end: string | null;
+  status: string | null;
+}
+
+export interface TimelineBaselineSnapshot {
+  captured_at: string;
+  captured_by: string;
+  scope: {
+    id: string;
+    type: TimelineScopeType;
+    title: string;
+  };
+  rows: TimelineBaselineRow[];
+  summary: {
+    total_rows: number;
+    dependency_count: number;
+    blocked_count: number;
+    overdue_count: number;
+    at_risk_count: number;
+    planned_start: string | null;
+    planned_end: string | null;
+  };
+}
+
+export interface TimelineVarianceRow {
+  id: string;
+  title: string;
+  document_type: TimelineDocumentType;
+  current_planned_start: string | null;
+  current_planned_end: string | null;
+  current_status: string | null;
+  baseline_planned_start: string | null;
+  baseline_planned_end: string | null;
+  baseline_status: string | null;
+  start_variance_days: number | null;
+  end_variance_days: number | null;
+  status_changed: boolean;
+  missing_from_baseline: boolean;
+  missing_from_current: boolean;
+  blocked: boolean;
+  overdue: boolean;
+  at_risk: boolean;
+}
+
+export interface TimelineVarianceResponse {
+  scope: {
+    id: string;
+    type: TimelineScopeType;
+    title: string;
+  };
+  generated_at: string;
+  baseline: TimelineBaselineSnapshot | null;
+  rows: TimelineVarianceRow[];
+  summary: {
+    total_rows: number;
+    current_rows: number;
+    baseline_rows: number;
+    missing_from_baseline_count: number;
+    missing_from_current_count: number;
+    start_variance_count: number;
+    end_variance_count: number;
+    status_changed_count: number;
+    delayed_count: number;
+    improved_count: number;
+    total_end_variance_days: number;
+    average_end_variance_days: number | null;
+  };
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -127,6 +202,14 @@ function toDate(value: unknown): Date | null {
 function toDateOnly(value: unknown): string | null {
   const date = toDate(value);
   return date ? date.toISOString().slice(0, 10) : null;
+}
+
+function diffDateOnlyDays(fromValue: string | null, toValue: string | null): number | null {
+  if (!fromValue || !toValue) return null;
+  const fromDate = toDate(`${fromValue}T00:00:00Z`);
+  const toDateValue = toDate(`${toValue}T00:00:00Z`);
+  if (!fromDate || !toDateValue) return null;
+  return Math.round((toDateValue.getTime() - fromDate.getTime()) / DAY_MS);
 }
 
 function todayUtcDateOnly(): Date {
@@ -621,6 +704,241 @@ async function getTimeline(
   };
 }
 
+function toBaselineRow(row: TimelineRow): TimelineBaselineRow {
+  return {
+    id: row.id,
+    title: row.title,
+    document_type: row.document_type,
+    planned_start: row.planned_start,
+    planned_end: row.planned_end,
+    status: row.status,
+  };
+}
+
+function buildBaselineSnapshot(timeline: TimelineResponse, capturedBy: string): TimelineBaselineSnapshot {
+  const rows = timeline.rows.map(toBaselineRow);
+
+  return {
+    captured_at: new Date().toISOString(),
+    captured_by: capturedBy,
+    scope: timeline.scope,
+    rows,
+    summary: {
+      total_rows: rows.length,
+      dependency_count: timeline.summary.dependency_count,
+      blocked_count: timeline.summary.blocked_count,
+      overdue_count: timeline.summary.overdue_count,
+      at_risk_count: timeline.summary.at_risk_count,
+      planned_start: earliest(rows.map(row => row.planned_start)),
+      planned_end: latest(rows.map(row => row.planned_end)),
+    },
+  };
+}
+
+function isTimelineDocumentType(value: unknown): value is TimelineDocumentType {
+  return value === 'program' || value === 'project' || value === 'sprint' || value === 'issue';
+}
+
+function parseBaselineRow(value: unknown): TimelineBaselineRow | null {
+  const row = asRecord(value);
+  if (typeof row.id !== 'string' || row.id.length === 0) return null;
+  if (typeof row.title !== 'string') return null;
+  if (!isTimelineDocumentType(row.document_type)) return null;
+
+  return {
+    id: row.id,
+    title: row.title,
+    document_type: row.document_type,
+    planned_start: toDateOnly(row.planned_start),
+    planned_end: toDateOnly(row.planned_end),
+    status: typeof row.status === 'string' ? row.status : null,
+  };
+}
+
+function parseBaselineSnapshot(value: unknown): TimelineBaselineSnapshot | null {
+  const snapshot = asRecord(value);
+  const scope = asRecord(snapshot.scope);
+  const rowsValue = Array.isArray(snapshot.rows) ? snapshot.rows : null;
+
+  if (typeof snapshot.captured_at !== 'string') return null;
+  if (typeof snapshot.captured_by !== 'string') return null;
+  if (typeof scope.id !== 'string' || !isTimelineScopeType(scope.type) || typeof scope.title !== 'string') return null;
+  if (!rowsValue) return null;
+
+  const capturedAt = toDate(snapshot.captured_at);
+  if (!capturedAt) return null;
+
+  const rows = rowsValue.map(parseBaselineRow).filter((row): row is TimelineBaselineRow => row !== null);
+  const summary = asRecord(snapshot.summary);
+
+  return {
+    captured_at: capturedAt.toISOString(),
+    captured_by: snapshot.captured_by,
+    scope: {
+      id: scope.id,
+      type: scope.type,
+      title: scope.title,
+    },
+    rows,
+    summary: {
+      total_rows: typeof summary.total_rows === 'number' ? summary.total_rows : rows.length,
+      dependency_count: typeof summary.dependency_count === 'number' ? summary.dependency_count : 0,
+      blocked_count: typeof summary.blocked_count === 'number' ? summary.blocked_count : 0,
+      overdue_count: typeof summary.overdue_count === 'number' ? summary.overdue_count : 0,
+      at_risk_count: typeof summary.at_risk_count === 'number' ? summary.at_risk_count : 0,
+      planned_start: toDateOnly(summary.planned_start) ?? earliest(rows.map(row => row.planned_start)),
+      planned_end: toDateOnly(summary.planned_end) ?? latest(rows.map(row => row.planned_end)),
+    },
+  };
+}
+
+function isTimelineScopeType(value: unknown): value is TimelineScopeType {
+  return value === 'project' || value === 'program';
+}
+
+async function getStoredBaseline(
+  scopeType: TimelineScopeType,
+  scopeId: string,
+  workspaceId: string,
+  userId: string,
+  isAdmin: boolean
+): Promise<TimelineBaselineSnapshot | null> {
+  const result = await pool.query(
+    `SELECT d.properties->'timeline_baseline' as baseline
+     FROM documents d
+     WHERE d.id = $1
+       AND d.workspace_id = $2
+       AND d.document_type = $3
+       AND ${VISIBILITY_FILTER_SQL('d', '$4', '$5')}`,
+    [scopeId, workspaceId, scopeType, userId, isAdmin]
+  );
+
+  return parseBaselineSnapshot(result.rows[0]?.baseline);
+}
+
+async function saveBaseline(
+  scopeType: TimelineScopeType,
+  scopeId: string,
+  workspaceId: string,
+  snapshot: TimelineBaselineSnapshot
+): Promise<void> {
+  await pool.query(
+    `UPDATE documents
+     SET properties = jsonb_set(COALESCE(properties, '{}'::jsonb), '{timeline_baseline}', $1::jsonb, true),
+         updated_at = now()
+     WHERE id = $2
+       AND workspace_id = $3
+       AND document_type = $4`,
+    [JSON.stringify(snapshot), scopeId, workspaceId, scopeType]
+  );
+}
+
+function buildVarianceResponse(
+  timeline: TimelineResponse,
+  baseline: TimelineBaselineSnapshot | null
+): TimelineVarianceResponse {
+  const currentById = new Map(timeline.rows.map(row => [row.id, row]));
+  const baselineRows = baseline?.rows ?? [];
+  const baselineById = new Map(baselineRows.map(row => [row.id, row]));
+  const orderedIds = [
+    ...timeline.rows.map(row => row.id),
+    ...baselineRows.map(row => row.id).filter(id => !currentById.has(id)),
+  ];
+
+  const rows = orderedIds.map((id): TimelineVarianceRow => {
+    const current = currentById.get(id) ?? null;
+    const baselineRow = baselineById.get(id) ?? null;
+    const title = current?.title ?? baselineRow?.title ?? 'Unknown document';
+    const documentType = current?.document_type ?? baselineRow?.document_type ?? 'issue';
+    const startVarianceDays = diffDateOnlyDays(
+      baselineRow?.planned_start ?? null,
+      current?.planned_start ?? null
+    );
+    const endVarianceDays = diffDateOnlyDays(
+      baselineRow?.planned_end ?? null,
+      current?.planned_end ?? null
+    );
+
+    return {
+      id,
+      title,
+      document_type: documentType,
+      current_planned_start: current?.planned_start ?? null,
+      current_planned_end: current?.planned_end ?? null,
+      current_status: current?.status ?? null,
+      baseline_planned_start: baselineRow?.planned_start ?? null,
+      baseline_planned_end: baselineRow?.planned_end ?? null,
+      baseline_status: baselineRow?.status ?? null,
+      start_variance_days: startVarianceDays,
+      end_variance_days: endVarianceDays,
+      status_changed: !!baselineRow && !!current && baselineRow.status !== current.status,
+      missing_from_baseline: !baselineRow,
+      missing_from_current: !current,
+      blocked: current?.blocked ?? false,
+      overdue: current?.overdue ?? false,
+      at_risk: current?.at_risk ?? false,
+    };
+  });
+
+  const endVarianceValues = rows
+    .map(row => row.end_variance_days)
+    .filter((value): value is number => typeof value === 'number');
+  const totalEndVarianceDays = endVarianceValues.reduce((total, value) => total + value, 0);
+
+  return {
+    scope: timeline.scope,
+    generated_at: new Date().toISOString(),
+    baseline,
+    rows,
+    summary: {
+      total_rows: rows.length,
+      current_rows: timeline.rows.length,
+      baseline_rows: baselineRows.length,
+      missing_from_baseline_count: rows.filter(row => row.missing_from_baseline).length,
+      missing_from_current_count: rows.filter(row => row.missing_from_current).length,
+      start_variance_count: rows.filter(row => typeof row.start_variance_days === 'number' && row.start_variance_days !== 0).length,
+      end_variance_count: rows.filter(row => typeof row.end_variance_days === 'number' && row.end_variance_days !== 0).length,
+      status_changed_count: rows.filter(row => row.status_changed).length,
+      delayed_count: endVarianceValues.filter(value => value > 0).length,
+      improved_count: endVarianceValues.filter(value => value < 0).length,
+      total_end_variance_days: totalEndVarianceDays,
+      average_end_variance_days: endVarianceValues.length > 0
+        ? Number((totalEndVarianceDays / endVarianceValues.length).toFixed(2))
+        : null,
+    },
+  };
+}
+
+async function getTimelineVariance(
+  scopeType: TimelineScopeType,
+  scopeId: string,
+  workspaceId: string,
+  userId: string,
+  isAdmin: boolean
+): Promise<TimelineVarianceResponse | null> {
+  const timeline = await getTimeline(scopeType, scopeId, workspaceId, userId, isAdmin);
+  if (!timeline) return null;
+
+  const baseline = await getStoredBaseline(scopeType, scopeId, workspaceId, userId, isAdmin);
+  return buildVarianceResponse(timeline, baseline);
+}
+
+async function captureTimelineBaseline(
+  scopeType: TimelineScopeType,
+  scopeId: string,
+  workspaceId: string,
+  userId: string,
+  isAdmin: boolean
+): Promise<TimelineVarianceResponse | null> {
+  const timeline = await getTimeline(scopeType, scopeId, workspaceId, userId, isAdmin);
+  if (!timeline) return null;
+
+  const baseline = buildBaselineSnapshot(timeline, userId);
+  await saveBaseline(scopeType, scopeId, workspaceId, baseline);
+
+  return buildVarianceResponse(timeline, baseline);
+}
+
 export function getProjectTimeline(
   projectId: string,
   workspaceId: string,
@@ -637,4 +955,40 @@ export function getProgramTimeline(
   isAdmin: boolean
 ): Promise<TimelineResponse | null> {
   return getTimeline('program', programId, workspaceId, userId, isAdmin);
+}
+
+export function getProjectTimelineVariance(
+  projectId: string,
+  workspaceId: string,
+  userId: string,
+  isAdmin: boolean
+): Promise<TimelineVarianceResponse | null> {
+  return getTimelineVariance('project', projectId, workspaceId, userId, isAdmin);
+}
+
+export function getProgramTimelineVariance(
+  programId: string,
+  workspaceId: string,
+  userId: string,
+  isAdmin: boolean
+): Promise<TimelineVarianceResponse | null> {
+  return getTimelineVariance('program', programId, workspaceId, userId, isAdmin);
+}
+
+export function captureProjectTimelineBaseline(
+  projectId: string,
+  workspaceId: string,
+  userId: string,
+  isAdmin: boolean
+): Promise<TimelineVarianceResponse | null> {
+  return captureTimelineBaseline('project', projectId, workspaceId, userId, isAdmin);
+}
+
+export function captureProgramTimelineBaseline(
+  programId: string,
+  workspaceId: string,
+  userId: string,
+  isAdmin: boolean
+): Promise<TimelineVarianceResponse | null> {
+  return captureTimelineBaseline('program', programId, workspaceId, userId, isAdmin);
 }

@@ -67,6 +67,80 @@ export interface TimelineResponse {
   };
 }
 
+export interface TimelineBaselineRow {
+  id: string;
+  title: string;
+  document_type: TimelineDocumentType;
+  planned_start: string | null;
+  planned_end: string | null;
+  status: string | null;
+}
+
+export interface TimelineBaselineSnapshot {
+  captured_at: string;
+  captured_by: string;
+  scope: {
+    id: string;
+    type: TimelineScopeType;
+    title: string;
+  };
+  rows: TimelineBaselineRow[];
+  summary: {
+    total_rows: number;
+    dependency_count: number;
+    blocked_count: number;
+    overdue_count: number;
+    at_risk_count: number;
+    planned_start: string | null;
+    planned_end: string | null;
+  };
+}
+
+export interface TimelineVarianceRow {
+  id: string;
+  title: string;
+  document_type: TimelineDocumentType;
+  current_planned_start: string | null;
+  current_planned_end: string | null;
+  current_status: string | null;
+  baseline_planned_start: string | null;
+  baseline_planned_end: string | null;
+  baseline_status: string | null;
+  start_variance_days: number | null;
+  end_variance_days: number | null;
+  status_changed: boolean;
+  missing_from_baseline: boolean;
+  missing_from_current: boolean;
+  blocked: boolean;
+  overdue: boolean;
+  at_risk: boolean;
+}
+
+export interface TimelineVarianceResponse {
+  scope: {
+    id: string;
+    type: TimelineScopeType;
+    title: string;
+  };
+  generated_at: string;
+  baseline: TimelineBaselineSnapshot | null;
+  rows: TimelineVarianceRow[];
+  summary: {
+    total_rows: number;
+    current_rows: number;
+    baseline_rows: number;
+    missing_from_baseline_count: number;
+    missing_from_current_count: number;
+    start_variance_count: number;
+    end_variance_count: number;
+    status_changed_count: number;
+    delayed_count: number;
+    improved_count: number;
+    total_end_variance_days: number;
+    average_end_variance_days: number | null;
+  };
+}
+
 // BelongsTo association entry - unified format for all document relationships
 export interface BelongsTo {
   id: string;

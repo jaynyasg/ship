@@ -7,7 +7,11 @@ import { DEFAULT_PROJECT_PROPERTIES, computeICEScore } from '@ship/shared';
 import { checkDocumentCompleteness } from '../utils/extractHypothesis.js';
 import { logDocumentChange, getLatestDocumentFieldHistory } from '../utils/document-crud.js';
 import { broadcastToUser } from '../collaboration/index.js';
-import { getProjectTimeline } from '../services/timeline.js';
+import {
+  captureProjectTimelineBaseline,
+  getProjectTimeline,
+  getProjectTimelineVariance,
+} from '../services/timeline.js';
 
 type RouterType = ReturnType<typeof Router>;
 const router: RouterType = Router();
@@ -480,6 +484,48 @@ router.get('/:id/timeline', authMiddleware, async (req: Request, res: Response) 
     res.json(timeline);
   } catch (err) {
     console.error('Get project timeline error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/projects/:id/timeline/baseline - Project baseline variance
+router.get('/:id/timeline/baseline', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const userId = req.userId!;
+    const workspaceId = req.workspaceId!;
+    const { isAdmin } = await getVisibilityContext(userId, workspaceId);
+
+    const variance = await getProjectTimelineVariance(id, workspaceId, userId, isAdmin);
+    if (!variance) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
+
+    res.json(variance);
+  } catch (err) {
+    console.error('Get project timeline baseline error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/projects/:id/timeline/baseline - Capture project baseline snapshot
+router.post('/:id/timeline/baseline', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const userId = req.userId!;
+    const workspaceId = req.workspaceId!;
+    const { isAdmin } = await getVisibilityContext(userId, workspaceId);
+
+    const variance = await captureProjectTimelineBaseline(id, workspaceId, userId, isAdmin);
+    if (!variance) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
+
+    res.status(201).json(variance);
+  } catch (err) {
+    console.error('Capture project timeline baseline error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

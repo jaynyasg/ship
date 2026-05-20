@@ -4,7 +4,11 @@ import { z } from 'zod';
 import { getVisibilityContext, VISIBILITY_FILTER_SQL } from '../middleware/visibility.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { logAuditEvent } from '../services/audit.js';
-import { getProgramTimeline } from '../services/timeline.js';
+import {
+  captureProgramTimelineBaseline,
+  getProgramTimeline,
+  getProgramTimelineVariance,
+} from '../services/timeline.js';
 
 type RouterType = ReturnType<typeof Router>;
 const router: RouterType = Router();
@@ -117,6 +121,48 @@ router.get('/:id/timeline', authMiddleware, async (req: Request, res: Response) 
     res.json(timeline);
   } catch (err) {
     console.error('Get program timeline error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/programs/:id/timeline/baseline - Program baseline variance
+router.get('/:id/timeline/baseline', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const userId = req.userId!;
+    const workspaceId = req.workspaceId!;
+    const { isAdmin } = await getVisibilityContext(userId, workspaceId);
+
+    const variance = await getProgramTimelineVariance(id, workspaceId, userId, isAdmin);
+    if (!variance) {
+      res.status(404).json({ error: 'Program not found' });
+      return;
+    }
+
+    res.json(variance);
+  } catch (err) {
+    console.error('Get program timeline baseline error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/programs/:id/timeline/baseline - Capture program baseline snapshot
+router.post('/:id/timeline/baseline', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const userId = req.userId!;
+    const workspaceId = req.workspaceId!;
+    const { isAdmin } = await getVisibilityContext(userId, workspaceId);
+
+    const variance = await captureProgramTimelineBaseline(id, workspaceId, userId, isAdmin);
+    if (!variance) {
+      res.status(404).json({ error: 'Program not found' });
+      return;
+    }
+
+    res.status(201).json(variance);
+  } catch (err) {
+    console.error('Capture program timeline baseline error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { apiGet } from '@/lib/api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiGet, apiPost } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import type { DocumentTabProps } from '@/lib/document-tabs';
 
@@ -58,6 +58,78 @@ interface TimelineResponse {
     blocked_count: number;
     overdue_count: number;
     at_risk_count: number;
+  };
+}
+
+interface TimelineBaselineSnapshot {
+  captured_at: string;
+  captured_by: string;
+  scope: {
+    id: string;
+    type: TimelineScopeType;
+    title: string;
+  };
+  rows: Array<{
+    id: string;
+    title: string;
+    document_type: TimelineDocumentType;
+    planned_start: string | null;
+    planned_end: string | null;
+    status: string | null;
+  }>;
+  summary: {
+    total_rows: number;
+    dependency_count: number;
+    blocked_count: number;
+    overdue_count: number;
+    at_risk_count: number;
+    planned_start: string | null;
+    planned_end: string | null;
+  };
+}
+
+interface TimelineVarianceRow {
+  id: string;
+  title: string;
+  document_type: TimelineDocumentType;
+  current_planned_start: string | null;
+  current_planned_end: string | null;
+  current_status: string | null;
+  baseline_planned_start: string | null;
+  baseline_planned_end: string | null;
+  baseline_status: string | null;
+  start_variance_days: number | null;
+  end_variance_days: number | null;
+  status_changed: boolean;
+  missing_from_baseline: boolean;
+  missing_from_current: boolean;
+  blocked: boolean;
+  overdue: boolean;
+  at_risk: boolean;
+}
+
+interface TimelineVarianceResponse {
+  scope: {
+    id: string;
+    type: TimelineScopeType;
+    title: string;
+  };
+  generated_at: string;
+  baseline: TimelineBaselineSnapshot | null;
+  rows: TimelineVarianceRow[];
+  summary: {
+    total_rows: number;
+    current_rows: number;
+    baseline_rows: number;
+    missing_from_baseline_count: number;
+    missing_from_current_count: number;
+    start_variance_count: number;
+    end_variance_count: number;
+    status_changed_count: number;
+    delayed_count: number;
+    improved_count: number;
+    total_end_variance_days: number;
+    average_end_variance_days: number | null;
   };
 }
 
@@ -212,6 +284,17 @@ function formatStatus(status: string | null): string {
   return status.replaceAll('_', ' ');
 }
 
+function formatSignedDays(value: number | null): string | null {
+  if (value === null) return null;
+  if (value === 0) return '0d';
+  return `${value > 0 ? '+' : ''}${value}d`;
+}
+
+function getVarianceTone(value: number | null): string {
+  if (value === null || value === 0) return 'text-muted';
+  return value > 0 ? 'text-orange-300' : 'text-emerald-300';
+}
+
 function getRowBadges(row: TimelineRow): Array<{ label: string; style: string }> {
   if (row.blocked) return [{ label: 'Blocked', style: STATUS_STYLES.blocked }];
   if (row.overdue) return [{ label: 'Overdue', style: STATUS_STYLES.overdue }];
@@ -256,6 +339,87 @@ function SummaryMetric({
     <div className={cn('min-h-16 rounded-md border px-3 py-2', toneClass)}>
       <div className="text-xs font-medium uppercase tracking-wide text-muted">{label}</div>
       <div className="mt-1 text-2xl font-semibold text-foreground">{value}</div>
+    </div>
+  );
+}
+
+function BaselineSummary({
+  variance,
+  isLoading,
+  error,
+}: {
+  variance: TimelineVarianceResponse | undefined;
+  isLoading: boolean;
+  error: unknown;
+}) {
+  if (isLoading) {
+    return (
+      <div className="mt-3 rounded-md border border-border bg-surface px-3 py-2 text-sm text-muted">
+        Loading baseline...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="mt-3 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+        Baseline variance unavailable.
+      </div>
+    );
+  }
+
+  if (!variance?.baseline) {
+    return (
+      <div className="mt-3 rounded-md border border-border bg-surface px-3 py-2 text-sm text-muted">
+        No baseline captured. Current timeline rows are ready to baseline.
+      </div>
+    );
+  }
+
+  const capturedAt = generatedFormatter.format(new Date(variance.baseline.captured_at));
+  const averageVariance = formatSignedDays(
+    variance.summary.average_end_variance_days === null
+      ? null
+      : Math.round(variance.summary.average_end_variance_days)
+  );
+
+  return (
+    <div className="mt-3 rounded-md border border-border bg-surface px-3 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-sm font-medium text-foreground">Baseline captured {capturedAt}</div>
+          <div className="text-xs text-muted">
+            {variance.summary.baseline_rows} baseline rows, {variance.summary.current_rows} current rows
+          </div>
+        </div>
+        {averageVariance ? (
+          <div className={cn('text-sm font-semibold', getVarianceTone(variance.summary.average_end_variance_days))}>
+            Avg end {averageVariance}
+          </div>
+        ) : null}
+      </div>
+      <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-5">
+        <div className="rounded border border-border px-2 py-1.5">
+          <span className="text-muted">Delayed</span>
+          <span className="ml-2 font-semibold text-orange-300">{variance.summary.delayed_count}</span>
+        </div>
+        <div className="rounded border border-border px-2 py-1.5">
+          <span className="text-muted">Improved</span>
+          <span className="ml-2 font-semibold text-emerald-300">{variance.summary.improved_count}</span>
+        </div>
+        <div className="rounded border border-border px-2 py-1.5">
+          <span className="text-muted">Changed</span>
+          <span className="ml-2 font-semibold text-foreground">{variance.summary.status_changed_count}</span>
+        </div>
+        <div className="rounded border border-border px-2 py-1.5">
+          <span className="text-muted">New</span>
+          <span className="ml-2 font-semibold text-foreground">{variance.summary.missing_from_baseline_count}</span>
+        </div>
+        <div className="rounded border border-border px-2 py-1.5">
+          <span className="text-muted">Removed</span>
+          <span className="ml-2 font-semibold text-foreground">{variance.summary.missing_from_current_count}</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -361,8 +525,10 @@ function DependencyList({
 
 export default function TimelineTab({ documentId, document }: DocumentTabProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const scopeType = getScopeType(document.document_type);
   const endpoint = getTimelineEndpoint(scopeType, documentId);
+  const baselineEndpoint = `${endpoint}/baseline`;
 
   const { data, isLoading, error, refetch, isFetching } = useQuery<TimelineResponse>({
     queryKey: ['timeline', scopeType, documentId],
@@ -375,10 +541,38 @@ export default function TimelineTab({ documentId, document }: DocumentTabProps) 
     },
   });
 
+  const baselineQuery = useQuery<TimelineVarianceResponse>({
+    queryKey: ['timeline-baseline', scopeType, documentId],
+    queryFn: async () => {
+      const response = await apiGet(baselineEndpoint);
+      if (!response.ok) {
+        throw new Error('Failed to load baseline variance');
+      }
+      return response.json();
+    },
+  });
+
+  const captureBaselineMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiPost(baselineEndpoint);
+      if (!response.ok) {
+        throw new Error('Failed to capture baseline');
+      }
+      return response.json() as Promise<TimelineVarianceResponse>;
+    },
+    onSuccess: (variance) => {
+      queryClient.setQueryData(['timeline-baseline', scopeType, documentId], variance);
+      queryClient.invalidateQueries({ queryKey: ['document', documentId] });
+    },
+  });
+
   const scale = useMemo(() => buildScale(data?.rows ?? []), [data?.rows]);
   const rowsById = useMemo(() => {
     return new Map((data?.rows ?? []).map(row => [row.id, row]));
   }, [data?.rows]);
+  const varianceById = useMemo(() => {
+    return new Map((baselineQuery.data?.rows ?? []).map(row => [row.id, row]));
+  }, [baselineQuery.data?.rows]);
 
   if (isLoading) return <TimelineLoading />;
 
@@ -415,14 +609,24 @@ export default function TimelineTab({ documentId, document }: DocumentTabProps) 
               {data.scope.title} - generated {generatedAt}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isFetching ? 'Refreshing...' : 'Refresh'}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => captureBaselineMutation.mutate()}
+              disabled={captureBaselineMutation.isPending}
+              className="rounded-md border border-accent/50 bg-accent/10 px-3 py-1.5 text-sm font-medium text-foreground hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {captureBaselineMutation.isPending ? 'Capturing...' : 'Capture Baseline'}
+            </button>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isFetching ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
         </div>
 
         <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
@@ -432,6 +636,12 @@ export default function TimelineTab({ documentId, document }: DocumentTabProps) 
           <SummaryMetric label="Overdue" value={data.summary.overdue_count} tone="overdue" />
           <SummaryMetric label="At risk" value={data.summary.at_risk_count} tone="risk" />
         </div>
+
+        <BaselineSummary
+          variance={baselineQuery.data}
+          isLoading={baselineQuery.isLoading}
+          error={baselineQuery.error ?? captureBaselineMutation.error}
+        />
       </div>
 
       <div className="overflow-x-auto">
@@ -460,6 +670,8 @@ export default function TimelineTab({ documentId, document }: DocumentTabProps) 
               const plannedStyle = getSpanStyle(scale, plannedStart, plannedEnd);
               const actualStyle = getSpanStyle(scale, row.actual_start, row.actual_end);
               const badges = getRowBadges(row);
+              const variance = varianceById.get(row.id);
+              const endVarianceLabel = formatSignedDays(variance?.end_variance_days ?? null);
               const rowSummary = [
                 TYPE_LABELS[row.document_type],
                 formatStatus(row.status),
@@ -532,6 +744,12 @@ export default function TimelineTab({ documentId, document }: DocumentTabProps) 
                       {row.blocker_ids.length > 0 ? `${row.blocker_ids.length} blocker${row.blocker_ids.length === 1 ? '' : 's'}` : 'No blockers'}
                       {row.blocks_ids.length > 0 ? `, blocks ${row.blocks_ids.length}` : ''}
                     </div>
+                    {variance && baselineQuery.data?.baseline ? (
+                      <div className={cn('mt-1 text-xs', getVarianceTone(variance.end_variance_days))}>
+                        End {endVarianceLabel ?? 'no change'} vs baseline
+                        {variance.status_changed ? `, was ${formatStatus(variance.baseline_status)}` : ''}
+                      </div>
+                    ) : null}
                   </div>
                 </button>
               );

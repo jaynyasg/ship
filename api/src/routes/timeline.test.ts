@@ -11,6 +11,8 @@ describe('Timeline read model API', () => {
   const testWorkspaceName = `Timeline Test ${testRunId}`
 
   let sessionCookie: string
+  let csrfCookie: string
+  let csrfToken: string
   let testWorkspaceId: string
   let testUserId: string
   let programId: string
@@ -86,6 +88,12 @@ describe('Timeline read model API', () => {
       [sessionId, testUserId, testWorkspaceId]
     )
     sessionCookie = `session_id=${sessionId}`
+
+    const csrfRes = await request(app)
+      .get('/api/csrf-token')
+      .set('Cookie', sessionCookie)
+    csrfToken = csrfRes.body.token
+    csrfCookie = csrfRes.headers['set-cookie']?.[0]?.split(';')[0] || ''
   })
 
   afterAll(async () => {
@@ -176,5 +184,75 @@ describe('Timeline read model API', () => {
 
     expect(response.status).toBe(404)
     expect(response.body.error).toBe('Project not found')
+  })
+
+  it('returns no baseline variance before a baseline is captured', async () => {
+    const response = await request(app)
+      .get(`/api/programs/${programId}/timeline/baseline`)
+      .set('Cookie', sessionCookie)
+
+    expect(response.status).toBe(200)
+    expect(response.body.baseline).toBeNull()
+    expect(response.body.summary).toMatchObject({
+      current_rows: 6,
+      baseline_rows: 0,
+      missing_from_baseline_count: 6,
+      delayed_count: 0,
+      improved_count: 0,
+    })
+  })
+
+  it('captures project baseline and reports date and status variance', async () => {
+    const baselineResponse = await request(app)
+      .post(`/api/projects/${projectId}/timeline/baseline`)
+      .set('Cookie', [sessionCookie, csrfCookie])
+      .set('x-csrf-token', csrfToken)
+
+    expect(baselineResponse.status).toBe(201)
+    expect(baselineResponse.body.baseline).toMatchObject({
+      scope: {
+        id: projectId,
+        type: 'project',
+        title: 'Timeline Project',
+      },
+      summary: {
+        total_rows: 5,
+      },
+    })
+    expect(baselineResponse.body.summary).toMatchObject({
+      baseline_rows: 5,
+      end_variance_count: 0,
+      status_changed_count: 0,
+    })
+
+    await pool.query(
+      `UPDATE documents
+       SET properties = properties || '{"sprint_number": 3}'::jsonb
+       WHERE id = $1`,
+      [sprint2Id]
+    )
+    await pool.query(
+      `UPDATE documents
+       SET properties = properties || '{"state": "in_review"}'::jsonb
+       WHERE id = $1`,
+      [issue2Id]
+    )
+
+    const varianceResponse = await request(app)
+      .get(`/api/projects/${projectId}/timeline/baseline`)
+      .set('Cookie', sessionCookie)
+
+    expect(varianceResponse.status).toBe(200)
+    const issueVariance = varianceResponse.body.rows.find((row: { id: string }) => row.id === issue2Id)
+    expect(issueVariance).toMatchObject({
+      baseline_planned_end: '2026-01-18',
+      current_planned_end: '2026-01-25',
+      end_variance_days: 7,
+      baseline_status: 'todo',
+      current_status: 'in_review',
+      status_changed: true,
+    })
+    expect(varianceResponse.body.summary.delayed_count).toBeGreaterThanOrEqual(1)
+    expect(varianceResponse.body.summary.status_changed_count).toBeGreaterThanOrEqual(1)
   })
 })
