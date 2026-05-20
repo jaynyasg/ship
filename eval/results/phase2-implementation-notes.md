@@ -1,7 +1,7 @@
 # Phase 2 Implementation Notes
 
 **Date:** 2026-05-20  
-**Status:** Measurement pass completed — evidence artifacts captured; U11 type-safety, U12 bundle, U13 API response-time, and U14 DB query-efficiency targets are now met.
+**Status:** Measurement pass completed — evidence artifacts captured; all seven PDF category targets are now met (U11, U12, U13, U14, U15, U16/U7, U17).
 
 ## Completed in codebase
 
@@ -28,6 +28,7 @@
 | U13 | `eval/results/api-benchmark-after.json`, `eval/results/api-benchmark-documents-limit50-c25.json`, `eval/results/api-benchmark-issues-limit50-c25.json` | Target met: documents paginated c=25 improved 71.02% (283 ms -> 82 ms P97.5); issues paginated c=25 improved 39.58% (192 ms -> 116 ms P97.5) |
 | U14 | `eval/results/db-query-after.md`, `eval/results/api-benchmark-weeks-u14-after.json` | Target met by query-count reduction: `GET /api/weeks` drops from 5 -> 3 DB statements for seeded super-admin flow (-40%) and 6 -> 4 for normal member flow (-33.33%); c=50 P97.5 rerun is 130 ms with 0 non-2xx |
 | U15 | `eval/results/test-coverage-after.json`, `eval/results/empty-tests-after.json` | 455/455 API tests pass with 41.27% line coverage; empty-test detector now reports 0 empty tests |
+| U16/U7 | `eval/results/error-after.md` | Target met: top-level React `ErrorBoundary`, global client listeners, Express `errorHandler`, shared in-house capture, and `process.on('unhandledRejection')`; WebSocket reconnect UI remains stretch |
 | U17 | `eval/results/axe-after.json` | 0 Critical/Serious/Moderate/Minor axe violations across login/docs/projects/team after final contrast fixes |
 
 ## Not started / deferred

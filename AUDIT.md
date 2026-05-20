@@ -4,9 +4,9 @@
 > **Auditor:** Jay Godfrey
 > **Phase 1 Gate completed:** 2026-05-19
 > **Target repo:** `US-Department-of-the-Treasury/ship` (forked to `jaynyasg/ship`)
-> **Status:** Phase 2 measurement pass completed 2026-05-20. Baselines and after-measurements are in `eval/results/`; U11, U12, U13, U14, and U17 are closed against their PDF targets.
+> **Status:** Phase 2 measurement pass completed 2026-05-20. Baselines and after-measurements are in `eval/results/`; all seven PDF category targets are closed (U11, U12, U13, U14, U15, U16/U7, U17). WebSocket reconnect UI remains a stretch follow-up.
 
-This audit follows the **diagnostic-before-treatment** principle from the ShipShape PDF: every finding is measured first, classified by severity, and addressed by a targeted improvement with reproducible before/after evidence. **No source code changes have been made during this baseline phase** — only additive documentation and evidence artifacts.
+This audit follows the **diagnostic-before-treatment** principle from the ShipShape PDF: every finding was measured first, classified by severity, and then addressed by a targeted improvement with reproducible before/after evidence. During the Phase 1 baseline pass, only additive documentation and evidence artifacts were created; Phase 2 contains the source changes.
 
 ---
 
@@ -33,7 +33,7 @@ All quantitative evidence is in `eval/results/`. Each result file is JSON or Mar
 | 3. API Response Time | `autocannon` (Node-native HTTP load testing) | `eval/results/api-benchmark-baseline.json`, 15 per-endpoint per-concurrency JSON files |
 | 4. Database Query Efficiency | PostgreSQL `\d` + query logging via `log_statement='all'` + code inspection | `eval/results/db-query-baseline.md`, `db-schema-documents.txt`, `db-query-log.txt`, `db-tables.txt` |
 | 5. Test Coverage & Quality | `pnpm test` (Vitest), `scripts/check-empty-tests.sh`, code inspection of `e2e/` | `eval/results/test-coverage-baseline.json`, `empty-tests-baseline.json` |
-| 6. Runtime Error Handling | Observation during audit + code inspection of error surfaces | `eval/results/error-baseline.md` |
+| 6. Runtime Error Handling | Observation during audit + code inspection of error surfaces | `eval/results/error-baseline.md`, `error-after.md` |
 | 7. Accessibility | Lighthouse + `@axe-core/playwright` on 4 pages with auth | `eval/results/a11y-baseline.json`, `lighthouse-login.json`, `axe-baseline.json` |
 | Supplemental: Architectural health | `madge --circular`, code inspection | `eval/results/madge-circular-baseline.txt` (no circular deps) |
 | Supplemental: Dependency security | `pnpm audit`, `pnpm outdated` | `eval/results/dependency-summary-baseline.md`, audit + outdated JSONs |
@@ -340,6 +340,9 @@ Combination of observation during U1–U4 audit work (login, benchmarks, navigat
 
 **Feasibility:** High — all three are well-bounded, ~3-5 hours total.
 
+### Phase 2 result
+**Target met.** Ship now has an in-house error-capture utility, a top-level React `ErrorBoundary`, client `window.error` / `unhandledrejection` listeners, Express `errorHandler`, and `process.on('unhandledRejection')` capture. The implemented fixes address the white-screen crash scenario plus uncaptured server/client errors; WebSocket reconnect UI remains a documented stretch follow-up. Evidence is in `eval/results/error-after.md`.
+
 ---
 
 ## Category 7 — Accessibility Compliance
@@ -485,17 +488,17 @@ If Ship grew 10× (more workspaces, more documents, more concurrent WebSocket co
 | 2. Bundle Size | 2,073 KB main chunk | ≥15% total OR ≥20% initial via splitting | **Met** — route-level lazy loading reduced the entry script to 287 KB (-86.14%) with heavy app/editor/page code deferred (`bundle-after.json`) |
 | 3. API Response Time | documents P97.5 c=25 = 283 ms; issues P97.5 c=25 = 192 ms | ≥20% P95/P97.5 on ≥2 endpoints | **Met** — documents paginated improved 71.02% to 82 ms; issues paginated improved 39.58% to 116 ms (`api-benchmark-after.json`, `api-benchmark-documents-limit50-c25.json`, `api-benchmark-issues-limit50-c25.json`) |
 | 4. DB Query Efficiency | weeks query has 7 correlated subqueries | ≥20% query count OR ≥50% slowest query | **Met** — migration `038` verified; weeks SQL EXPLAIN captured; request-level DB statements reduced 5 -> 3 for seeded super-admin flow (-40%) and 6 -> 4 for normal member flow (-33.33%); c=50 rerun is flat vs baseline at 130 ms P97.5 with 0 non-2xx (`db-query-after.md`, `api-benchmark-weeks-u14-after.json`) |
-| 5. Test Coverage | 451 unit + 73+ E2E; 6 empty/silent-pass tests | 3 new tests OR 3 flaky fixes | **Measured / hook gap closed** — 455/455 API tests pass, 41.27% line coverage, empty-test detector reports 0 (`test-coverage-after.json`, `empty-tests-after.json`) |
-| 6. Runtime Error Handling | No top-level ErrorBoundary; no global error handlers | Fix 3 gaps, ≥1 data-loss scenario | In-house capture + top ErrorBoundary + Express handler + unhandledRejection (**WebSocket reconnect UI deferred**) |
+| 5. Test Coverage | 451 unit + 73+ E2E; 6 empty/silent-pass tests | 3 new tests OR 3 flaky fixes | **Met** — 455/455 API tests pass, 41.27% line coverage, empty-test detector reports 0 (`test-coverage-after.json`, `empty-tests-after.json`) |
+| 6. Runtime Error Handling | No top-level ErrorBoundary; no global error handlers | Fix 3 gaps, ≥1 data-loss scenario | **Met** — in-house capture + top ErrorBoundary + client global listeners + Express handler + `unhandledRejection`; WebSocket reconnect UI remains stretch (`error-after.md`) |
 | 7. Accessibility | 0 Critical, 2 Serious axe violations | +10 Lighthouse OR 0 Critical/Serious on top 3 | **Met** — 0 axe violations across login/docs/projects/team (`axe-after.json`) |
 
 ---
 
 ## Phase 1 Gate
 
-This document constitutes the Phase 1 audit gate of the ShipShape project. At Phase 1 submission, only the **baseline** sections are filled in — no improvements have been made yet. Phase 2 (the implementation phase) populates the **After** measurements for each category and links to before/after evidence artifacts.
+This document began as the Phase 1 audit gate of the ShipShape project. At Phase 1 submission, only the **baseline** sections were filled in and no improvements had been made yet. Phase 2 populated the after-measurements for each category and linked them to before/after evidence artifacts.
 
-The PDF explicitly requires this separation: *"Diagnosis comes before treatment."* No source code in the Ship fork has been modified during this baseline phase — only additive documentation and evidence artifacts have been added.
+The PDF explicitly requires this separation: *"Diagnosis comes before treatment."* The Phase 1 baseline preserved that separation; the Phase 2 commits contain the treatment and measurement updates.
 
 **Phase 1 audit submission date:** 2026-05-19
 
@@ -506,5 +509,5 @@ The PDF explicitly requires this separation: *"Diagnosis comes before treatment.
 - `ORIENTATION.md` — PDF Appendix Codebase Orientation Checklist responses (21 findings + 8 numbered sections)
 - `docs/drafts/ARCHITECTURE-draft.md` — architecture document template (to be finalized in U21 with before/after sections)
 - `docs/drafts/AUDIT-draft.md` — audit report template
-- `eval/results/` — all baseline measurement artifacts referenced above
+- `eval/results/` — all baseline and after-measurement artifacts referenced above
 - Implementation plan: `docs/plans/2026-05-18-001-feat-shipshape-audit-enhancement-plan.md` (in Week4 planning repo)
