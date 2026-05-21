@@ -13,11 +13,13 @@
     "type-check": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
+    "test:security-probe": "vitest run --config vitest.security-probe.config.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "db:seed": "tsx src/db/seed.ts",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:orphan-check": "tsx src/db/scripts/orphan-diagnostic.ts",
+    "security:audit": "tsx src/security-probe/cli.ts",
     "openapi:generate": "tsx src/scripts/generate-openapi.ts",
     "mcp": "tsx src/mcp/server.ts"
   },
