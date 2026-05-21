@@ -1,6 +1,6 @@
 # ShipShape Submission Summary
 
-**Date:** 2026-05-20  
+**Date:** 2026-05-21
 **Repo:** `jaynyasg/ship`  
 **Latest verified main before Phase 07:** `bd83a30 Remediate critical dependency CVEs`
 
@@ -8,7 +8,7 @@ This file is the reviewer-facing map for the ShipShape audit work. The detailed 
 
 ## What Changed
 
-All seven PDF improvement categories have reproducible after-measurements:
+All eight audit categories have reproducible after-measurements:
 
 | Category | Evidence | Result |
 |---|---|---|
@@ -19,6 +19,7 @@ All seven PDF improvement categories have reproducible after-measurements:
 | Tests | `eval/results/test-coverage-after.json`, `empty-tests-after.json` | 455/455 API tests passing; empty Playwright test detector now reports 0 empty tests |
 | Runtime errors | `eval/results/error-after.md` | Shared in-house error capture, Express error middleware, unhandled rejection hook, client listeners, and React top-level error boundary |
 | Accessibility | `eval/results/axe-after.json` | 0 axe violations across login, docs, projects, and team pages after contrast/landmark fixes |
+| Security audit | `eval/results/security-audit-baseline.md`, `security-audit-after.md`, `security-audit-fixes.md` | Runnable probe; baseline found 2 Medium findings; after report has 0 verified findings after WebSocket and verbose-error fixes |
 
 ## Phase 04 Product Upgrade
 
@@ -76,6 +77,12 @@ Root `pnpm test:e2e` now wraps Playwright with a compact Node runner that captur
 
 The compact runner was exercised against the real Playwright harness. Phase 15 fixed the Windows preview-server spawn path, preserved runner logs after Playwright clears `test-results`, corrected retry-aware progress accounting, and bumped the `ip-address` override to the `express-rate-limit` compatible patched floor. The focused isolated E2E spike now passes 4/4 through testcontainers, API, Vite preview, proxy, CSRF, and login.
 
+## Phase 16 Category 8 Security Audit
+
+Ship now has a runnable Category 8 security audit probe via `pnpm security:audit`. The baseline exercised unauthenticated auth/session checks, authenticated input probes with `dev@ship.local / admin123`, WebSocket malformed/oversized payloads, parsed dependency CVEs, CORS/CSP, common secret exposure paths, rate-limit coverage, and verbose error leakage. The baseline found 2 Medium findings: collaboration WebSocket malformed binary handling and malformed JSON parser detail leakage.
+
+Both findings are fixed with before/after proof. `eval/results/security-audit-after.md` reports 0 verified findings, and `eval/results/security-audit-fixes.md` records the vulnerability class, reproduction steps, fix summary, and before/after evidence for each fix.
+
 ## Files To Read
 
 - `AUDIT.md` - full audit narrative with baseline, severity, and after status.
@@ -94,6 +101,7 @@ The compact runner was exercised against the real Playwright harness. Phase 15 f
 - `docs/brainstorms/2026-05-20-phase-13-websocket-reconnect-ui.md` - Phase 13 collaboration reconnect UI evidence.
 - `docs/brainstorms/2026-05-20-phase-14-compact-e2e-runner.md` - Phase 14 compact E2E runner evidence.
 - `docs/brainstorms/2026-05-20-phase-15-windows-e2e-runner-hardening.md` - Phase 15 Windows E2E runner hardening evidence.
+- `docs/brainstorms/2026-05-21-phase-16-category-8-security-audit.md` - Category 8 security audit requirements and acceptance examples.
 - `eval/results/documents-pagination-contract.md` - concise API contract evidence for page-style `/api/documents` pagination.
 - `eval/results/e2e-windows-build-unblock.md` - verification note for the cross-platform API build.
 - `eval/results/cross-platform-dev-wrapper.md` - verification note for the Node dev wrapper.
@@ -101,6 +109,9 @@ The compact runner was exercised against the real Playwright harness. Phase 15 f
 - `eval/results/websocket-reconnect-ui.md` - verification note for collaboration reconnect UI.
 - `eval/results/compact-e2e-runner.md` - verification note for compact E2E runner wiring.
 - `eval/results/e2e-windows-runner-hardening.md` - verification note for focused isolated E2E execution on Windows.
+- `eval/results/security-audit-baseline.md` - Category 8 baseline with exact audit deliverable matrix.
+- `eval/results/security-audit-after.md` - Category 8 after-remediation report with zero verified findings.
+- `eval/results/security-audit-fixes.md` - Category 8 two-fix before/after proof.
 
 ## Verification Commands
 
@@ -123,6 +134,15 @@ pnpm --filter @ship/web test -- src/lib/document-tabs.test.ts
 pnpm build:web
 pnpm --filter @ship/api test
 git diff --check
+```
+
+These were the core checks used during the Category 8 security audit pass:
+
+```powershell
+pnpm type-check
+pnpm --filter @ship/api test:security-probe
+pnpm build:api
+pnpm security:audit -- --mode local --non-interactive --report-name security-audit-after
 ```
 
 ## Known Follow-Ups
