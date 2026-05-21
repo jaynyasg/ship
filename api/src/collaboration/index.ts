@@ -343,6 +343,17 @@ function handleMessage(ws: WebSocket, message: Uint8Array, docName: string, doc:
   }
 }
 
+function handleMessageSafely(ws: WebSocket, message: Uint8Array, docName: string, doc: Y.Doc, aw: awarenessProtocol.Awareness) {
+  try {
+    handleMessage(ws, message, docName, doc, aw);
+  } catch (error) {
+    console.warn('[Collaboration] Invalid protocol message rejected:', error instanceof Error ? error.message : String(error));
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.close(1008, 'Invalid collaboration message');
+    }
+  }
+}
+
 // Validate session from cookie header - returns userId/workspaceId or null
 async function validateWebSocketSession(request: IncomingMessage): Promise<{ userId: string; workspaceId: string } | null> {
   const cookieHeader = request.headers.cookie;
@@ -688,6 +699,10 @@ export function setupCollaboration(server: Server) {
     const clientId = doc.clientID;
     conns.set(ws, { docName, awarenessClientId: clientId, userId: sessionData.userId, workspaceId: sessionData.workspaceId });
 
+    ws.on('error', (error) => {
+      console.warn('[Collaboration] WebSocket error:', error.message);
+    });
+
     // If this doc was loaded fresh from JSON (API-created or API-updated content),
     // tell the browser to clear its IndexedDB cache before sync to prevent stale content merge
     if (freshFromJsonDocs.has(docName)) {
@@ -742,7 +757,7 @@ export function setupCollaboration(server: Server) {
       rateLimitViolations.delete(ws);
       recordMessage(ws);
 
-      handleMessage(ws, new Uint8Array(data), docName, doc, aw);
+      handleMessageSafely(ws, new Uint8Array(data), docName, doc, aw);
     });
 
     ws.on('close', () => {
@@ -789,6 +804,10 @@ export function setupCollaboration(server: Server) {
   eventsWss.on('connection', (ws: WebSocket, sessionData: { userId: string; workspaceId: string }) => {
     eventConns.set(ws, { userId: sessionData.userId, workspaceId: sessionData.workspaceId });
     console.log(`[Events] User ${sessionData.userId} connected (${eventConns.size} total connections)`);
+
+    ws.on('error', (error) => {
+      console.warn('[Events] WebSocket error:', error.message);
+    });
 
     // Send initial connected message
     ws.send(JSON.stringify({ type: 'connected', data: {} }));

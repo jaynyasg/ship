@@ -114,12 +114,18 @@ export async function runWebSocketProbes(
     ));
 
     if (config.limits.allowOversizedWebSocketProbe) {
-      const oversized = await sendAndObserve(
-        collabOpen.socket,
-        Buffer.alloc(config.limits.maxWebSocketPayloadBytes, 0),
-        1_000
-      );
-      findings.push(classifyOversizedPayload(oversized));
+      const oversizedOpen = await openWebSocket(config, collaborationPath, client.cookieHeader);
+      if (oversizedOpen.opened && oversizedOpen.socket) {
+        const oversized = await sendAndObserve(
+          oversizedOpen.socket,
+          Buffer.alloc(config.limits.maxWebSocketPayloadBytes, 0),
+          1_000
+        );
+        findings.push(classifyOversizedPayload(oversized));
+        oversizedOpen.socket.close();
+      } else {
+        findings.push(classifyOversizedProbeUnavailable(oversizedOpen));
+      }
     } else {
       findings.push({
         id: 'ws-collaboration-oversized-payload',
@@ -136,6 +142,8 @@ export async function runWebSocketProbes(
 
     collabOpen.socket.close();
   }
+
+  findings.push(await probePostWebSocketHealth(client));
 
   return findings;
 }
@@ -314,6 +322,59 @@ function classifyOversizedPayload(observation: MessageObservation): SecurityFind
       ? undefined
       : 'Enforce a max WebSocket payload size and close oversized messages with code 1009.',
   };
+}
+
+function classifyOversizedProbeUnavailable(result: WebSocketAttemptResult): SecurityFinding {
+  return {
+    id: 'ws-collaboration-oversized-payload',
+    metric: 'websocket_validation_failures',
+    surface: 'websocket',
+    status: 'not_run_target_unavailable',
+    severity: 'info',
+    title: 'Oversized WebSocket payload probe could not open a fresh socket',
+    description: 'The oversized payload check opens a fresh authenticated collaboration socket because earlier malformed-message checks may close their socket safely.',
+    reproduction: ['Open an authenticated collaboration WebSocket.', 'Send an oversized payload.'],
+    evidence: socketEvidence(result),
+    recommendation: 'Verify the target is still running and rerun the probe.',
+  };
+}
+
+async function probePostWebSocketHealth(client: WebSocketProbeHttpClient): Promise<SecurityFinding> {
+  try {
+    const response = await client.request('/health');
+    const healthy = response.status >= 200 && response.status < 300;
+
+    return {
+      id: 'ws-post-probe-health',
+      metric: 'websocket_validation_failures',
+      surface: 'websocket',
+      status: healthy ? 'pass' : 'finding',
+      severity: healthy ? 'info' : 'medium',
+      title: healthy ? 'API remained healthy after WebSocket probes' : 'API returned unhealthy status after WebSocket probes',
+      description: 'The probe checks API health after active WebSocket validation payloads to catch crash-only failures.',
+      reproduction: ['Run the WebSocket validation probes.', 'GET /health after malformed and oversized WebSocket payloads.'],
+      evidence: {
+        status: response.status,
+        body: response.bodyText.slice(0, 500),
+      },
+      recommendation: healthy ? undefined : 'Handle WebSocket parser and payload errors without terminating the API process.',
+    };
+  } catch (error) {
+    return {
+      id: 'ws-post-probe-health',
+      metric: 'websocket_validation_failures',
+      surface: 'websocket',
+      status: 'finding',
+      severity: 'medium',
+      title: 'API target unavailable after WebSocket probes',
+      description: 'The probe checks API health after active WebSocket validation payloads to catch crash-only failures.',
+      reproduction: ['Run the WebSocket validation probes.', 'GET /health after malformed and oversized WebSocket payloads.'],
+      evidence: {
+        error: error instanceof Error ? error.message : String(error),
+      },
+      recommendation: 'Handle WebSocket parser and payload errors without terminating the API process.',
+    };
+  }
 }
 
 function credentialsRequiredFinding(id: string, title: string): SecurityFinding {

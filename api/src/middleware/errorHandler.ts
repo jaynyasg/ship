@@ -33,8 +33,7 @@ export function errorHandler(
       ? (err as { status: number }).status
       : 500;
 
-  const message =
-    err instanceof Error ? err.message : 'Internal server error';
+  const message = getClientSafeMessage(err);
 
   res.status(status >= 400 && status < 600 ? status : 500).json({
     error: {
@@ -42,4 +41,19 @@ export function errorHandler(
       message: status === 500 ? 'Internal server error' : message,
     },
   });
+}
+
+function getClientSafeMessage(err: unknown): string {
+  if (isJsonParseError(err)) {
+    return 'Invalid JSON body';
+  }
+
+  return err instanceof Error ? err.message : 'Internal server error';
+}
+
+function isJsonParseError(err: unknown): boolean {
+  return typeof err === 'object' &&
+    err !== null &&
+    'type' in err &&
+    (err as { type?: unknown }).type === 'entity.parse.failed';
 }
