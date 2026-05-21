@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { spawn } from 'node:child_process';
-import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, unlinkSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, unlinkSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -92,6 +92,39 @@ function tailFile(filePath, maxLines = 40) {
     .slice(-maxLines);
 }
 
+function quoteForCmd(arg) {
+  if (/^[\w./:=+-]+$/.test(arg)) {
+    return arg;
+  }
+
+  return `"${arg.replace(/"/g, '\\"')}"`;
+}
+
+function spawnSpec(command, commandArgs) {
+  if (!isWindows) {
+    return { command, args: commandArgs };
+  }
+
+  return {
+    command: process.env.ComSpec || 'cmd.exe',
+    args: ['/d', '/s', '/c', [command, ...commandArgs].map(quoteForCmd).join(' ')],
+  };
+}
+
+function appendLog(filePath, chunk) {
+  mkdirSync(runnerDir, { recursive: true });
+  appendFileSync(filePath, chunk);
+}
+
+function stopProcessTree(child, signal) {
+  if (isWindows && child.pid) {
+    spawnSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], { stdio: 'ignore' });
+    return;
+  }
+
+  child.kill(signal);
+}
+
 async function main() {
   if (args.includes('--help') || args.includes('-h')) {
     showHelp();
@@ -110,21 +143,21 @@ async function main() {
 
   prepareResults();
 
-  const stdoutFd = openSync(stdoutPath, 'a');
-  const stderrFd = openSync(stderrPath, 'a');
-
   console.log(`Starting Playwright E2E runner...`);
   console.log(`Output logs: ${stdoutPath}`);
   console.log(`Error logs:  ${stderrPath}`);
   console.log(`Progress:    ${summaryPath}`);
   console.log('');
 
-  const child = spawn(command, commandArgs, {
+  const childSpec = spawnSpec(command, commandArgs);
+  const child = spawn(childSpec.command, childSpec.args, {
     cwd: rootDir,
     env: process.env,
-    shell: isWindows,
-    stdio: ['ignore', stdoutFd, stderrFd],
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
+
+  child.stdout?.on('data', (chunk) => appendLog(stdoutPath, chunk));
+  child.stderr?.on('data', (chunk) => appendLog(stderrPath, chunk));
 
   let lastRendered = '';
   const poll = setInterval(() => {
@@ -146,7 +179,7 @@ async function main() {
 
   const stop = (signal) => {
     console.log(`\nStopping Playwright (${signal})...`);
-    child.kill(signal);
+    stopProcessTree(child, signal);
   };
 
   process.on('SIGINT', () => stop('SIGINT'));
@@ -155,8 +188,6 @@ async function main() {
   const exitCode = await new Promise((resolveExitCode) => {
     child.on('exit', (code, signal) => {
       clearInterval(poll);
-      closeSync(stdoutFd);
-      closeSync(stderrFd);
 
       const summary = readSummary();
       if (summary) {
@@ -178,8 +209,6 @@ async function main() {
 
     child.on('error', (error) => {
       clearInterval(poll);
-      closeSync(stdoutFd);
-      closeSync(stderrFd);
       console.error(error);
       resolveExitCode(1);
     });

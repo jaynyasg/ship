@@ -4,7 +4,7 @@
 > **Auditor:** Jay Godfrey
 > **Phase 1 Gate completed:** 2026-05-19
 > **Target repo:** `US-Department-of-the-Treasury/ship` (forked to `jaynyasg/ship`)
-> **Status:** Phase 2 measurement pass completed 2026-05-20. Baselines and after-measurements are in `eval/results/`; all seven PDF category targets are closed (U11, U12, U13, U14, U15, U16/U7, U17). Phase 13 later closed the WebSocket reconnect UI stretch follow-up.
+> **Status:** Phase 2 measurement pass completed 2026-05-20. Baselines and after-measurements are in `eval/results/`; all seven PDF category targets are closed (U11, U12, U13, U14, U15, U16/U7, U17). Phase 13 later closed the WebSocket reconnect UI stretch follow-up, and Phase 15 hardened the Windows E2E runner path with a focused isolated Playwright pass.
 
 This audit follows the **diagnostic-before-treatment** principle from the ShipShape PDF: every finding was measured first, classified by severity, and then addressed by a targeted improvement with reproducible before/after evidence. During the Phase 1 baseline pass, only additive documentation and evidence artifacts were created; Phase 2 contains the source changes.
 

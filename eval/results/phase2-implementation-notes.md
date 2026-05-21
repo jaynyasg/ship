@@ -33,4 +33,4 @@
 
 ## Not started / deferred
 
-- Full Playwright E2E should still be run through the dedicated E2E runner workflow to avoid output explosion.
+- Full all-suite Playwright E2E should still be run before release with `pnpm test:e2e`. Phase 14 added the compact runner and Phase 15 verified the isolated E2E harness with `pnpm test:e2e -- e2e/spike-isolated.spec.ts --workers=1`.

@@ -59,6 +59,8 @@ Evidence:
 
 No dependency audit advisories remain after Phase 08. The remediation uses targeted `pnpm.overrides` to keep parent package APIs stable while forcing patched transitive versions.
 
+Phase 15 adjusts the `ip-address` override from `10.1.1` to `10.2.0` because `express-rate-limit@8.5.2` depends on the newer `Address6.networkForm()` API for the fixed IPv6 key generator. This remains above the `ip-address` advisory's patched floor (`>=10.1.1`) and keeps `pnpm audit:ci` at zero advisories.
+
 | Risk | Current Status | Rationale |
 |---|---|---|
 | High/moderate production dependency advisories | Mitigated | Phase 08 reduces the audit count to zero while preserving the current API and frontend parent package surfaces. |

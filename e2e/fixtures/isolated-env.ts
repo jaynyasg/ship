@@ -16,7 +16,7 @@
 
 import { test as base } from '@playwright/test';
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, spawnSync, ChildProcess } from 'child_process';
 import { Pool } from 'pg';
 import { readdirSync, readFileSync, existsSync } from 'fs';
 import path from 'path';
@@ -51,6 +51,28 @@ async function getWorkerPort(workerIndex: number): Promise<number> {
 
 // Get project root (fixtures is at e2e/fixtures/, so go up 2 levels)
 const PROJECT_ROOT = path.resolve(__dirname, '../..');
+
+function createPnpmCommand(args: string[]): { command: string; args: string[] } {
+  if (process.platform !== 'win32') {
+    return { command: 'pnpm', args };
+  }
+
+  // Node 24 can throw EINVAL when spawning pnpm.cmd directly on Windows.
+  // Route through cmd.exe so the PATH/PATHEXT resolution matches an interactive shell.
+  return {
+    command: process.env.ComSpec || 'cmd.exe',
+    args: ['/d', '/s', '/c', `pnpm ${args.join(' ')}`],
+  };
+}
+
+function stopProcessTree(proc: ChildProcess): void {
+  if (process.platform === 'win32' && proc.pid) {
+    spawnSync('taskkill', ['/pid', String(proc.pid), '/t', '/f'], { stdio: 'ignore' });
+    return;
+  }
+
+  proc.kill('SIGTERM');
+}
 
 /**
  * Get available system memory in GB.
@@ -194,7 +216,7 @@ export const test = base.extend<
         await use({ url: apiUrl, process: proc });
       } finally {
         if (debug) console.log(`${workerTag} Stopping API server...`);
-        proc.kill('SIGTERM');
+        stopProcessTree(proc);
       }
     },
     { scope: 'worker' },
@@ -228,7 +250,8 @@ export const test = base.extend<
 
       // Use vite preview instead of vite dev - much lighter weight
       // We pass the API port via env var so vite.config.ts can set up the proxy
-      const proc = spawn('npx', ['vite', 'preview', '--port', String(port), '--strictPort'], {
+      const previewCommand = createPnpmCommand(['exec', 'vite', 'preview', '--port', String(port), '--strictPort']);
+      const proc = spawn(previewCommand.command, previewCommand.args, {
         cwd: path.join(PROJECT_ROOT, 'web'),
         env: {
           ...process.env,
@@ -258,7 +281,7 @@ export const test = base.extend<
         await use({ url: webUrl, process: proc });
       } finally {
         if (debug) console.log(`${workerTag} Stopping Vite preview server...`);
-        proc.kill('SIGTERM');
+        stopProcessTree(proc);
       }
     },
     { scope: 'worker' },

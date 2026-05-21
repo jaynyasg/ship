@@ -36,6 +36,7 @@ const SUMMARY_FILE = path.join(RESULTS_DIR, 'summary.json');
 
 class ProgressReporter implements Reporter {
   private totalTests = 0;
+  private testStatuses = new Map<string, 'passed' | 'failed' | 'skipped'>();
 
   onBegin(config: FullConfig, suite: Suite): void {
     // Ensure directories exist
@@ -104,7 +105,7 @@ class ProgressReporter implements Reporter {
     this.writeProgress(entry);
 
     // Atomically update summary counters (read-modify-write)
-    this.updateSummaryCounter(status);
+    this.updateSummaryCounter(test, status);
   }
 
   onEnd(result: FullResult): void {
@@ -117,17 +118,29 @@ class ProgressReporter implements Reporter {
     });
   }
 
-  private updateSummaryCounter(status: 'passed' | 'failed' | 'skipped'): void {
+  private updateSummaryCounter(test: TestCase, status: 'passed' | 'failed' | 'skipped'): void {
     try {
-      const data = fs.readFileSync(SUMMARY_FILE, 'utf-8');
-      const summary = JSON.parse(data);
+      this.testStatuses.set(test.id, status);
 
-      if (status === 'passed') summary.passed++;
-      else if (status === 'failed') summary.failed++;
-      else if (status === 'skipped') summary.skipped++;
+      const counts = {
+        passed: 0,
+        failed: 0,
+        skipped: 0,
+      };
 
-      summary.pending = summary.total - summary.passed - summary.failed - summary.skipped;
-      summary.ts = Date.now();
+      for (const currentStatus of this.testStatuses.values()) {
+        counts[currentStatus]++;
+      }
+
+      const completed = counts.passed + counts.failed + counts.skipped;
+      const summary = {
+        total: this.totalTests,
+        passed: counts.passed,
+        failed: counts.failed,
+        skipped: counts.skipped,
+        pending: Math.max(0, this.totalTests - completed),
+        ts: Date.now(),
+      };
 
       fs.writeFileSync(SUMMARY_FILE, JSON.stringify(summary, null, 2));
     } catch {
