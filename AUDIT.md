@@ -4,7 +4,7 @@
 > **Auditor:** Jay Godfrey
 > **Phase 1 Gate completed:** 2026-05-19
 > **Target repo:** `US-Department-of-the-Treasury/ship` (forked to `jaynyasg/ship`)
-> **Status:** Phase 2 measurement pass completed 2026-05-20. Baselines and after-measurements are in `eval/results/`; all seven PDF category targets are closed (U11, U12, U13, U14, U15, U16/U7, U17). Phase 13 later closed the WebSocket reconnect UI stretch follow-up, and Phase 15 hardened the Windows E2E runner path with a focused isolated Playwright pass.
+> **Status:** Phase 2 measurement pass completed 2026-05-20. Baselines and after-measurements are in `eval/results/`; all seven original PDF category targets are closed (U11, U12, U13, U14, U15, U16/U7, U17). Category 8 Security Audit was added and completed 2026-05-21 with a runnable probe, baseline, two verified fixes, and after-proof. Phase 13 later closed the WebSocket reconnect UI stretch follow-up, and Phase 15 hardened the Windows E2E runner path with a focused isolated Playwright pass.
 
 This audit follows the **diagnostic-before-treatment** principle from the ShipShape PDF: every finding was measured first, classified by severity, and then addressed by a targeted improvement with reproducible before/after evidence. During the Phase 1 baseline pass, only additive documentation and evidence artifacts were created; Phase 2 contains the source changes.
 
@@ -12,7 +12,7 @@ This audit follows the **diagnostic-before-treatment** principle from the ShipSh
 
 ## How to Read This Report
 
-Each of the 7 PDF audit categories below follows the same structure:
+Each of the 8 PDF audit categories below follows the same structure:
 
 1. **What this category measures** — the engineering quality dimension under test
 2. **How we measured it** — specific tools, commands, and artifacts produced
@@ -35,6 +35,7 @@ All quantitative evidence is in `eval/results/`. Each result file is JSON or Mar
 | 5. Test Coverage & Quality | `pnpm test` (Vitest), `scripts/check-empty-tests.sh`, code inspection of `e2e/` | `eval/results/test-coverage-baseline.json`, `empty-tests-baseline.json` |
 | 6. Runtime Error Handling | Observation during audit + code inspection of error surfaces | `eval/results/error-baseline.md`, `error-after.md` |
 | 7. Accessibility | Lighthouse + `@axe-core/playwright` on 4 pages with auth | `eval/results/a11y-baseline.json`, `lighthouse-login.json`, `axe-baseline.json` |
+| 8. Security Audit | `pnpm security:audit` live probe + dependency audit + manual review collectors | `eval/results/security-audit-baseline.md`, `security-audit-after.md`, `security-audit-fixes.md` |
 | Supplemental: Architectural health | `madge --circular`, code inspection | `eval/results/madge-circular-baseline.txt` (no circular deps) |
 | Supplemental: Dependency security | `pnpm audit`, `pnpm outdated` | `eval/results/dependency-summary-baseline.md`, audit + outdated JSONs |
 
@@ -398,6 +399,80 @@ Section 508 / WCAG 2.1 AA conformance, the standards Ship's README explicitly cl
 
 ---
 
+## Category 8 — Security Audit
+
+### What this category measures
+Live security posture across Ship's running application surface: authentication/session handling, WebSocket validation, input sanitization, high/critical dependency CVEs, CORS/CSP, secret exposure, rate limiting, and verbose error leakage.
+
+### How we measured it
+1. Added a runnable security probe CLI exposed as `pnpm security:audit`
+2. Ran the probe against local API + web targets with seeded `dev@ship.local / admin123`
+3. Exercised unauthenticated auth/session checks, authenticated write/input probes, collaboration WebSocket malformed/oversized payload probes, dependency audit parsing, CORS/CSP header checks, common secret-path checks, rate-limit coverage review, and malformed-error checks
+4. Wrote JSON and Markdown reports to `eval/results/security-audit-baseline.*` and `eval/results/security-audit-after.*`
+5. Captured fix-specific proof in `eval/results/security-audit-fixes.md`
+
+**Primary command:**
+```powershell
+pnpm security:audit -- --mode local --non-interactive
+```
+
+**Remote/production-capable command shape:**
+```powershell
+pnpm security:audit -- --mode remote --web-url <WEB_URL> --api-url <API_URL> --non-interactive
+```
+
+The probe first tries `dev@ship.local / admin123`. If those credentials do not work for a remote target, explicit `--email` / `--password` or `SHIP_SECURITY_EMAIL` / `SHIP_SECURITY_PASSWORD` can be provided; otherwise authenticated checks are marked credentials-required rather than silently skipped.
+
+### Baseline findings
+
+| Metric | Baseline |
+|---|---|
+| Security probe tool | ✅ Runnable — `pnpm security:audit` wrote JSON + Markdown reports |
+| Auth/session vulnerabilities found | ✅ No verified vulnerabilities found; unauthenticated protected routes returned 401/403; malformed session and bearer token rejected |
+| WebSocket validation failures | **MEDIUM** — collaboration WebSocket malformed binary handling closed unsafely (`closeCode: 1006`) after a 1-byte malformed frame |
+| Input sanitization failures | ✅ No verified vulnerabilities found across login payloads, public feedback malformed ID, document title XSS marker, comment event-handler marker, overlong title rejection, and SQLi-like issue title |
+| High/Critical CVEs in dependencies | ✅ No high or critical CVEs found by parsed `pnpm audit --json` |
+| CORS/CSP misconfiguration | ✅ No verified vulnerabilities found for the local baseline; untrusted CORS origin was not allowed and CSP checks were classified cleanly |
+| Secrets exposure risk | ✅ No secret-like values found on common accidental exposure paths (`/.env`, `/api/.env`, `/config.json`) |
+| Rate limiting absent on endpoints | ✅ No absent endpoints identified by review; API, login, WebSocket connection, and WebSocket message limits are wired |
+| Verbose error leakage | **MEDIUM** — malformed JSON responses leaked parser details (`JSON at position`, `line`, `column`) |
+| Secondary privilege probe | Not run — secondary credentials were not provided; recorded as `not_run_secondary_credentials_required` |
+
+**Baseline report summary:** `eval/results/security-audit-baseline.md` recorded **2 verified findings**, both Medium severity, with 32 pass results, 0 inconclusive/error/target-unavailable results, and 1 secondary-credentials-required result.
+
+### Severity classification
+| Finding | Severity |
+|---|---|
+| Collaboration WebSocket malformed binary frame closed with `1006` and previously risked API instability under active probes | **Medium** — malformed authenticated WebSocket input should be rejected with a controlled policy/validation close, not crash-only behavior |
+| Malformed JSON parser details exposed in API response | **Medium** — discloses implementation/parser internals and gives attackers unnecessary request-shaping feedback |
+| Auth/session unauthenticated access checks | **Positive** — protected API and WebSocket routes rejected unauthenticated access |
+| Dependency CVE count | **Positive** — parsed audit found 0 high/critical CVEs |
+| Input sanitization probes | **Positive** — active write probes treated adversarial payloads as data or rejected them |
+
+### Planned improvement (Phase 16)
+**Target:** Fix at least 2 verified security findings with vulnerability class, reproduction steps, applied fix, and before/after proof. Fixes must not break existing type-check/build/test gates.
+
+**Selected fixes:**
+1. **Collaboration WebSocket malformed-frame handling** — catch malformed Yjs protocol frames, close with controlled code `1008`, add WebSocket error handlers, and add a post-probe health check so crash-only failures are detected.
+2. **Malformed JSON verbose error leakage** — map Express/body-parser `entity.parse.failed` errors to a generic `Invalid JSON body` client response while logging internal details server-side.
+
+**Feasibility:** High — both fixes are narrow and directly covered by the probe and focused regression tests.
+
+### Phase 16 result
+**Target met.** `eval/results/security-audit-after.md` recorded **0 verified findings** after remediation: 35 pass results, 0 findings, 0 inconclusive/error/target-unavailable results, and 1 secondary-credentials-required result.
+
+Before/after proof:
+- WebSocket malformed binary: baseline `Status: finding`, `closeCode: 1006` → after `Status: pass`, `closeCode: 1008`, plus `ws-post-probe-health` returned `/health` status 200 after malformed and oversized WebSocket probes
+- Verbose JSON leakage: baseline response exposed parser position/line/column → after response body is `{"error":{"code":"REQUEST_ERROR","message":"Invalid JSON body"}}` with `leaks: []`
+
+Verification:
+- `pnpm type-check` passed
+- `pnpm --filter @ship/api test:security-probe` passed (39 focused security/regression tests)
+- `pnpm build:api` passed
+- `pnpm security:audit -- --mode local --non-interactive --report-name security-audit-after` passed with 0 verified findings
+
+---
+
 ## Discovery — Three Things Learned (per PDF Discovery Requirement)
 
 ### Discovery 1: The unified document model with `document_type` discriminator
@@ -491,6 +566,7 @@ If Ship grew 10× (more workspaces, more documents, more concurrent WebSocket co
 | 5. Test Coverage | 451 unit + 73+ E2E; 6 empty/silent-pass tests | 3 new tests OR 3 flaky fixes | **Met** — 455/455 API tests pass, 41.27% line coverage, empty-test detector reports 0 (`test-coverage-after.json`, `empty-tests-after.json`) |
 | 6. Runtime Error Handling | No top-level ErrorBoundary; no global error handlers | Fix 3 gaps, ≥1 data-loss scenario | **Met** — in-house capture + top ErrorBoundary + client global listeners + Express handler + `unhandledRejection`; Phase 13 adds WebSocket reconnect/retry UI (`error-after.md`, `websocket-reconnect-ui.md`) |
 | 7. Accessibility | 0 Critical, 2 Serious axe violations | +10 Lighthouse OR 0 Critical/Serious on top 3 | **Met** — 0 axe violations across login/docs/projects/team (`axe-after.json`) |
+| 8. Security Audit | Runnable probe; 2 Medium verified findings (WebSocket malformed binary, verbose JSON leakage) | Fix at least 2 verified vulnerabilities/findings with before/after proof | **Met** — after probe reports 0 verified findings; fixes documented in `security-audit-fixes.md` with baseline/after evidence |
 
 ---
 
@@ -510,4 +586,8 @@ The PDF explicitly requires this separation: *"Diagnosis comes before treatment.
 - `docs/drafts/ARCHITECTURE-draft.md` — architecture document template (to be finalized in U21 with before/after sections)
 - `docs/drafts/AUDIT-draft.md` — audit report template
 - `eval/results/` — all baseline and after-measurement artifacts referenced above
+- `eval/results/security-audit-baseline.md` — Category 8 baseline with exact audit deliverable matrix
+- `eval/results/security-audit-after.md` — Category 8 after-remediation report with zero verified findings
+- `eval/results/security-audit-fixes.md` — Category 8 two-fix before/after proof
+- `docs/brainstorms/2026-05-21-phase-16-category-8-security-audit.md` — Category 8 requirements and acceptance examples
 - Implementation plan: `docs/plans/2026-05-18-001-feat-shipshape-audit-enhancement-plan.md` (in Week4 planning repo)
