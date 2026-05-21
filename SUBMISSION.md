@@ -64,6 +64,10 @@ Root `pnpm dev` no longer depends on bash. It now runs a Node wrapper that prese
 
 The README and orientation notes now match the cross-platform setup path: local PostgreSQL-first host dev, `pnpm dev` first-run automation, optional full-stack Docker Compose, correct migrate/seed ordering, explicit pnpm version, and correct unit-vs-E2E test commands.
 
+## Phase 13 WebSocket Reconnect UI
+
+The editor now distinguishes healthy sync from cached reconnect/offline states. Collaboration failures show an accessible recovery banner, a compact retry control, and a throttled session check that reuses the existing expired-session login path when reconnect failure is authentication-related.
+
 ## Files To Read
 
 - `AUDIT.md` - full audit narrative with baseline, severity, and after status.
@@ -79,10 +83,12 @@ The README and orientation notes now match the cross-platform setup path: local 
 - `docs/brainstorms/2026-05-20-phase-10-windows-e2e-build-unblock.md` - Phase 10 Windows E2E build unblock evidence.
 - `docs/brainstorms/2026-05-20-phase-11-cross-platform-dev-wrapper.md` - Phase 11 cross-platform `pnpm dev` evidence.
 - `docs/brainstorms/2026-05-20-phase-12-setup-docs-hardening.md` - Phase 12 setup documentation hardening evidence.
+- `docs/brainstorms/2026-05-20-phase-13-websocket-reconnect-ui.md` - Phase 13 collaboration reconnect UI evidence.
 - `eval/results/documents-pagination-contract.md` - concise API contract evidence for page-style `/api/documents` pagination.
 - `eval/results/e2e-windows-build-unblock.md` - verification note for the cross-platform API build.
 - `eval/results/cross-platform-dev-wrapper.md` - verification note for the Node dev wrapper.
 - `eval/results/setup-docs-hardening.md` - verification note for README/orientation setup doc alignment.
+- `eval/results/websocket-reconnect-ui.md` - verification note for collaboration reconnect UI.
 
 ## Verification Commands
 
@@ -109,6 +115,5 @@ git diff --check
 
 ## Known Follow-Ups
 
-- WebSocket reconnect UI remains a stretch item for runtime resilience.
 - Full Playwright E2E should still be run through the dedicated E2E runner workflow to avoid output explosion.
 - Dependency overrides should be retired as upstream parent packages naturally absorb patched transitive versions.

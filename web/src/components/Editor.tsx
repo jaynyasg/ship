@@ -23,7 +23,7 @@ import { IndexeddbPersistence } from 'y-indexeddb';
 import { cn } from '@/lib/cn';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { ScrollFade } from '@/components/ui/ScrollFade';
-import { apiPost } from '@/lib/api';
+import { apiGet, apiPost } from '@/lib/api';
 import { createSlashCommands } from './editor/SlashCommands';
 import { DocumentEmbed } from './editor/DocumentEmbed';
 import { DragHandleExtension } from './editor/DragHandle';
@@ -38,6 +38,7 @@ import { CommentMark } from './editor/CommentMark';
 import { CommentDisplayExtension } from './editor/CommentDisplay';
 import { AIScoringDisplayExtension } from './editor/AIScoringDisplay';
 import { PlanReferenceBlockExtension } from './editor/PlanReferenceBlock';
+import { getSyncStatusDisplay, type SyncStatus, type SyncStatusTone } from './editor/syncStatus';
 import { useCommentsQuery, useCreateComment, useUpdateComment } from '@/hooks/useCommentsQuery';
 import { BubbleMenu } from '@tiptap/react';
 import 'tippy.js/dist/tippy.css';
@@ -89,8 +90,6 @@ interface EditorProps {
   /** Suffix displayed after the title in the header (e.g., author name) */
   titleSuffix?: string;
 }
-
-type SyncStatus = 'connecting' | 'cached' | 'synced' | 'disconnected';
 
 // Generate a consistent color from a string
 function stringToColor(str: string): string {
@@ -237,6 +236,21 @@ export function Editor({
   // AbortController for cancelling async uploads (images, files) when navigating away
   // This prevents uploads from completing into a different document after navigation
   const imageUploadAbortRef = useRef<AbortController>(new AbortController());
+  const lastCollabSessionCheckRef = useRef(0);
+
+  const verifyCollaborationSession = useCallback(() => {
+    if (!navigator.onLine) return;
+
+    const now = Date.now();
+    if (now - lastCollabSessionCheckRef.current < 10_000) {
+      return;
+    }
+    lastCollabSessionCheckRef.current = now;
+
+    apiGet('/api/auth/session').catch((error) => {
+      console.warn('[Editor] Collaboration session check failed:', error);
+    });
+  }, []);
 
   // Find portal target for properties sidebar (for proper landmark order)
   useLayoutEffect(() => {
@@ -289,6 +303,8 @@ export function Editor({
     let cancelled = false;
     // Store the updateUsers callback so we can properly remove it on cleanup
     let updateUsersCallback: (() => void) | null = null;
+
+    setSyncStatus('connecting');
 
     // Create IndexedDB persistence for content caching
     // This loads cached content BEFORE WebSocket connects for instant navigation
@@ -388,9 +404,15 @@ export function Editor({
         if (event.status === 'connected') {
           setSyncStatus('synced');
         } else if (event.status === 'disconnected') {
-          // If we have cached content, show 'cached' instead of 'disconnected'
-          setSyncStatus(hasCachedContent ? 'cached' : 'disconnected');
+          setSyncStatus(hasCachedContent ? 'reconnecting' : 'disconnected');
+          verifyCollaborationSession();
         }
+      });
+
+      wsProvider.on('connection-error', () => {
+        if (cancelled) return;
+        setSyncStatus(hasCachedContent ? 'reconnecting' : 'disconnected');
+        verifyCollaborationSession();
       });
 
       // Handle WebSocket close events to detect access revoked, document converted, or content updated
@@ -434,6 +456,9 @@ export function Editor({
             console.error(`[Editor] Failed to clear IndexedDB cache for ${documentId}:`, err);
           });
           // y-websocket will auto-reconnect, now with fresh state from server
+        } else {
+          setSyncStatus(hasCachedContent ? 'reconnecting' : 'disconnected');
+          verifyCollaborationSession();
         }
       });
 
@@ -500,7 +525,7 @@ export function Editor({
       setProvider(null);
       setConnectedUsers([]);
     };
-  }, [documentId, userName, color, ydoc, roomPrefix, onBack, onDocumentConverted]);
+  }, [documentId, userName, color, ydoc, roomPrefix, onBack, onDocumentConverted, verifyCollaborationSession]);
 
   // Create slash commands extension (memoized to avoid recreation)
   // documentId is in deps to ensure fresh AbortSignal when switching documents
@@ -813,6 +838,17 @@ export function Editor({
     onTitleChange?.(newTitle);
   }, [onTitleChange]);
 
+  const syncDisplay = getSyncStatusDisplay(syncStatus, isBrowserOnline);
+  const canRetrySync = syncDisplay.showRetry && isBrowserOnline && provider !== null;
+  const syncToneClasses = getSyncToneClasses(syncDisplay.tone);
+
+  const handleRetrySync = useCallback(() => {
+    if (!provider || !isBrowserOnline) return;
+    setSyncStatus('connecting');
+    provider.shouldConnect = true;
+    provider.connect();
+  }, [provider, isBrowserOnline]);
+
   return (
     <div className="flex h-full flex-col">
       {/* Compact header - breadcrumb, title, status, presence all in one row */}
@@ -846,36 +882,33 @@ export function Editor({
           </h1>
 
           {/* Sync status - WCAG 4.1.3 aria-live for status messages */}
-          {/* Show 'Offline' when browser is offline, regardless of WebSocket state */}
-          {(() => {
-            const effectiveStatus = !isBrowserOnline ? 'disconnected' : syncStatus;
-            return (
-              <div
-                role="status"
-                aria-live="polite"
-                aria-atomic="true"
-                className="flex items-center gap-1.5"
-                data-testid="sync-status"
-              >
-                <div
-                  className={cn(
-                    'h-2 w-2 rounded-full',
-                    effectiveStatus === 'synced' && 'bg-green-500',
-                    effectiveStatus === 'cached' && 'bg-blue-500',
-                    effectiveStatus === 'connecting' && 'bg-yellow-500 animate-pulse',
-                    effectiveStatus === 'disconnected' && 'bg-red-500'
-                  )}
-                  aria-hidden="true"
-                />
-                <span className="text-xs text-muted">
-                  {effectiveStatus === 'synced' && 'Saved'}
-                  {effectiveStatus === 'cached' && 'Cached'}
-                  {effectiveStatus === 'connecting' && 'Saving'}
-                  {effectiveStatus === 'disconnected' && 'Offline'}
-                </span>
-              </div>
-            );
-          })()}
+          <div
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className="flex min-w-[6.75rem] items-center justify-end gap-1.5"
+            data-testid="sync-status"
+            data-sync-status={syncDisplay.status}
+            title={syncDisplay.description}
+          >
+            <div
+              className={cn('h-2 w-2 shrink-0 rounded-full', syncToneClasses.dot)}
+              aria-hidden="true"
+            />
+            <span className="text-xs text-muted">{syncDisplay.label}</span>
+            {canRetrySync && (
+              <Tooltip content="Retry collaboration connection">
+                <button
+                  type="button"
+                  onClick={handleRetrySync}
+                  className="flex h-6 w-6 items-center justify-center rounded text-muted hover:bg-border hover:text-foreground transition-colors"
+                  aria-label="Retry collaboration connection"
+                >
+                  <SyncRetryIcon />
+                </button>
+              </Tooltip>
+            )}
+          </div>
 
           {/* Delete button */}
           {onDelete && (
@@ -904,6 +937,35 @@ export function Editor({
           ))}
         </div>
       </div>
+
+      {syncDisplay.showRecoveryBanner && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={cn(
+            'flex items-center justify-between gap-3 border-b px-4 py-2 text-xs',
+            syncToneClasses.banner
+          )}
+          data-testid="sync-recovery-banner"
+        >
+          <div className="min-w-0">
+            <span className="font-medium">{syncDisplay.bannerTitle}</span>
+            <span className="ml-2">{syncDisplay.description}</span>
+          </div>
+          {canRetrySync && (
+            <Tooltip content="Retry collaboration connection">
+              <button
+                type="button"
+                onClick={handleRetrySync}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-current/20 hover:bg-background/40 transition-colors"
+                aria-label="Retry collaboration connection"
+              >
+                <SyncRetryIcon />
+              </button>
+            </Tooltip>
+          )}
+        </div>
+      )}
 
       {/* Secondary header for actions (e.g., Submit, Accept, Reject buttons) */}
       {secondaryHeader && (
@@ -1078,6 +1140,39 @@ export function Editor({
         portalTarget
       )}
     </div>
+  );
+}
+
+function getSyncToneClasses(tone: SyncStatusTone): { dot: string; banner: string } {
+  switch (tone) {
+    case 'success':
+      return {
+        dot: 'bg-green-500',
+        banner: 'border-green-500/20 bg-green-500/10 text-foreground',
+      };
+    case 'info':
+      return {
+        dot: 'bg-blue-500',
+        banner: 'border-blue-500/20 bg-blue-500/10 text-foreground',
+      };
+    case 'warning':
+      return {
+        dot: 'bg-yellow-500 animate-pulse',
+        banner: 'border-yellow-500/30 bg-yellow-500/10 text-foreground',
+      };
+    case 'danger':
+      return {
+        dot: 'bg-red-500',
+        banner: 'border-red-500/30 bg-red-500/10 text-foreground',
+      };
+  }
+}
+
+function SyncRetryIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M4 4v6h6M20 20v-6h-6M5.5 15A7 7 0 0018 17.5M18.5 9A7 7 0 006 6.5" />
+    </svg>
   );
 }
 

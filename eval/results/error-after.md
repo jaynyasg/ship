@@ -14,6 +14,7 @@ PDF Category 6 required fixing 3 runtime error-handling gaps, with at least one 
 | Client global error capture | No `window.error` / `unhandledrejection` listeners | `web/src/lib/errorCapture.ts` installs both listeners and logs captured errors through the shared utility |
 | Server escaped error handling | No global Express error handler | `api/src/middleware/errorHandler.ts` captures errors and returns structured JSON 4xx/5xx responses; `api/src/app.ts` mounts it |
 | Server unhandled rejections | No `process.on('unhandledRejection')` handler | `api/src/index.ts` captures unhandled rejections through `@ship/shared` |
+| Collaboration reconnect UI | Sync badge did not distinguish cached reconnect from healthy sync | Phase 13 adds explicit `Reconnecting`/`Disconnected`/`Offline` states, a recovery banner, retry controls, and a session check that uses existing login-expiration handling |
 
 ## Shared Capture Utility
 
@@ -38,6 +39,6 @@ Results:
 - Full API suite passed: 28 files, 455 tests.
 - The full API run exercised expected Express error paths; CSRF and forced database-error tests returned structured handled responses rather than crashing the process.
 
-## Remaining Stretch
+## Phase 13 Stretch Closure
 
-WebSocket reconnect UI for expired-session collaboration recovery remains deferred as a stretch improvement. The core PDF target is still met because the top-level user-confusion case, global client capture, Express fallback, and process-level unhandled-rejection capture are implemented.
+The deferred WebSocket reconnect UI was closed after the core PDF target was met. The editor now announces collaboration recovery states through the existing `sync-status` live region, shows a full-width recovery banner while offline or reconnecting, provides a retry control for reachable-network failures, and probes `/api/auth/session` after collaboration transport failures so expired sessions reuse the app's existing login recovery path.

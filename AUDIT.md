@@ -4,7 +4,7 @@
 > **Auditor:** Jay Godfrey
 > **Phase 1 Gate completed:** 2026-05-19
 > **Target repo:** `US-Department-of-the-Treasury/ship` (forked to `jaynyasg/ship`)
-> **Status:** Phase 2 measurement pass completed 2026-05-20. Baselines and after-measurements are in `eval/results/`; all seven PDF category targets are closed (U11, U12, U13, U14, U15, U16/U7, U17). WebSocket reconnect UI remains a stretch follow-up.
+> **Status:** Phase 2 measurement pass completed 2026-05-20. Baselines and after-measurements are in `eval/results/`; all seven PDF category targets are closed (U11, U12, U13, U14, U15, U16/U7, U17). Phase 13 later closed the WebSocket reconnect UI stretch follow-up.
 
 This audit follows the **diagnostic-before-treatment** principle from the ShipShape PDF: every finding was measured first, classified by severity, and then addressed by a targeted improvement with reproducible before/after evidence. During the Phase 1 baseline pass, only additive documentation and evidence artifacts were created; Phase 2 contains the source changes.
 
@@ -341,7 +341,7 @@ Combination of observation during U1–U4 audit work (login, benchmarks, navigat
 **Feasibility:** High — all three are well-bounded, ~3-5 hours total.
 
 ### Phase 2 result
-**Target met.** Ship now has an in-house error-capture utility, a top-level React `ErrorBoundary`, client `window.error` / `unhandledrejection` listeners, Express `errorHandler`, and `process.on('unhandledRejection')` capture. The implemented fixes address the white-screen crash scenario plus uncaptured server/client errors; WebSocket reconnect UI remains a documented stretch follow-up. Evidence is in `eval/results/error-after.md`.
+**Target met.** Ship now has an in-house error-capture utility, a top-level React `ErrorBoundary`, client `window.error` / `unhandledrejection` listeners, Express `errorHandler`, and `process.on('unhandledRejection')` capture. The implemented fixes address the white-screen crash scenario plus uncaptured server/client errors. Phase 13 also added the deferred WebSocket reconnect UI with cached-edit recovery messaging, retry controls, and session-expiration checks. Evidence is in `eval/results/error-after.md` and `eval/results/websocket-reconnect-ui.md`.
 
 ---
 
@@ -489,7 +489,7 @@ If Ship grew 10× (more workspaces, more documents, more concurrent WebSocket co
 | 3. API Response Time | documents P97.5 c=25 = 283 ms; issues P97.5 c=25 = 192 ms | ≥20% P95/P97.5 on ≥2 endpoints | **Met** — documents paginated improved 71.02% to 82 ms; issues paginated improved 39.58% to 116 ms (`api-benchmark-after.json`, `api-benchmark-documents-limit50-c25.json`, `api-benchmark-issues-limit50-c25.json`) |
 | 4. DB Query Efficiency | weeks query has 7 correlated subqueries | ≥20% query count OR ≥50% slowest query | **Met** — migration `038` verified; weeks SQL EXPLAIN captured; request-level DB statements reduced 5 -> 3 for seeded super-admin flow (-40%) and 6 -> 4 for normal member flow (-33.33%); c=50 rerun is flat vs baseline at 130 ms P97.5 with 0 non-2xx (`db-query-after.md`, `api-benchmark-weeks-u14-after.json`) |
 | 5. Test Coverage | 451 unit + 73+ E2E; 6 empty/silent-pass tests | 3 new tests OR 3 flaky fixes | **Met** — 455/455 API tests pass, 41.27% line coverage, empty-test detector reports 0 (`test-coverage-after.json`, `empty-tests-after.json`) |
-| 6. Runtime Error Handling | No top-level ErrorBoundary; no global error handlers | Fix 3 gaps, ≥1 data-loss scenario | **Met** — in-house capture + top ErrorBoundary + client global listeners + Express handler + `unhandledRejection`; WebSocket reconnect UI remains stretch (`error-after.md`) |
+| 6. Runtime Error Handling | No top-level ErrorBoundary; no global error handlers | Fix 3 gaps, ≥1 data-loss scenario | **Met** — in-house capture + top ErrorBoundary + client global listeners + Express handler + `unhandledRejection`; Phase 13 adds WebSocket reconnect/retry UI (`error-after.md`, `websocket-reconnect-ui.md`) |
 | 7. Accessibility | 0 Critical, 2 Serious axe violations | +10 Lighthouse OR 0 Critical/Serious on top 3 | **Met** — 0 axe violations across login/docs/projects/team (`axe-after.json`) |
 
 ---
