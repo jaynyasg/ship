@@ -526,4 +526,4 @@ async function getWorkerPort(workerIndex: number): Promise<number> {
 }
 ```
 
-**Important:** Always use the `/e2e-test-runner` skill when running E2E tests. Never run `pnpm test:e2e` directly.
+**Important:** Always use `/e2e-test-runner` when it is available. Otherwise run `pnpm test:e2e`, which wraps Playwright with the compact runner. Never run `pnpm test:e2e:raw` unless explicitly debugging raw Playwright output.

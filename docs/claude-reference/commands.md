@@ -81,16 +81,16 @@ Runs API unit tests via Vitest.
 - **Requires:** PostgreSQL running locally
 - Uses testcontainers for isolated database
 
-### `/e2e-test-runner` (REQUIRED for E2E)
-**ALWAYS use this skill for E2E tests.** Never run `pnpm test:e2e` directly.
+### `/e2e-test-runner` or `pnpm test:e2e` (REQUIRED for E2E)
+**ALWAYS use a compact runner for E2E tests.** Prefer `/e2e-test-runner` when the skill is available; otherwise run `pnpm test:e2e`, which wraps Playwright with `scripts/run-e2e.mjs`.
 
-Why: Direct execution causes output explosion (600+ tests crash Claude Code). The skill handles:
-- Background execution
+Why: Raw Playwright output causes output explosion (600+ tests crash Claude Code). The runner handles:
+- Captured raw output under `test-results/runner/`
 - Progress polling via `test-results/summary.json`
 - `--last-failed` flag for iterative fixing
 
-### `pnpm test:e2e` (DO NOT USE DIRECTLY)
-Runs Playwright E2E tests. Use `/e2e-test-runner` instead.
+### `pnpm test:e2e:raw` (DO NOT USE DIRECTLY)
+Runs raw Playwright E2E tests. Use only when explicitly debugging unfiltered output.
 
 ### `pnpm test:e2e:ui`
 Opens Playwright UI for interactive test debugging.
@@ -233,7 +233,7 @@ Removes all build artifacts and node_modules across all packages.
 |------|---------|
 | Start development | `pnpm dev` |
 | Run unit tests | `pnpm test` |
-| Run E2E tests | Use `/e2e-test-runner` skill |
+| Run E2E tests | Use `/e2e-test-runner` or `pnpm test:e2e` |
 | Type check all | `pnpm type-check` |
 | Build everything | `pnpm build` |
 | Deploy API | `./scripts/deploy.sh <env>` |

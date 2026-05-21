@@ -141,7 +141,7 @@ pnpm build:shared  # Build shared types when running package servers manually
 pnpm db:migrate    # Run database migrations
 pnpm db:seed       # Reset database with sample data
 pnpm test          # Run API unit tests
-pnpm test:e2e      # Run Playwright E2E tests
+pnpm test:e2e      # Run Playwright through the compact progress runner
 ```
 
 ---
@@ -209,14 +209,17 @@ pnpm test
 # Run type checks across all workspaces
 pnpm type-check
 
-# Run Playwright E2E tests
+# Run Playwright E2E tests through the compact progress runner
 pnpm test:e2e
 
 # Run Playwright with UI
 pnpm test:e2e:ui
+
+# Escape hatch: raw Playwright output
+pnpm test:e2e:raw
 ```
 
-Ship uses Vitest for API unit tests and Playwright for end-to-end testing.
+Ship uses Vitest for API unit tests and Playwright for end-to-end testing. The default E2E command captures raw Playwright output under `test-results/runner/` and prints compact progress from `test-results/summary.json`.
 
 ---
 

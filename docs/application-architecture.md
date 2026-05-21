@@ -498,11 +498,11 @@ test("create and edit document", async ({ page }) => {
 ```
 
 ```bash
-# Run tests (Chromium only)
+# Run tests through the compact progress runner (Chromium only)
 pnpm test:e2e
 
 # Run specific test file
-pnpm test:e2e e2e/weeks.spec.ts
+pnpm test:e2e -- e2e/weeks.spec.ts
 ```
 
 ### Test Categories

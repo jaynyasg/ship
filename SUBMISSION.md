@@ -68,6 +68,10 @@ The README and orientation notes now match the cross-platform setup path: local 
 
 The editor now distinguishes healthy sync from cached reconnect/offline states. Collaboration failures show an accessible recovery banner, a compact retry control, and a throttled session check that reuses the existing expired-session login path when reconnect failure is authentication-related.
 
+## Phase 14 Compact E2E Runner
+
+Root `pnpm test:e2e` now wraps Playwright with a compact Node runner that captures raw stdout/stderr under `test-results/runner/`, polls `test-results/summary.json`, and preserves focused test files plus `--last-failed` passthrough. Raw Playwright output remains available as `pnpm test:e2e:raw` only for explicit debugging.
+
 ## Files To Read
 
 - `AUDIT.md` - full audit narrative with baseline, severity, and after status.
@@ -84,11 +88,13 @@ The editor now distinguishes healthy sync from cached reconnect/offline states. 
 - `docs/brainstorms/2026-05-20-phase-11-cross-platform-dev-wrapper.md` - Phase 11 cross-platform `pnpm dev` evidence.
 - `docs/brainstorms/2026-05-20-phase-12-setup-docs-hardening.md` - Phase 12 setup documentation hardening evidence.
 - `docs/brainstorms/2026-05-20-phase-13-websocket-reconnect-ui.md` - Phase 13 collaboration reconnect UI evidence.
+- `docs/brainstorms/2026-05-20-phase-14-compact-e2e-runner.md` - Phase 14 compact E2E runner evidence.
 - `eval/results/documents-pagination-contract.md` - concise API contract evidence for page-style `/api/documents` pagination.
 - `eval/results/e2e-windows-build-unblock.md` - verification note for the cross-platform API build.
 - `eval/results/cross-platform-dev-wrapper.md` - verification note for the Node dev wrapper.
 - `eval/results/setup-docs-hardening.md` - verification note for README/orientation setup doc alignment.
 - `eval/results/websocket-reconnect-ui.md` - verification note for collaboration reconnect UI.
+- `eval/results/compact-e2e-runner.md` - verification note for compact E2E runner wiring.
 
 ## Verification Commands
 
@@ -115,5 +121,5 @@ git diff --check
 
 ## Known Follow-Ups
 
-- Full Playwright E2E should still be run through the dedicated E2E runner workflow to avoid output explosion.
+- Full Playwright E2E should still be run before release with `pnpm test:e2e`; use `pnpm test:e2e:raw` only when raw Playwright output is explicitly needed for debugging.
 - Dependency overrides should be retired as upstream parent packages naturally absorb patched transitive versions.

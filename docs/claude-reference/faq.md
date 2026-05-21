@@ -85,16 +85,16 @@ pnpm test
 
 PostgreSQL must be running. Tests use real database integration.
 
-### Why can't I run `pnpm test:e2e` directly?
+### Why can't I run raw Playwright directly?
 
-**Never run `pnpm test:e2e` directly in Claude Code.** The output from 600+ tests crashes the context.
+**Never run `pnpm test:e2e:raw` directly in Claude Code.** The output from 600+ tests crashes the context.
 
-Use the `/e2e-test-runner` skill instead, which handles background execution and progress tracking.
+Use `/e2e-test-runner` when available, or `pnpm test:e2e`, which captures raw output and prints compact progress.
 
 ### How do I debug a failing E2E test?
 
 1. Check error logs: `cat test-results/errors/*.log`
-2. Run with debug: `DEBUG=1 pnpm test:e2e e2e/specific-test.spec.ts`
+2. Run a focused file through the compact runner: `pnpm test:e2e -- e2e/specific-test.spec.ts`
 3. Use UI mode: `pnpm test:e2e:ui`
 4. View HTML report: `playwright-report/index.html`
 

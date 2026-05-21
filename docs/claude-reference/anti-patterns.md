@@ -140,13 +140,13 @@ if (isValidResponse(data)) {
 
 ---
 
-## 4. Direct E2E Test Execution
+## 4. Raw E2E Test Execution
 
 ### What it looks like
 
 ```bash
-pnpm test:e2e
-pnpm test:e2e e2e/some-test.spec.ts
+pnpm test:e2e:raw
+pnpm test:e2e:raw e2e/some-test.spec.ts
 ```
 
 ### Why it's problematic
@@ -158,16 +158,15 @@ pnpm test:e2e e2e/some-test.spec.ts
 
 ### What to do instead
 
-**Always use the `/e2e-test-runner` skill:**
+**Always use the compact runner path:**
 
 ```bash
-# The skill handles:
-# - Background execution
-# - Progress polling via test-results/summary.json
-# - --last-failed for iterative fixing
+pnpm test:e2e
+pnpm test:e2e -- --last-failed
+pnpm test:e2e -- e2e/some-test.spec.ts
 ```
 
-See `.claude/rules/testing.md` for full details on the E2E test runner skill.
+Use `/e2e-test-runner` when that skill is available. Otherwise `pnpm test:e2e` wraps Playwright with `scripts/run-e2e.mjs`, captures raw logs under `test-results/runner/`, polls `test-results/summary.json`, and passes through focused test files or `--last-failed`.
 
 ---
 
@@ -470,7 +469,7 @@ Follow the transaction pattern used in:
 | Console logging | `grep -r "console\."` | Use structured logger |
 | Empty tests | `scripts/check-empty-tests.sh` | Use `test.fixme()` |
 | Type assertions to `any` | `grep -r "as any"` | Create proper types |
-| Direct E2E execution | Running `pnpm test:e2e` | Use `/e2e-test-runner` |
+| Raw E2E execution | Running `pnpm test:e2e:raw` | Use `/e2e-test-runner` or `pnpm test:e2e` |
 | Modifying schema.sql | Editing `schema.sql` | Create migration file |
 | --no-verify | Git history | Never use it |
 | Inconsistent errors | Review route responses | Use error helper |

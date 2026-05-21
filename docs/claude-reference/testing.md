@@ -22,20 +22,23 @@ pnpm test              # Run API unit tests (vitest)
 
 Requires PostgreSQL running locally. Tests share a single database connection via `api/src/db/client.js` but clean up via `beforeAll` in setup.
 
-### E2E Tests - USE THE SKILL
+### E2E Tests - USE THE COMPACT RUNNER
 
-**ALWAYS use `/e2e-test-runner` skill when running E2E tests.**
+**ALWAYS use the compact runner path when running E2E tests.** Prefer `/e2e-test-runner` when the skill is available; otherwise run `pnpm test:e2e`, which wraps Playwright with `scripts/run-e2e.mjs`.
 
 ```bash
-# WRONG - causes output explosion (600+ tests crash Claude Code)
+# RIGHT - compact Node runner
 pnpm test:e2e
 
-# RIGHT - use the skill
+# RIGHT - skill runner when available
 /e2e-test-runner
+
+# WRONG unless explicitly debugging raw output
+pnpm test:e2e:raw
 ```
 
-The skill handles:
-- Running tests in background
+The runner handles:
+- Capturing raw Playwright output under `test-results/runner/`
 - Progress polling via `test-results/summary.json`
 - `--last-failed` for iterative fixing
 
@@ -260,12 +263,12 @@ test.fixme('my test', async ({ page }) => {
 
 Pre-commit hook `scripts/check-empty-tests.sh` catches these.
 
-### E2E Output Explosion
+### Raw E2E Output Explosion
 
-Running `pnpm test:e2e` directly outputs 600+ test results, crashing Claude Code.
+Running `pnpm test:e2e:raw` directly outputs 600+ test results, crashing Claude Code.
 
-**Always use `/e2e-test-runner` skill** which:
-1. Runs tests in background
+**Always use `/e2e-test-runner` when available, or `pnpm test:e2e`,** which:
+1. Captures raw Playwright output under `test-results/runner/`
 2. Polls `test-results/summary.json` for progress
 3. Shows concise pass/fail summary
 

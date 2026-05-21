@@ -261,8 +261,8 @@ pnpm test             # Run API unit tests via vitest
 
 ### Running E2E Tests
 
-**Always use the `/e2e-test-runner` skill** - never run `pnpm test:e2e` directly. The skill handles:
-- Background execution (prevents output explosion)
+**Always use a compact E2E runner** - prefer `/e2e-test-runner` when available, or run `pnpm test:e2e`. Never run `pnpm test:e2e:raw` unless explicitly debugging raw output. The runner handles:
+- Captured raw Playwright output (prevents output explosion)
 - Progress tracking via `test-results/summary.json`
 - Iterative fixing with `--last-failed`
 

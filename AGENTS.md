@@ -53,7 +53,7 @@ pnpm test             # Runs api unit tests via vitest
 
 ## E2E Testing
 
-**ALWAYS use `/e2e-test-runner` when running E2E tests.** Never run `pnpm test:e2e` directly - it causes output explosion (600+ tests crash Codex). The skill handles background execution, progress polling via `test-results/summary.json`, and `--last-failed` for iterative fixing.
+**ALWAYS use the compact E2E runner path when running E2E tests.** Use `/e2e-test-runner` when that skill is available, or run `pnpm test:e2e`, which now wraps Playwright with `scripts/run-e2e.mjs`. Never run `pnpm test:e2e:raw` unless explicitly debugging raw Playwright output - it causes output explosion (600+ tests crash Codex). The runner handles captured output, progress polling via `test-results/summary.json`, and `--last-failed` passthrough for iterative fixing.
 
 **Empty test footgun:** Tests with only TODO comments pass silently. Use `test.fixme()` for unimplemented tests. Pre-commit hook (`scripts/check-empty-tests.sh`) catches these.
 

@@ -114,17 +114,17 @@ test.fixme('my test', async ({ page }) => {
 
 **Gotcha:** The pre-commit hook only catches empty tests at commit time. During development, you won't see failures.
 
-## 6. E2E Test Output Explosion
+## 6. Raw E2E Test Output Explosion
 
-Never run `pnpm test:e2e` directly. It outputs 600+ test results that crash Claude Code.
+Never run `pnpm test:e2e:raw` directly. It outputs 600+ test results that crash Claude Code.
 
-**Instead:** Use the `/e2e-test-runner` skill which:
-- Runs tests in background
+**Instead:** Use `/e2e-test-runner` when available, or run `pnpm test:e2e`, which:
+- Captures raw Playwright output under `test-results/runner/`
 - Polls `test-results/summary.json` for progress
-- Supports `--last-failed` for iterative fixing
+- Supports focused test files and `--last-failed` for iterative fixing
 
 **Key locations:**
-- `/Users/jonesshaw/Documents/code/ship/.claude/CLAUDE.md:55-58` - Documents this requirement
+- `/Users/jonesshaw/Documents/code/ship/scripts/run-e2e.mjs` - Compact runner implementation
 
 ## 7. Yjs State - Binary Buffer Manipulation
 
@@ -210,7 +210,7 @@ Not all types are in `shared/src/types/`. Some domain types are defined locally 
 | Dual associations | Medium | Check both column and junction table when debugging |
 | Error formats | Low | Use type guards to handle both formats |
 | Empty tests | High | Always use `test.fixme()` for stubs |
-| E2E output | High | Use `/e2e-test-runner` skill only |
+| E2E output | High | Use `/e2e-test-runner` or `pnpm test:e2e` only |
 | Yjs corruption | High | Use `Buffer.from()`, never string cast |
 | Port conflicts | Low | Use `pnpm dev` which handles this |
 | Schema.sql edits | High | Create migration file instead |
