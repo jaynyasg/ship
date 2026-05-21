@@ -1,5 +1,6 @@
 import type { SecurityFinding, SecurityProbeConfig, SecurityProbeReport } from './types.js';
 import { buildSecurityProbeReport } from './reporter.js';
+import { runAuthSessionProbes } from './probes/auth.js';
 
 export async function runSecurityProbe(config: SecurityProbeConfig): Promise<SecurityProbeReport> {
   const findings: SecurityFinding[] = [
@@ -23,6 +24,8 @@ export async function runSecurityProbe(config: SecurityProbeConfig): Promise<Sec
       },
     },
   ];
+
+  findings.push(...await runAuthSessionProbes(config));
 
   return buildSecurityProbeReport(config, findings);
 }
