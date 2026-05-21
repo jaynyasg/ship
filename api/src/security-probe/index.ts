@@ -30,10 +30,10 @@ export async function runSecurityProbe(config: SecurityProbeConfig): Promise<Sec
   ];
 
   findings.push(...await runAuthSessionProbes(config));
-  findings.push(...await runWebSocketProbes(config));
   findings.push(...await runInputSanitizationProbes(config));
   findings.push(...await runDependencyCveProbe(config));
   findings.push(...await runManualReviewCollectors(config));
+  findings.push(...await runWebSocketProbes(config));
 
   return buildSecurityProbeReport(config, findings);
 }

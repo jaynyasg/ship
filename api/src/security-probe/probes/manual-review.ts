@@ -108,29 +108,55 @@ export function classifyCspHeaders(
   response: HeaderProbeResponse,
   tolerateMissingForLocalDev: boolean
 ): SecurityFinding {
+  if (response.status === 0 || response.error) {
+    return {
+      id,
+      metric: 'cors_csp_misconfiguration',
+      surface: 'cors_csp',
+      status: 'not_run_target_unavailable',
+      severity: 'info',
+      title: `${title} unavailable`,
+      description: 'The target did not respond to the Content Security Policy header probe.',
+      reproduction: [`GET ${response.url}.`, 'Inspect the Content-Security-Policy response header.'],
+      evidence: {
+        status: response.status,
+        error: response.error,
+      },
+      recommendation: 'Start the target app or verify the configured URL, then rerun the probe.',
+    };
+  }
+
   const csp = response.headers['content-security-policy'];
   const missing = !csp;
   const hasUnsafeInline = typeof csp === 'string' && csp.includes("'unsafe-inline'");
-  const status = missing ? (tolerateMissingForLocalDev ? 'inconclusive' : 'finding') : 'pass';
+  const localDevTolerated = missing && tolerateMissingForLocalDev;
+  const status = missing && !localDevTolerated ? 'finding' : 'pass';
 
   return {
     id,
     metric: 'cors_csp_misconfiguration',
     surface: 'cors_csp',
     status,
-    severity: missing && !tolerateMissingForLocalDev ? 'medium' : 'info',
-    title: missing ? `${title} missing` : `${title} present`,
-    description: missing
+    severity: missing && !localDevTolerated ? 'medium' : 'info',
+    title: missing
+      ? localDevTolerated
+        ? `${title} missing on local dev target (tolerated)`
+        : `${title} missing`
+      : `${title} present`,
+    description: missing && !localDevTolerated
       ? 'The target response did not include a Content-Security-Policy header.'
+      : localDevTolerated
+        ? 'The local Vite development target did not include a Content-Security-Policy header; deployed targets are still treated as findings.'
       : 'The target response included a Content-Security-Policy header.',
     reproduction: [`GET ${response.url}.`, 'Inspect the Content-Security-Policy response header.'],
     evidence: {
       status: response.status,
       csp,
       hasUnsafeInline,
+      localDevTolerated,
       error: response.error,
     },
-    recommendation: missing && !tolerateMissingForLocalDev
+    recommendation: missing && !localDevTolerated
       ? 'Set a Content-Security-Policy header on deployed web/API responses.'
       : undefined,
   };
@@ -220,6 +246,8 @@ export function classifyVerboseErrorResponse(response: ProbeHttpResponse): Secur
     /SELECT\s+.+\s+FROM/i,
     /C:\\Users\\/i,
     /\/home\/.+\//i,
+    /JSON\s+at\s+position\s+\d+/i,
+    /line\s+\d+\s+column\s+\d+/i,
     /DATABASE_URL|SESSION_SECRET|AWS_SECRET_ACCESS_KEY/i,
   ];
   const leaks = leakagePatterns.filter((pattern) => pattern.test(response.bodyText)).map((pattern) => pattern.source);
