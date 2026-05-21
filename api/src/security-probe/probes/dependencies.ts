@@ -168,11 +168,16 @@ function extractFindingPaths(value: unknown): string[] {
 }
 
 function defaultCommandRunner(command: string, args: string[], options: { cwd: string }): CommandResult {
-  const executable = process.platform === 'win32' && command === 'pnpm' ? 'pnpm.cmd' : command;
-  const result = spawnSync(executable, args, {
-    cwd: options.cwd,
-    encoding: 'utf8',
-  });
+  const result = process.platform === 'win32'
+    ? spawnSync([command, ...args].map(quoteWindowsShellSegment).join(' '), {
+        cwd: options.cwd,
+        encoding: 'utf8',
+        shell: true,
+      })
+    : spawnSync(command, args, {
+        cwd: options.cwd,
+        encoding: 'utf8',
+      });
 
   return {
     status: result.status,
@@ -180,6 +185,10 @@ function defaultCommandRunner(command: string, args: string[], options: { cwd: s
     stderr: result.stderr || '',
     error: result.error?.message,
   };
+}
+
+function quoteWindowsShellSegment(segment: string): string {
+  return /^[a-zA-Z0-9_@./:-]+$/.test(segment) ? segment : `"${segment.replace(/"/g, '\\"')}"`;
 }
 
 function nestedValue(value: unknown, path: string[]): unknown {

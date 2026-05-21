@@ -4,6 +4,7 @@ import { runAuthSessionProbes } from './probes/auth.js';
 import { runWebSocketProbes } from './probes/websocket.js';
 import { runInputSanitizationProbes } from './probes/input.js';
 import { runDependencyCveProbe } from './probes/dependencies.js';
+import { runManualReviewCollectors } from './probes/manual-review.js';
 
 export async function runSecurityProbe(config: SecurityProbeConfig): Promise<SecurityProbeReport> {
   const findings: SecurityFinding[] = [
@@ -32,6 +33,7 @@ export async function runSecurityProbe(config: SecurityProbeConfig): Promise<Sec
   findings.push(...await runWebSocketProbes(config));
   findings.push(...await runInputSanitizationProbes(config));
   findings.push(...await runDependencyCveProbe(config));
+  findings.push(...await runManualReviewCollectors(config));
 
   return buildSecurityProbeReport(config, findings);
 }
