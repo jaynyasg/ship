@@ -2,6 +2,7 @@ import type { SecurityFinding, SecurityProbeConfig, SecurityProbeReport } from '
 import { buildSecurityProbeReport } from './reporter.js';
 import { runAuthSessionProbes } from './probes/auth.js';
 import { runWebSocketProbes } from './probes/websocket.js';
+import { runInputSanitizationProbes } from './probes/input.js';
 
 export async function runSecurityProbe(config: SecurityProbeConfig): Promise<SecurityProbeReport> {
   const findings: SecurityFinding[] = [
@@ -28,6 +29,7 @@ export async function runSecurityProbe(config: SecurityProbeConfig): Promise<Sec
 
   findings.push(...await runAuthSessionProbes(config));
   findings.push(...await runWebSocketProbes(config));
+  findings.push(...await runInputSanitizationProbes(config));
 
   return buildSecurityProbeReport(config, findings);
 }
