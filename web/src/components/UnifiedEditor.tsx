@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Editor } from '@/components/Editor';
 import { PropertiesPanel } from '@/components/sidebars/PropertiesPanel';
@@ -196,6 +196,11 @@ interface UnifiedEditorProps {
   /** Suffix displayed after the title in the header (e.g., author name) */
   titleSuffix?: string;
 }
+
+type DocumentScopedValue<T> = {
+  documentId: string;
+  value: T;
+};
 
 /**
  * UnifiedEditor - Adaptive editor component that renders type-specific properties
@@ -441,30 +446,38 @@ export function UnifiedEditor({
     );
   }, [showTypeSelector, typeSpecificSidebar, selectableDocumentType, handleTypeChange, isChangingType, missingFields]);
 
-  if (!user) {
-    return null;
-  }
-
   // Weekly plans and retros have computed titles (includes person name) - make read-only
   const isTitleReadOnly = document.document_type === 'weekly_plan' || document.document_type === 'weekly_retro';
 
   // AI quality banner — triggers analysis on content changes from the editor
-  const [editorContent, setEditorContent] = useState<Record<string, unknown> | null>(null);
-  const [aiScoringAnalysis, setAiScoringAnalysis] = useState<{ planAnalysis?: unknown; retroAnalysis?: unknown } | null>(null);
+  const [editorContentState, setEditorContentState] = useState<DocumentScopedValue<Record<string, unknown> | null>>(() => ({
+    documentId: document.id,
+    value: null,
+  }));
+  const [aiScoringAnalysisState, setAiScoringAnalysisState] = useState<DocumentScopedValue<{ planAnalysis?: unknown; retroAnalysis?: unknown } | null>>(() => ({
+    documentId: document.id,
+    value: null,
+  }));
+  const editorContent = editorContentState.documentId === document.id ? editorContentState.value : null;
+  const aiScoringAnalysis = aiScoringAnalysisState.documentId === document.id ? aiScoringAnalysisState.value : null;
 
-  // Prevent stale AI feedback from leaking when navigating to a different document.
-  useEffect(() => {
-    setEditorContent(null);
-    setAiScoringAnalysis(null);
+  const setEditorContent = useCallback((content: Record<string, unknown>) => {
+    setEditorContentState({ documentId: document.id, value: content });
   }, [document.id]);
 
   const handlePlanAnalysisChange = useCallback((analysis: unknown) => {
-    setAiScoringAnalysis(analysis ? { planAnalysis: analysis } : null);
-  }, []);
+    setAiScoringAnalysisState({
+      documentId: document.id,
+      value: analysis ? { planAnalysis: analysis } : null,
+    });
+  }, [document.id]);
 
   const handleRetroAnalysisChange = useCallback((analysis: unknown) => {
-    setAiScoringAnalysis(analysis ? { retroAnalysis: analysis } : null);
-  }, []);
+    setAiScoringAnalysisState({
+      documentId: document.id,
+      value: analysis ? { retroAnalysis: analysis } : null,
+    });
+  }, [document.id]);
 
   const qualityBanner = useMemo(() => {
     if (document.document_type === 'weekly_plan') {
@@ -480,6 +493,10 @@ export function UnifiedEditor({
     if (!weeklyReviewState?.isReviewMode) return undefined;
     return <WeeklyReviewSubNav reviewState={weeklyReviewState} />;
   }, [weeklyReviewState]);
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <Editor

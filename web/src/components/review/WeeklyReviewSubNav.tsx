@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { cn } from '@/lib/cn';
 import type { WeeklyReviewActionsState } from '@/hooks/useWeeklyReviewActions';
@@ -24,17 +24,17 @@ export function WeeklyReviewSubNav({ reviewState }: WeeklyReviewSubNavProps) {
   const [feedbackInput, setFeedbackInput] = useState('');
   const [ratingInput, setRatingInput] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      setOpen(false);
+      return;
+    }
     setDecision('approve');
     setCommentInput(reviewState.approvalComment ?? '');
     setFeedbackInput('');
     setRatingInput(reviewState.currentRating ?? null);
-  }, [open, reviewState.approvalComment, reviewState.currentRating]);
-
-  if (!reviewState.isReviewMode) {
-    return null;
-  }
+    setOpen(true);
+  };
 
   const approveLabel = useMemo(() => {
     if (reviewState.isRetro) {
@@ -63,6 +63,10 @@ export function WeeklyReviewSubNav({ reviewState }: WeeklyReviewSubNavProps) {
     !feedbackInput.trim();
 
   const submitDisabled = decision === 'approve' ? approveDisabled : requestDisabled;
+
+  if (!reviewState.isReviewMode) {
+    return null;
+  }
 
   async function handleSubmit() {
     if (decision === 'approve') {
@@ -103,7 +107,7 @@ export function WeeklyReviewSubNav({ reviewState }: WeeklyReviewSubNavProps) {
         )}
       </div>
 
-      <Dialog.Root open={open} onOpenChange={setOpen}>
+      <Dialog.Root open={open} onOpenChange={handleOpenChange}>
         <Dialog.Trigger asChild>
           <button
             disabled={!reviewState.effectiveSprintId}
@@ -139,8 +143,8 @@ export function WeeklyReviewSubNav({ reviewState }: WeeklyReviewSubNavProps) {
 
             <div className="space-y-4 px-5 py-4">
               {reviewState.isRetro && (
-                <div>
-                  <label className="mb-2 block text-xs font-medium text-muted">Performance Rating</label>
+                <fieldset>
+                  <legend className="mb-2 block text-xs font-medium text-muted">Performance Rating</legend>
                   <div className="grid grid-cols-5 gap-2">
                     {OPM_RATINGS.map((rating) => (
                       <button
@@ -159,12 +163,13 @@ export function WeeklyReviewSubNav({ reviewState }: WeeklyReviewSubNavProps) {
                       </button>
                     ))}
                   </div>
-                </div>
+                </fieldset>
               )}
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-muted">Approval Note (optional)</label>
+                <label htmlFor="weekly-review-approval-note" className="mb-1 block text-xs font-medium text-muted">Approval Note (optional)</label>
                 <textarea
+                  id="weekly-review-approval-note"
                   value={commentInput}
                   onChange={(e) => setCommentInput(e.target.value)}
                   placeholder="Add context for this decision..."
@@ -173,8 +178,8 @@ export function WeeklyReviewSubNav({ reviewState }: WeeklyReviewSubNavProps) {
                 />
               </div>
 
-              <div>
-                <label className="mb-2 block text-xs font-medium text-muted">Decision</label>
+              <fieldset>
+                <legend className="mb-2 block text-xs font-medium text-muted">Decision</legend>
                 <div className="space-y-2">
                   <label
                     className={cn(
@@ -184,6 +189,8 @@ export function WeeklyReviewSubNav({ reviewState }: WeeklyReviewSubNavProps) {
                   >
                     <input
                       type="radio"
+                      name="weekly-review-decision"
+                      value="approve"
                       checked={decision === 'approve'}
                       onChange={() => setDecision('approve')}
                       className="mt-1"
@@ -199,6 +206,8 @@ export function WeeklyReviewSubNav({ reviewState }: WeeklyReviewSubNavProps) {
                   >
                     <input
                       type="radio"
+                      name="weekly-review-decision"
+                      value="request_changes"
                       checked={decision === 'request_changes'}
                       onChange={() => setDecision('request_changes')}
                       className="mt-1"
@@ -206,12 +215,13 @@ export function WeeklyReviewSubNav({ reviewState }: WeeklyReviewSubNavProps) {
                     <span className="text-sm text-foreground">Request Changes</span>
                   </label>
                 </div>
-              </div>
+              </fieldset>
 
               {decision === 'request_changes' && (
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-muted">What needs to change?</label>
+                  <label htmlFor="weekly-review-change-request" className="mb-1 block text-xs font-medium text-muted">What needs to change?</label>
                   <textarea
+                    id="weekly-review-change-request"
                     value={feedbackInput}
                     onChange={(e) => setFeedbackInput(e.target.value)}
                     placeholder="Explain what needs to be revised..."

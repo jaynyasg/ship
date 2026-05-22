@@ -7,17 +7,18 @@ export type DashboardView = 'my-work' | 'overview';
 
 export function DashboardSidebar() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const currentView = (searchParams.get('view') as DashboardView) || 'my-work';
+  const viewParam = searchParams.get('view');
+  const currentView = (viewParam as DashboardView) || 'my-work';
 
   // On mount, restore saved view preference if no view param is set
   useEffect(() => {
-    if (!searchParams.get('view')) {
+    if (!viewParam) {
       const savedView = localStorage.getItem(STORAGE_KEY) as DashboardView | null;
       if (savedView && savedView !== 'my-work') {
         setSearchParams({ view: savedView }, { replace: true });
       }
     }
-  }, []);
+  }, [setSearchParams, viewParam]);
 
   const setView = (view: DashboardView) => {
     localStorage.setItem(STORAGE_KEY, view);

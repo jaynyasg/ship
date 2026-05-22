@@ -32,10 +32,6 @@ export function BacklinksPanel({ documentId }: BacklinksPanelProps) {
 
     async function fetchBacklinks() {
       try {
-        // Only show loading on initial fetch, not on polls
-        if (backlinks.length === 0) {
-          setLoading(true);
-        }
         setError(null);
 
         const response = await fetch(`${API_URL}/api/documents/${documentId}/backlinks`, {

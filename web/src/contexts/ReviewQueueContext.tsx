@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export interface QueueItem {
@@ -37,7 +37,10 @@ export function ReviewQueueProvider({ children }: { children: React.ReactNode })
 
   // Use a ref to avoid stale closures in setTimeout/callbacks
   const stateRef = useRef(state);
-  stateRef.current = state;
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   const navigateToItem = useCallback((item: QueueItem) => {
     navigate(`/documents/${item.docId}?review=true&sprintId=${item.sprintId}`);

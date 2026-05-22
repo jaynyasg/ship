@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { cn } from '@/lib/cn';
 
 export interface WeekProgressGraphProps {
@@ -21,7 +22,7 @@ export function WeekProgressGraph({
 }: WeekProgressGraphProps) {
   const start = new Date(startDate).getTime();
   const end = new Date(endDate).getTime();
-  const now = Date.now();
+  const [now] = useState(() => Date.now());
 
   const current = Math.min(Math.max(now, start), end);
   const totalDuration = end - start;
