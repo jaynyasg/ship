@@ -41,22 +41,23 @@ export function AdminDashboardPage() {
       navigate('/docs');
       return;
     }
-    loadData();
-  }, [isSuperAdmin, navigate, showArchived]);
-
-  async function loadData() {
-    setLoading(true);
-    const [wsRes, usersRes, logsRes] = await Promise.all([
+    let cancelled = false;
+    Promise.all([
       api.admin.listWorkspaces(showArchived),
       api.admin.listUsers(),
       api.admin.getAuditLogs({ limit: 50 }),
-    ]);
+    ]).then(([wsRes, usersRes, logsRes]) => {
+      if (cancelled) return;
+      if (wsRes.success && wsRes.data) setWorkspaces(wsRes.data.workspaces);
+      if (usersRes.success && usersRes.data) setUsers(usersRes.data.users);
+      if (logsRes.success && logsRes.data) setAuditLogs(logsRes.data.logs);
+      setLoading(false);
+    });
 
-    if (wsRes.success && wsRes.data) setWorkspaces(wsRes.data.workspaces);
-    if (usersRes.success && usersRes.data) setUsers(usersRes.data.users);
-    if (logsRes.success && logsRes.data) setAuditLogs(logsRes.data.logs);
-    setLoading(false);
-  }
+    return () => {
+      cancelled = true;
+    };
+  }, [isSuperAdmin, navigate, showArchived]);
 
   async function handleCreateWorkspace(e: React.FormEvent) {
     e.preventDefault();
@@ -262,7 +263,6 @@ function WorkspacesTab({
             value={newWorkspaceName}
             onChange={(e) => setNewWorkspaceName(e.target.value)}
             placeholder="Workspace name"
-            autoFocus
             className="flex-1 max-w-sm px-3 py-1.5 bg-background border border-border rounded-md text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent"
           />
           <button

@@ -38,7 +38,25 @@ export function WorkspaceSettingsPage() {
 
   useEffect(() => {
     if (!currentWorkspace) return;
-    loadData(showArchived);
+    let cancelled = false;
+
+    Promise.all([
+      api.workspaces.getMembers(currentWorkspace.id, { includeArchived: showArchived }),
+      api.workspaces.getInvites(currentWorkspace.id),
+      api.apiTokens.list(),
+      api.workspaces.getAuditLogs(currentWorkspace.id, { limit: 50 }),
+    ]).then(([membersRes, invitesRes, tokensRes, logsRes]) => {
+      if (cancelled) return;
+      if (membersRes.success && membersRes.data) setMembers(membersRes.data.members);
+      if (invitesRes.success && invitesRes.data) setInvites(invitesRes.data.invites);
+      if (tokensRes.success && tokensRes.data) setApiTokens(tokensRes.data);
+      if (logsRes.success && logsRes.data) setAuditLogs(logsRes.data.logs);
+      setLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [currentWorkspace, showArchived]);
 
   async function loadData(includeArchived = false) {
@@ -586,8 +604,9 @@ function ApiTokensTab({
 
         <form onSubmit={handleCreate} className="flex gap-3 items-end">
           <div className="flex-1 max-w-xs">
-            <label className="block text-xs text-muted mb-1">Token Name</label>
+            <label htmlFor="api-token-name" className="block text-xs text-muted mb-1">Token Name</label>
             <input
+              id="api-token-name"
               type="text"
               value={tokenName}
               onChange={(e) => setTokenName(e.target.value)}
@@ -597,8 +616,9 @@ function ApiTokensTab({
             />
           </div>
           <div className="w-32">
-            <label className="block text-xs text-muted mb-1">Expires</label>
+            <label htmlFor="api-token-expiration" className="block text-xs text-muted mb-1">Expires</label>
             <select
+              id="api-token-expiration"
               value={expiresInDays}
               onChange={(e) => setExpiresInDays(e.target.value)}
               className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground"

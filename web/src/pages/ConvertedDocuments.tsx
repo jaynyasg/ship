@@ -29,37 +29,44 @@ export function ConvertedDocumentsPage() {
 
   useEffect(() => {
     if (!currentWorkspace) return;
-    loadConversions();
-  }, [currentWorkspace, filter]);
+    let cancelled = false;
+    let url = '/api/documents/converted/list';
+    const params = new URLSearchParams();
 
-  async function loadConversions() {
-    setLoading(true);
-    try {
-      let url = '/api/documents/converted/list';
-      const params = new URLSearchParams();
+    if (filter === 'issue-to-project') {
+      params.set('original_type', 'issue');
+      params.set('converted_type', 'project');
+    } else if (filter === 'project-to-issue') {
+      params.set('original_type', 'project');
+      params.set('converted_type', 'issue');
+    }
 
-      if (filter === 'issue-to-project') {
-        params.set('original_type', 'issue');
-        params.set('converted_type', 'project');
-      } else if (filter === 'project-to-issue') {
-        params.set('original_type', 'project');
-        params.set('converted_type', 'issue');
-      }
+    if (params.toString()) {
+      url += `?${params.toString()}`;
+    }
 
-      if (params.toString()) {
-        url += `?${params.toString()}`;
-      }
-
-      const res = await apiGet(url);
+    apiGet(url)
+      .then(async (res) => {
+        if (cancelled) return;
       if (res.ok) {
         const data = await res.json();
+          if (cancelled) return;
         setConversions(data);
       }
-    } catch (err) {
+      })
+      .catch((err) => {
+        if (cancelled) return;
       console.error('Failed to load conversions:', err);
-    }
-    setLoading(false);
-  }
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentWorkspace, filter]);
 
   function getTypeIcon(type: string) {
     if (type === 'issue') {

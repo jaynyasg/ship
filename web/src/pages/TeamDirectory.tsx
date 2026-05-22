@@ -27,30 +27,38 @@ export function TeamDirectoryPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; person: Person } | null>(null);
 
-  const fetchPeople = useCallback(async (includeArchived = false) => {
-    try {
-      const params = new URLSearchParams();
-      if (includeArchived) params.set('includeArchived', 'true');
-      const url = params.toString()
-        ? `${API_URL}/api/team/people?${params}`
-        : `${API_URL}/api/team/people`;
-      const response = await fetch(url, {
-        credentials: 'include',
-      });
+  useEffect(() => {
+    let cancelled = false;
+    const params = new URLSearchParams();
+    if (showArchived) params.set('includeArchived', 'true');
+    const url = params.toString()
+      ? `${API_URL}/api/team/people?${params}`
+      : `${API_URL}/api/team/people`;
+
+    fetch(url, {
+      credentials: 'include',
+    })
+      .then(async (response) => {
+        if (cancelled) return;
       if (response.ok) {
         const data = await response.json();
+          if (cancelled) return;
         setPeople(data);
       }
-    } catch (error) {
+      })
+      .catch((error) => {
+        if (cancelled) return;
       console.error('Failed to fetch people:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoading(false);
+      });
 
-  useEffect(() => {
-    fetchPeople(showArchived);
-  }, [fetchPeople, showArchived]);
+    return () => {
+      cancelled = true;
+    };
+  }, [showArchived]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, person: Person) => {
     e.preventDefault();
