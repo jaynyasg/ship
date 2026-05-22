@@ -56,6 +56,7 @@ interface ProgramGroup {
 export function TeamModePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const userId = user?.id ?? null;
   const [data, setData] = useState<TeamGridData | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [assignments, setAssignments] = useState<Record<string, Record<number, Assignment>>>({});
@@ -81,6 +82,7 @@ export function TeamModePage() {
   const [viewAsSprintNumber, setViewAsSprintNumber] = useState<number | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const hasScrolledToCurrentRef = useRef(false);
+  const hasCompletedInitialLoadRef = useRef(false);
 
   // Find the current sprint number
   const currentSprintNumber = data?.currentSprintNumber ?? null;
@@ -94,23 +96,17 @@ export function TeamModePage() {
 
   // Smart default: if user has direct reports, default to "my-team"
   const hasDirectReports = useMemo(() => {
-    if (!data || !user?.id) return false;
-    return data.users.some(u => u.reportsTo === user.id);
-  }, [data, user?.id]);
-
-  // Set smart default when data first loads (only if no stored value)
-  useEffect(() => {
-    if (data && filterMode === null) {
-      setFilterMode(hasDirectReports ? 'my-team' : 'everyone');
-    }
-  }, [data, filterMode, hasDirectReports]);
+    if (!data || !userId) return false;
+    return data.users.some(u => u.reportsTo === userId);
+  }, [data, userId]);
+  const effectiveFilterMode = filterMode ?? (hasDirectReports ? 'my-team' : 'everyone');
 
   // Persist filter mode and past-weeks visibility to localStorage
   useEffect(() => {
-    if (filterMode !== null) {
-      localStorage.setItem('ship:allocation-filter-mode', filterMode);
+    if (data) {
+      localStorage.setItem('ship:allocation-filter-mode', effectiveFilterMode);
     }
-  }, [filterMode]);
+  }, [data, effectiveFilterMode]);
 
   useEffect(() => {
     localStorage.setItem('ship:allocation-show-past-weeks', String(showPastWeeks));
@@ -120,15 +116,15 @@ export function TeamModePage() {
   const filteredUsers = useMemo(() => {
     if (!data) return [];
     let users = data.users;
-    if (filterMode === 'my-team' && user?.id) {
-      users = users.filter(u => u.reportsTo === user.id);
+    if (effectiveFilterMode === 'my-team' && userId) {
+      users = users.filter(u => u.reportsTo === userId);
     }
     if (nameFilter.trim()) {
       const query = nameFilter.trim().toLowerCase();
       users = users.filter(u => u.name.toLowerCase().includes(query));
     }
     return users;
-  }, [data, filterMode, user?.id, nameFilter]);
+  }, [data, effectiveFilterMode, userId, nameFilter]);
 
   // Group users by their assignment's program for the viewed sprint
   const groupingSprintNumber = viewAsSprintNumber ?? currentSprintNumber;
@@ -159,19 +155,16 @@ export function TeamModePage() {
       groups.get(groupKey)!.users.push(user);
     }
 
-    // Sort groups: alphabetically by name, with Unassigned last
-    const sortedGroups = Array.from(groups.values()).sort((a, b) => {
-      if (a.programId === null) return 1;
-      if (b.programId === null) return -1;
-      return a.programName.localeCompare(b.programName);
-    });
-
-    // Sort users within each group alphabetically
-    for (const group of sortedGroups) {
-      group.users.sort((a, b) => a.name.localeCompare(b.name));
-    }
-
-    return sortedGroups;
+    return Array.from(groups.values())
+      .map(group => ({
+        ...group,
+        users: [...group.users].sort((a, b) => a.name.localeCompare(b.name)),
+      }))
+      .sort((a, b) => {
+        if (a.programId === null) return 1;
+        if (b.programId === null) return -1;
+        return a.programName.localeCompare(b.programName);
+      });
   }, [data, filteredUsers, assignments, groupingSprintNumber]);
 
   // Toggle program group collapse
@@ -198,22 +191,6 @@ export function TeamModePage() {
   } | null>(null);
   const [operationLoading] = useState<string | null>(null);
 
-  // Initial load
-  useEffect(() => {
-    Promise.all([
-      fetchTeamGrid(undefined, undefined, showArchived),
-      fetchProjects(),
-      fetchAssignments(),
-    ]).finally(() => setLoading(false));
-  }, []);
-
-  // Refetch when showArchived changes
-  useEffect(() => {
-    // Skip initial render
-    if (loading) return;
-    fetchTeamGrid(sprintRange?.min, sprintRange?.max, showArchived);
-  }, [showArchived]);
-
   // Scroll to current sprint on initial load (only when past weeks are shown)
   useEffect(() => {
     if (!showPastWeeks) return; // No need to scroll when past weeks are hidden
@@ -232,7 +209,7 @@ export function TeamModePage() {
     }
   }, [data, showPastWeeks]);
 
-  async function fetchTeamGrid(fromSprint?: number, toSprint?: number, includeArchived = false) {
+  const fetchTeamGrid = useCallback(async (fromSprint?: number, toSprint?: number, includeArchived = false) => {
     try {
       const params = new URLSearchParams();
       if (fromSprint !== undefined) params.set('fromSprint', String(fromSprint));
@@ -255,9 +232,9 @@ export function TeamModePage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     }
-  }
+  }, []);
 
-  async function fetchProjects() {
+  const fetchProjects = useCallback(async () => {
     try {
       const res = await apiGet(`/api/team/projects`);
       if (res.ok) {
@@ -267,9 +244,9 @@ export function TeamModePage() {
     } catch (err) {
       console.error('Failed to fetch projects:', err);
     }
-  }
+  }, []);
 
-  async function fetchAssignments() {
+  const fetchAssignments = useCallback(async () => {
     try {
       const res = await apiGet(`/api/team/assignments`);
       if (res.ok) {
@@ -279,9 +256,33 @@ export function TeamModePage() {
     } catch (err) {
       console.error('Failed to fetch assignments:', err);
     }
-  }
+  }, []);
 
-  const handleAssign = async (personId: string, projectId: string, sprintNumber: number) => {
+  // Initial load
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      Promise.all([
+        fetchTeamGrid(undefined, undefined, showArchived),
+        fetchProjects(),
+        fetchAssignments(),
+      ]).finally(() => {
+        hasCompletedInitialLoadRef.current = true;
+        setLoading(false);
+      });
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [fetchAssignments, fetchProjects, fetchTeamGrid, showArchived]);
+
+  // Refetch when showArchived changes
+  useEffect(() => {
+    if (!hasCompletedInitialLoadRef.current) return;
+    const timeout = window.setTimeout(() => {
+      fetchTeamGrid(sprintRange?.min, sprintRange?.max, showArchived);
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [fetchTeamGrid, showArchived, sprintRange?.max, sprintRange?.min]);
+
+  const handleAssign = useCallback(async (personId: string, projectId: string, sprintNumber: number) => {
     const project = projects.find(p => p.id === projectId);
     if (!project) return;
 
@@ -339,9 +340,9 @@ export function TeamModePage() {
       });
       setError('Failed to assign user');
     }
-  };
+  }, [assignments, projects]);
 
-  const handleUnassign = async (personId: string, sprintNumber: number, skipConfirmation = false) => {
+  const handleUnassign = useCallback(async (personId: string, sprintNumber: number, skipConfirmation = false) => {
     // Optimistic update - remove from UI immediately
     const previousAssignment = assignments[personId]?.[sprintNumber];
     setAssignments(prev => {
@@ -391,7 +392,7 @@ export function TeamModePage() {
       }
       setError('Failed to unassign user');
     }
-  };
+  }, [assignments]);
 
   const handleCellChange = useCallback((
     personId: string,
@@ -417,7 +418,7 @@ export function TeamModePage() {
     if (newProjectId) {
       handleAssign(personId, newProjectId, sprintNumber);
     }
-  }, [projects]);
+  }, [handleAssign, handleUnassign]);
 
   // Fetch more sprints
   const fetchMoreSprints = useCallback(async (direction: 'left' | 'right') => {
@@ -555,7 +556,7 @@ export function TeamModePage() {
                 onClick={() => setFilterMode('my-team')}
                 className={cn(
                   'px-2 py-0.5 transition-colors',
-                  filterMode === 'my-team'
+                  effectiveFilterMode === 'my-team'
                     ? 'bg-accent text-white'
                     : 'text-muted hover:text-foreground'
                 )}
@@ -566,7 +567,7 @@ export function TeamModePage() {
                 onClick={() => setFilterMode('everyone')}
                 className={cn(
                   'px-2 py-0.5 transition-colors',
-                  filterMode === 'everyone'
+                  effectiveFilterMode === 'everyone'
                     ? 'bg-accent text-white'
                     : 'text-muted hover:text-foreground'
                 )}

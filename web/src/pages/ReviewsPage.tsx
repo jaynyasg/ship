@@ -160,6 +160,7 @@ interface BatchMode {
 export function ReviewsPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const userId = user?.id ?? null;
   const reviewQueue = useReviewQueue();
   const [data, setData] = useState<ReviewsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -168,41 +169,63 @@ export function ReviewsPage() {
   const [collapsedPrograms, setCollapsedPrograms] = useState<Set<string>>(new Set());
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
   const [batchMode, setBatchMode] = useState<BatchMode | null>(null);
-  const [selectedPlanWeek, setSelectedPlanWeek] = useState<number | null>(null);
-  const [selectedRetroWeek, setSelectedRetroWeek] = useState<number | null>(null);
+  const [selectedPlanWeekState, setSelectedPlanWeekState] = useState<{
+    filterMode: 'my-team' | 'everyone' | null;
+    value: number | null;
+  }>({ filterMode: null, value: null });
+  const [selectedRetroWeekState, setSelectedRetroWeekState] = useState<{
+    filterMode: 'my-team' | 'everyone' | null;
+    value: number | null;
+  }>({ filterMode: null, value: null });
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const hasScrolledToCurrentRef = useRef(false);
 
+  const fetchReviews = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await apiGet(`/api/team/reviews?sprint_count=8`);
+      if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
+      const json = await res.json();
+      setData(json);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load reviews');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   // Smart default: if user has direct reports, default to "my-team"
   const hasDirectReports = useMemo(() => {
-    if (!data || !user?.id) return false;
-    return data.people.some(p => p.reportsTo === user.id);
-  }, [data, user?.id]);
-
-  useEffect(() => {
-    if (data && filterMode === null) {
-      setFilterMode(hasDirectReports ? 'my-team' : 'everyone');
-    }
-  }, [data, filterMode, hasDirectReports]);
+    if (!data || !userId) return false;
+    return data.people.some(p => p.reportsTo === userId);
+  }, [data, userId]);
+  const effectiveFilterMode = filterMode ?? (hasDirectReports ? 'my-team' : 'everyone');
+  const selectedPlanWeek = selectedPlanWeekState.filterMode === effectiveFilterMode
+    ? selectedPlanWeekState.value
+    : null;
+  const selectedRetroWeek = selectedRetroWeekState.filterMode === effectiveFilterMode
+    ? selectedRetroWeekState.value
+    : null;
+  const setSelectedPlanWeek = useCallback((value: number | null) => {
+    setSelectedPlanWeekState({ filterMode: effectiveFilterMode, value });
+  }, [effectiveFilterMode]);
+  const setSelectedRetroWeek = useCallback((value: number | null) => {
+    setSelectedRetroWeekState({ filterMode: effectiveFilterMode, value });
+  }, [effectiveFilterMode]);
 
   // Filter people based on filter mode
   const filteredPeople = useMemo(() => {
     if (!data) return [];
-    if (filterMode === 'my-team' && user?.id) {
-      return data.people.filter(p => p.reportsTo === user.id);
+    if (effectiveFilterMode === 'my-team' && userId) {
+      return data.people.filter(p => p.reportsTo === userId);
     }
     return data.people;
-  }, [data, filterMode, user?.id]);
-
-  // Recalculate manager action defaults when switching review scope.
-  useEffect(() => {
-    setSelectedPlanWeek(null);
-    setSelectedRetroWeek(null);
-  }, [filterMode]);
+  }, [data, effectiveFilterMode, userId]);
 
   useEffect(() => {
-    fetchReviews();
-  }, []);
+    const timeout = window.setTimeout(fetchReviews, 0);
+    return () => window.clearTimeout(timeout);
+  }, [fetchReviews]);
 
   // Approve a plan optimistically
   const approvePlan = useCallback(async (personId: string, weekNumber: number, sprintId: string, comment?: string) => {
@@ -232,7 +255,7 @@ export function ReviewsPage() {
       // Revert on error
       fetchReviews();
     }
-  }, [data]);
+  }, [data, fetchReviews]);
 
   // Request changes on a plan or retro
   const requestChanges = useCallback(async (personId: string, weekNumber: number, sprintId: string, type: 'plan' | 'retro', feedback: string) => {
@@ -260,7 +283,7 @@ export function ReviewsPage() {
       // Revert on error
       fetchReviews();
     }
-  }, [data]);
+  }, [data, fetchReviews]);
 
   // Rate a retro (also approves it)
   const rateRetro = useCallback(async (personId: string, weekNumber: number, sprintId: string, rating: number, comment?: string) => {
@@ -291,21 +314,7 @@ export function ReviewsPage() {
       // Revert on error
       fetchReviews();
     }
-  }, [data]);
-
-  async function fetchReviews() {
-    try {
-      setLoading(true);
-      const res = await apiGet(`/api/team/reviews?sprint_count=8`);
-      if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
-      const json = await res.json();
-      setData(json);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load reviews');
-    } finally {
-      setLoading(false);
-    }
-  }
+  }, [data, fetchReviews]);
 
   // Group people by program
   const programGroups = useMemo((): ProgramGroup[] => {
@@ -329,17 +338,16 @@ export function ReviewsPage() {
       groups.get(groupKey)!.people.push(person);
     }
 
-    const sorted = Array.from(groups.values()).sort((a, b) => {
-      if (a.programId === null) return 1;
-      if (b.programId === null) return -1;
-      return a.programName.localeCompare(b.programName);
-    });
-
-    for (const group of sorted) {
-      group.people.sort((a, b) => a.name.localeCompare(b.name));
-    }
-
-    return sorted;
+    return Array.from(groups.values())
+      .map(group => ({
+        ...group,
+        people: [...group.people].sort((a, b) => a.name.localeCompare(b.name)),
+      }))
+      .sort((a, b) => {
+        if (a.programId === null) return 1;
+        if (b.programId === null) return -1;
+        return a.programName.localeCompare(b.programName);
+      });
   }, [data, filteredPeople]);
 
   // Build row structure for synchronized scrolling
@@ -440,24 +448,10 @@ export function ReviewsPage() {
     return currentWeekNumber;
   }, [data, weekReviewCounts, weeksDescending]);
 
-  useEffect(() => {
-    if (!data || defaultPlanWeek === null) return;
-    const selectedExists = selectedPlanWeek !== null && data.weeks.some(week => week.number === selectedPlanWeek);
-    if (!selectedExists) {
-      setSelectedPlanWeek(defaultPlanWeek);
-    }
-  }, [data, defaultPlanWeek, selectedPlanWeek]);
-
-  useEffect(() => {
-    if (!data || defaultRetroWeek === null) return;
-    const selectedExists = selectedRetroWeek !== null && data.weeks.some(week => week.number === selectedRetroWeek);
-    if (!selectedExists) {
-      setSelectedRetroWeek(defaultRetroWeek);
-    }
-  }, [data, defaultRetroWeek, selectedRetroWeek]);
-
-  const effectivePlanWeek = selectedPlanWeek ?? defaultPlanWeek ?? data?.currentSprintNumber ?? 1;
-  const effectiveRetroWeek = selectedRetroWeek ?? defaultRetroWeek ?? data?.currentSprintNumber ?? 1;
+  const selectedPlanWeekExists = selectedPlanWeek !== null && (data?.weeks.some(week => week.number === selectedPlanWeek) ?? false);
+  const selectedRetroWeekExists = selectedRetroWeek !== null && (data?.weeks.some(week => week.number === selectedRetroWeek) ?? false);
+  const effectivePlanWeek = selectedPlanWeekExists ? selectedPlanWeek : defaultPlanWeek ?? data?.currentSprintNumber ?? 1;
+  const effectiveRetroWeek = selectedRetroWeekExists ? selectedRetroWeek : defaultRetroWeek ?? data?.currentSprintNumber ?? 1;
   const selectedPlanPendingCount = weekReviewCounts[effectivePlanWeek]?.plans ?? 0;
   const selectedRetroPendingCount = weekReviewCounts[effectiveRetroWeek]?.retros ?? 0;
   const selectedPlanWeekLabel = data?.weeks.find(week => week.number === effectivePlanWeek)?.name ?? `Week ${effectivePlanWeek}`;
@@ -637,7 +631,7 @@ export function ReviewsPage() {
                 onClick={() => setFilterMode('my-team')}
                 className={cn(
                   'px-2 py-0.5 transition-colors',
-                  filterMode === 'my-team'
+                  effectiveFilterMode === 'my-team'
                     ? 'bg-accent text-white'
                     : 'text-muted hover:text-foreground'
                 )}
@@ -648,7 +642,7 @@ export function ReviewsPage() {
                 onClick={() => setFilterMode('everyone')}
                 className={cn(
                   'px-2 py-0.5 transition-colors',
-                  filterMode === 'everyone'
+                  effectiveFilterMode === 'everyone'
                     ? 'bg-accent text-white'
                     : 'text-muted hover:text-foreground'
                 )}
@@ -1040,47 +1034,57 @@ function ReviewPanel({
 
   // Fetch plan/retro content when selection changes
   useEffect(() => {
-    setLoadingDocs(true);
-    setPlanDoc(null);
-    setRetroDoc(null);
-    setSelectedRating(selectedCell.cell.reviewRating?.value ?? null);
-    const existingComment = selectedCell.type === 'retro'
-      ? selectedCell.cell.reviewApproval?.comment
-      : selectedCell.cell.planApproval?.comment;
-    setApprovalComment(existingComment ?? '');
-    setShowFeedbackInput(false);
-    setFeedbackText('');
+    const timeout = window.setTimeout(() => {
+      setLoadingDocs(true);
+      setPlanDoc(null);
+      setRetroDoc(null);
+      setSelectedRating(selectedCell.cell.reviewRating?.value ?? null);
+      const existingComment = selectedCell.type === 'retro'
+        ? selectedCell.cell.reviewApproval?.comment
+        : selectedCell.cell.planApproval?.comment;
+      setApprovalComment(existingComment ?? '');
+      setShowFeedbackInput(false);
+      setFeedbackText('');
 
-    const fetchDocs = async () => {
-      try {
-        const params = new URLSearchParams({
-          person_id: selectedCell.personId,
-          week_number: String(selectedCell.weekNumber),
-        });
+      const fetchDocs = async () => {
+        try {
+          const params = new URLSearchParams({
+            person_id: selectedCell.personId,
+            week_number: String(selectedCell.weekNumber),
+          });
 
-        // Fetch plan and retro in parallel
-        const [planRes, retroRes] = await Promise.all([
-          apiGet(`/api/weekly-plans?${params}`),
-          apiGet(`/api/weekly-retros?${params}`),
-        ]);
+          // Fetch plan and retro in parallel
+          const [planRes, retroRes] = await Promise.all([
+            apiGet(`/api/weekly-plans?${params}`),
+            apiGet(`/api/weekly-retros?${params}`),
+          ]);
 
-        if (planRes.ok) {
-          const plans = await planRes.json();
-          if (plans.length > 0) setPlanDoc(plans[0]);
+          if (planRes.ok) {
+            const plans = await planRes.json();
+            if (plans.length > 0) setPlanDoc(plans[0]);
+          }
+          if (retroRes.ok) {
+            const retros = await retroRes.json();
+            if (retros.length > 0) setRetroDoc(retros[0]);
+          }
+        } catch (err) {
+          console.error('Failed to fetch plan/retro:', err);
+        } finally {
+          setLoadingDocs(false);
         }
-        if (retroRes.ok) {
-          const retros = await retroRes.json();
-          if (retros.length > 0) setRetroDoc(retros[0]);
-        }
-      } catch (err) {
-        console.error('Failed to fetch plan/retro:', err);
-      } finally {
-        setLoadingDocs(false);
-      }
-    };
+      };
 
-    fetchDocs();
-  }, [selectedCell.personId, selectedCell.weekNumber]);
+      fetchDocs();
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [
+    selectedCell.cell.planApproval?.comment,
+    selectedCell.cell.reviewApproval?.comment,
+    selectedCell.cell.reviewRating?.value,
+    selectedCell.personId,
+    selectedCell.type,
+    selectedCell.weekNumber,
+  ]);
 
   const isRetroMode = selectedCell.type === 'retro';
   const planApprovalState = selectedCell.cell.planApproval?.state;
@@ -1198,7 +1202,6 @@ function ReviewPanel({
               placeholder="Explain what needs to be revised..."
               rows={3}
               className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:ring-1 focus:ring-purple-500"
-              autoFocus
             />
             <div className="flex gap-2 mt-2">
               <button
@@ -1255,8 +1258,9 @@ function ReviewPanel({
                 </button>
               ))}
             </div>
-            <label className="text-xs text-muted mb-1 block">Approval Note (optional)</label>
+            <label htmlFor="retro-approval-note" className="text-xs text-muted mb-1 block">Approval Note (optional)</label>
             <textarea
+              id="retro-approval-note"
               value={approvalComment}
               onChange={e => setApprovalComment(e.target.value)}
               placeholder="Add context for this decision..."
@@ -1299,8 +1303,9 @@ function ReviewPanel({
         ) : (
           /* Plan actions: Approve + Request Changes */
           <div>
-            <label className="text-xs text-muted mb-1 block">Approval Note (optional)</label>
+            <label htmlFor="plan-approval-note" className="text-xs text-muted mb-1 block">Approval Note (optional)</label>
             <textarea
+              id="plan-approval-note"
               value={approvalComment}
               onChange={e => setApprovalComment(e.target.value)}
               placeholder="Add context for this decision..."
