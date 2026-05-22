@@ -307,7 +307,9 @@ export function IssuesList({
   }, [effectiveContext]);
 
   // Use fetched issues when self-fetching, otherwise use the prop
-  const inContextIssues = shouldSelfFetch ? (fetchedIssues ?? []) : (issuesProp ?? []);
+  const inContextIssues = useMemo(() => (
+    shouldSelfFetch ? (fetchedIssues ?? []) : (issuesProp ?? [])
+  ), [fetchedIssues, issuesProp, shouldSelfFetch]);
   const loading = shouldSelfFetch ? (isFetchingIssues || (showAllIssues && isLoadingAllIssues)) : loadingProp;
 
   // Create set of in-context issue IDs for quick lookup
@@ -350,7 +352,16 @@ export function IssuesList({
     return initialStateFilter;
   };
 
-  const [stateFilter, setStateFilter] = useState(getInitialStateFilter);
+  const [localStateFilterState, setLocalStateFilterState] = useState(() => ({
+    initialStateFilter,
+    value: getInitialStateFilter(),
+  }));
+  const localStateFilter = localStateFilterState.initialStateFilter === initialStateFilter
+    ? localStateFilterState.value
+    : initialStateFilter;
+  const stateFilter = stateUrlParam
+    ? searchParams.get(stateUrlParam) ?? initialStateFilter
+    : localStateFilter;
   const [programFilter, setProgramFilter] = useState<string | null>(null);
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
   const [sprintFilter, setSprintFilter] = useState<string | null>(null);
@@ -475,9 +486,8 @@ export function IssuesList({
 
   // Track selection state for BulkActionBar and global keyboard navigation
   const [selectedIds, setSelectedIds] = useState<Set<string>>(getInitialSelection);
+  const [selection, setSelection] = useState<UseSelectionReturn | null>(null);
   const selectionRef = useRef<UseSelectionReturn | null>(null);
-  // Force re-render trigger for when selection ref updates (used by useGlobalListNavigation)
-  const [, forceUpdate] = useState(0);
 
   // Persist selection changes to context
   useEffect(() => {
@@ -488,23 +498,6 @@ export function IssuesList({
       });
     }
   }, [selectedIds, selectionPersistenceKey, selectionPersistence]);
-
-  // Sync state filter with external state (when not using URL sync)
-  useEffect(() => {
-    if (!stateUrlParam) {
-      setStateFilter(initialStateFilter);
-    }
-  }, [initialStateFilter, stateUrlParam]);
-
-  // Sync state filter from URL (when using URL sync)
-  useEffect(() => {
-    if (stateUrlParam) {
-      const urlValue = searchParams.get(stateUrlParam) ?? '';
-      if (urlValue !== stateFilter) {
-        setStateFilter(urlValue);
-      }
-    }
-  }, [searchParams, stateUrlParam, stateFilter]);
 
   // Compute unique programs from issues for the filter dropdown
   const programOptions = useMemo(() => {
@@ -637,7 +630,9 @@ export function IssuesList({
   }, [effectiveContext, queryClient, showToast]);
 
   const handleFilterChange = useCallback((newFilter: string) => {
-    setStateFilter(newFilter);
+    if (!stateUrlParam) {
+      setLocalStateFilterState({ initialStateFilter, value: newFilter });
+    }
     // Update URL if URL sync is enabled
     if (stateUrlParam) {
       setSearchParams((prev) => {
@@ -651,7 +646,7 @@ export function IssuesList({
     }
     // Call external callback if provided
     onStateFilterChange?.(newFilter);
-  }, [onStateFilterChange, stateUrlParam, setSearchParams]);
+  }, [initialStateFilter, onStateFilterChange, stateUrlParam, setSearchParams]);
 
   const handleUpdateIssue = useCallback(async (id: string, updates: { state: string }) => {
     if (onUpdateIssue) {
@@ -662,6 +657,7 @@ export function IssuesList({
   // Clear selection helper
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
+    setSelection(null);
     selectionRef.current?.clearSelection();
     setContextMenu(null);
   }, []);
@@ -927,13 +923,13 @@ export function IssuesList({
   // Selection change handler
   const handleSelectionChange = useCallback((newSelectedIds: Set<string>, newSelection: UseSelectionReturn) => {
     setSelectedIds(newSelectedIds);
+    setSelection(newSelection);
     selectionRef.current = newSelection;
-    forceUpdate(n => n + 1);
   }, []);
 
   // Global keyboard navigation for j/k and Enter
   useGlobalListNavigation({
-    selection: selectionRef.current,
+    selection,
     selectionRef: selectionRef,
     enabled: enableKeyboardNavigation && viewMode === 'list',
     onEnter: useCallback((focusedId: string) => {
@@ -979,12 +975,14 @@ export function IssuesList({
       handleKeyDown: () => {},
     };
     selectionRef.current = mockSelection;
+    setSelection(mockSelection);
     setContextMenu({ x: event.x, y: event.y, selection: mockSelection });
   }, [selectedIds]);
 
   // Context menu handler for SelectableList
   const handleContextMenu = useCallback((e: React.MouseEvent, _item: Issue, selection: UseSelectionReturn) => {
     selectionRef.current = selection;
+    setSelection(selection);
     setContextMenu({ x: e.clientX, y: e.clientY, selection });
   }, []);
 

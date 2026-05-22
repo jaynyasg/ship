@@ -86,7 +86,8 @@ export function StandupFeed({ sprintId }: StandupFeedProps) {
   }, [sprintId, showToast]);
 
   useEffect(() => {
-    fetchStandups();
+    const timeout = window.setTimeout(fetchStandups, 0);
+    return () => window.clearTimeout(timeout);
   }, [fetchStandups]);
 
   const handleSubmit = async () => {

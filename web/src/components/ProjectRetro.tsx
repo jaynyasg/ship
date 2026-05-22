@@ -75,9 +75,10 @@ export function ProjectRetro({ projectId }: ProjectRetroProps) {
   }, [projectId, editor, showToast]);
 
   useEffect(() => {
-    if (editor) {
-      fetchRetro();
-    }
+    if (!editor) return;
+
+    const timeout = window.setTimeout(fetchRetro, 0);
+    return () => window.clearTimeout(timeout);
   }, [fetchRetro, editor]);
 
   const handleSave = async () => {
@@ -197,9 +198,9 @@ export function ProjectRetro({ projectId }: ProjectRetroProps) {
 
             {/* Plan Validation */}
             <div className="space-y-2 mb-6">
-              <label className="text-xs font-medium text-muted uppercase tracking-wide">
+              <div className="text-xs font-medium text-muted uppercase tracking-wide">
                 Plan Validation
-              </label>
+              </div>
               <div className="flex flex-col gap-2">
                 <button
                   onClick={() => {
@@ -252,9 +253,9 @@ export function ProjectRetro({ projectId }: ProjectRetroProps) {
             {/* Monetary Impact Expected */}
             {retroData?.monetary_impact_expected && (
               <div className="space-y-2 mb-6">
-                <label className="text-xs font-medium text-muted uppercase tracking-wide">
+                <div className="text-xs font-medium text-muted uppercase tracking-wide">
                   Expected Impact
-                </label>
+                </div>
                 <div className="text-sm text-foreground bg-border/30 rounded-md px-3 py-2">
                   {retroData.monetary_impact_expected}
                 </div>
@@ -263,10 +264,11 @@ export function ProjectRetro({ projectId }: ProjectRetroProps) {
 
             {/* Monetary Impact Actual */}
             <div className="space-y-2 mb-6">
-              <label className="text-xs font-medium text-muted uppercase tracking-wide">
+              <label htmlFor="project-retro-monetary-impact" className="text-xs font-medium text-muted uppercase tracking-wide">
                 Actual Monetary Impact
               </label>
               <input
+                id="project-retro-monetary-impact"
                 type="text"
                 value={monetaryImpactActual}
                 onChange={(e) => {
@@ -280,7 +282,7 @@ export function ProjectRetro({ projectId }: ProjectRetroProps) {
 
             {/* Success Criteria */}
             <div className="space-y-2 mb-6">
-              <label className="text-xs font-medium text-muted uppercase tracking-wide">
+              <label htmlFor="project-retro-success-criterion" className="text-xs font-medium text-muted uppercase tracking-wide">
                 Success Criteria
               </label>
               <div className="space-y-2">
@@ -302,6 +304,7 @@ export function ProjectRetro({ projectId }: ProjectRetroProps) {
                 ))}
                 <div className="flex gap-2">
                   <input
+                    id="project-retro-success-criterion"
                     type="text"
                     value={newCriterion}
                     onChange={(e) => setNewCriterion(e.target.value)}
@@ -328,9 +331,9 @@ export function ProjectRetro({ projectId }: ProjectRetroProps) {
             {/* Sprints */}
             {retroData?.weeks && retroData.weeks.length > 0 && (
               <div className="space-y-2 mb-6">
-                <label className="text-xs font-medium text-muted uppercase tracking-wide">
+                <div className="text-xs font-medium text-muted uppercase tracking-wide">
                   Sprints ({retroData.weeks.length})
-                </label>
+                </div>
                 <div className="space-y-1">
                   {retroData.weeks.map((sprint) => (
                     <div key={sprint.id} className="text-sm text-foreground">

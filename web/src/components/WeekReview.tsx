@@ -60,9 +60,10 @@ export function WeekReview({ sprintId }: WeekReviewProps) {
   }, [sprintId, editor, showToast]);
 
   useEffect(() => {
-    if (editor) {
-      fetchReview();
-    }
+    if (!editor) return;
+
+    const timeout = window.setTimeout(fetchReview, 0);
+    return () => window.clearTimeout(timeout);
   }, [fetchReview, editor]);
 
   const handleSave = async () => {
@@ -149,9 +150,9 @@ export function WeekReview({ sprintId }: WeekReviewProps) {
 
             {/* Plan Validation */}
             <div className="space-y-2">
-              <label className="text-xs font-medium text-muted uppercase tracking-wide">
+              <div className="text-xs font-medium text-muted uppercase tracking-wide">
                 Plan Validation
-              </label>
+              </div>
               <div className="flex flex-col gap-2">
                 <button
                   onClick={() => setPlanValidated(true)}
