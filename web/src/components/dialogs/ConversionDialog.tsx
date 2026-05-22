@@ -35,8 +35,14 @@ export function ConversionDialog({ isOpen, onClose, onConvert, sourceType, title
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" onClick={handleBackdropClick}>
-      <div className="w-full max-w-md rounded-lg bg-background p-6 shadow-lg">
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <button
+        type="button"
+        aria-label="Close conversion dialog"
+        className="absolute inset-0 bg-black/50"
+        onClick={handleBackdropClick}
+      />
+      <div className="relative w-full max-w-md rounded-lg bg-background p-6 shadow-lg" role="dialog" aria-modal="true">
         <h2 className="mb-4 text-lg font-semibold text-foreground">{actionLabel}</h2>
         <p className="mb-4 text-sm text-foreground">
           Convert <strong>"{title}"</strong> from {sourceType} to {targetType}?

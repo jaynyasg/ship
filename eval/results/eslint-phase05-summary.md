@@ -1,6 +1,6 @@
-# Phase 05 ESLint Baseline Summary
+# Phase 17 ESLint Burn-down Summary
 
-Date: 2026-05-20
+Date: 2026-05-22
 
 Command:
 
@@ -12,45 +12,28 @@ pnpm exec eslint api web shared --format json --output-file eval/results/eslint-
 
 | Metric | Count |
 |---|---:|
-| Files checked | 333 |
-| Files with findings | 116 |
-| Errors | 487 |
-| Warnings | 29 |
+| Files checked | 357 |
+| Files with findings | 0 |
+| Errors | 0 |
+| Warnings | 0 |
 
-`pnpm lint` now runs ESLint through the workspace scripts. It exits non-zero because the new rules expose existing baseline findings; this is expected for Phase 05 and is not a parser/configuration crash.
+The maintained-source ESLint baseline is fully burned down. The compact source gate now reports zero findings across `api`, `web`, and `shared`.
 
 ## Top Rules
 
 | Rule | Count |
 |---|---:|
-| `@typescript-eslint/no-explicit-any` | 202 |
-| `@typescript-eslint/no-unused-vars` | 97 |
-| `react-hooks/set-state-in-effect` | 42 |
-| `react-hooks/exhaustive-deps` | 29 |
-| `react-hooks/refs` | 29 |
-| `jsx-a11y/label-has-associated-control` | 22 |
-| `jsx-a11y/role-has-required-aria-props` | 15 |
-| `jsx-a11y/click-events-have-key-events` | 12 |
-| `react-hooks/immutability` | 12 |
-| `jsx-a11y/no-static-element-interactions` | 9 |
+| None | 0 |
 
 ## Top Files
 
 | File | Findings |
 |---|---:|
-| `api/src/__tests__/transformIssueLinks.test.ts` | 37 |
-| `api/src/services/accountability.test.ts` | 33 |
-| `api/src/__tests__/auth.test.ts` | 24 |
-| `api/src/__tests__/activity.test.ts` | 23 |
-| `web/src/pages/App.tsx` | 23 |
-| `api/src/routes/issues-history.test.ts` | 20 |
-| `api/src/routes/projects.test.ts` | 17 |
-| `web/src/pages/TeamMode.tsx` | 16 |
-| `web/src/components/Editor.tsx` | 13 |
-| `web/src/components/ui/ContextMenu.tsx` | 13 |
+| None | 0 |
 
 ## Notes
 
 - `web/dev-dist/**`, package builds, coverage output, and generated icons are ignored so the baseline tracks maintained source.
 - The initial generated-output-inclusive run found 637 errors and 39 warnings; after ignoring `web/dev-dist/**`, the maintained-source baseline is 487 errors and 29 warnings.
-- Recommended next cleanup order: explicit `any` in API tests, unused variables, React hooks findings, then JSX accessibility findings.
+- Burn-down order completed: explicit `any` in API tests, unused variables, React hooks findings, then JSX accessibility findings.
+- Verification on completion: full source ESLint, type-check, API build, web build, and whitespace checks passed.

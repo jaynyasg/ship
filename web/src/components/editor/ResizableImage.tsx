@@ -67,7 +67,9 @@ function ResizableImageComponent({ node, updateAttributes, selected }: NodeViewP
         />
         {/* Resize handle - bottom right corner */}
         {selected && (
-          <div
+          <button
+            type="button"
+            aria-label="Resize image"
             onMouseDown={handleMouseDown}
             className="absolute bottom-0 right-0 w-4 h-4 bg-accent cursor-se-resize rounded-tl-sm opacity-80 hover:opacity-100 transition-opacity"
             style={{ transform: 'translate(25%, 25%)' }}

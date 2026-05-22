@@ -109,10 +109,11 @@ export default function ProgramProjectsTab({ documentId }: DocumentTabProps) {
       </div>
       <div className="space-y-2">
         {projects.map((project) => (
-          <div
+          <button
+            type="button"
             key={project.id}
             onClick={() => navigate(`/documents/${project.id}`)}
-            className="flex items-center gap-4 p-3 rounded-lg border border-border hover:bg-accent/5 cursor-pointer transition-colors"
+            className="flex w-full items-center gap-4 p-3 rounded-lg border border-border hover:bg-accent/5 cursor-pointer transition-colors text-left"
           >
             {/* Project color indicator */}
             <div
@@ -147,7 +148,7 @@ export default function ProgramProjectsTab({ documentId }: DocumentTabProps) {
             <svg className="w-4 h-4 text-muted flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
             </svg>
-          </div>
+          </button>
         ))}
       </div>
     </div>

@@ -27,8 +27,9 @@ export function DocumentTypeSelector({
 }: DocumentTypeSelectorProps) {
   return (
     <div className="space-y-1.5">
-      <label className="block text-xs font-medium text-muted">Type</label>
+      <label htmlFor="document-type-selector" className="block text-xs font-medium text-muted">Type</label>
       <select
+        id="document-type-selector"
         value={value}
         onChange={(e) => onChange(e.target.value as DocumentType)}
         disabled={disabled}

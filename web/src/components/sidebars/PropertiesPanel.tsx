@@ -301,7 +301,7 @@ function WeeklyDocumentSidebar({
         <div className="border-b border-border pb-4">
           {isRetro ? (
             <div>
-              <label className="text-xs font-medium text-muted mb-2 block">Performance Rating</label>
+              <div className="text-xs font-medium text-muted mb-2 block">Performance Rating</div>
               {currentRating ? (
                 <div className="mb-2">
                   <div className="flex items-center gap-2">
@@ -339,7 +339,7 @@ function WeeklyDocumentSidebar({
             </div>
           ) : (
             <div>
-              <label className="text-xs font-medium text-muted mb-2 block">Plan Approval</label>
+              <div className="text-xs font-medium text-muted mb-2 block">Plan Approval</div>
               <div className="mb-2">
                 {approvalState === 'approved' ? (
                   <span className="inline-flex items-center gap-1 rounded bg-green-600/20 px-2 py-1 text-xs font-medium text-green-400">
@@ -387,7 +387,7 @@ function WeeklyDocumentSidebar({
       {/* Person */}
       {personId && (
         <div>
-          <label className="text-xs font-medium text-muted mb-1 block">Person</label>
+          <div className="text-xs font-medium text-muted mb-1 block">Person</div>
           <p className="text-sm text-foreground">{personName}</p>
         </div>
       )}
@@ -395,7 +395,7 @@ function WeeklyDocumentSidebar({
       {/* Project */}
       {projectId && (
         <div>
-          <label className="text-xs font-medium text-muted mb-1 block">Project</label>
+          <div className="text-xs font-medium text-muted mb-1 block">Project</div>
           <a
             href={`/documents/${projectId}/weeks`}
             className="text-sm text-accent hover:underline"

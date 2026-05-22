@@ -31,7 +31,7 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['api/scripts/**/*.{js,mjs,ts}', 'scripts/**/*.{js,mjs,ts}'],
+    files: ['api/scripts/**/*.{js,mjs,ts}', 'scripts/**/*.{js,mjs,ts}', 'web/scripts/**/*.{js,mjs,ts}'],
     languageOptions: {
       globals: {
         ...globals.es2022,

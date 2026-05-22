@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type FormEvent } from 'react';
+import { useState, useEffect, useMemo, useRef, type FormEvent } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/cn';
@@ -34,6 +34,7 @@ export function LoginPage() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [caiaAvailable, setCaiaAvailable] = useState(false);
   const [isCaiaLoading, setIsCaiaLoading] = useState(false);
+  const emailInputRef = useRef<HTMLInputElement>(null);
 
   // Subscribe to online/offline status changes using native browser events
   useEffect(() => {
@@ -51,6 +52,11 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => emailInputRef.current?.focus(), 0);
+    return () => window.clearTimeout(timeout);
+  }, []);
 
   // Check if session expired
   const sessionExpired = searchParams.get('expired') === 'true';
@@ -240,11 +246,11 @@ export function LoginPage() {
               Email address
             </label>
             <input
+              ref={emailInputRef}
               id="email"
               name="email"
               type="email"
               autoComplete="email"
-              autoFocus
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}

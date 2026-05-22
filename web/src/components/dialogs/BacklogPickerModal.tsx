@@ -211,13 +211,18 @@ export function BacklogPickerModal({ isOpen, onClose, context, onIssuesAdded }: 
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      role="dialog"
-      aria-modal="true"
-      onClick={handleBackdropClick}
-    >
-      <div className="w-full max-w-3xl h-[80vh] flex flex-col rounded-lg bg-background shadow-lg">
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <button
+        type="button"
+        aria-label="Close backlog picker"
+        className="absolute inset-0 bg-black/50"
+        onClick={handleBackdropClick}
+      />
+      <div
+        className="relative w-full max-w-3xl h-[80vh] flex flex-col rounded-lg bg-background shadow-lg"
+        role="dialog"
+        aria-modal="true"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <div>
@@ -285,6 +290,8 @@ export function BacklogPickerModal({ isOpen, onClose, context, onIssuesAdded }: 
                 return (
                   <div
                     key={issue.id}
+                    role={isInContext ? undefined : 'button'}
+                    tabIndex={isInContext ? undefined : 0}
                     className={cn(
                       'flex items-center gap-4 px-6 py-3',
                       isInContext && 'opacity-50 bg-border/20',
@@ -292,6 +299,12 @@ export function BacklogPickerModal({ isOpen, onClose, context, onIssuesAdded }: 
                       isSelected && !isInContext && 'bg-accent/10'
                     )}
                     onClick={() => !isInContext && toggleSelection(issue.id)}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (isInContext || (e.key !== 'Enter' && e.key !== ' ')) return;
+                      e.preventDefault();
+                      toggleSelection(issue.id);
+                    }}
                   >
                     <input
                       type="checkbox"

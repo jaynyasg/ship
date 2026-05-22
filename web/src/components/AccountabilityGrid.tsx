@@ -220,7 +220,8 @@ export function AccountabilityGrid({ showArchived = false }: AccountabilityGridP
               {group.projects.map((project) => {
                 const isExpanded = expandedProjectId === project.id;
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={project.id}
                     className={cn(
                       "flex w-[180px] items-center border-b border-border px-3 cursor-pointer transition-all duration-200",
@@ -260,7 +261,7 @@ export function AccountabilityGrid({ showArchived = false }: AccountabilityGridP
                         </div>
                       </div>
                     )}
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -317,7 +318,8 @@ export function AccountabilityGrid({ showArchived = false }: AccountabilityGridP
                       const hasAllocation = allocationCount > 0;
 
                       return (
-                        <div
+                        <button
+                          type="button"
                           key={project.id}
                           className={cn(
                             "w-[140px] border-b border-r border-border cursor-pointer transition-all duration-200",
@@ -350,7 +352,7 @@ export function AccountabilityGrid({ showArchived = false }: AccountabilityGridP
                               )}
                             </div>
                           )}
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -403,7 +405,8 @@ function SprintAccountabilityCell({
   }
 
   return (
-    <div
+    <button
+      type="button"
       className={cn(
         "flex h-10 w-[140px] items-stretch border-b border-r border-border cursor-pointer hover:bg-border/20",
         isCurrent && "bg-accent/5",
@@ -429,7 +432,7 @@ function SprintAccountabilityCell({
           approvalState={reviewApprovalState}
         />
       </div>
-    </div>
+    </button>
   );
 }
 

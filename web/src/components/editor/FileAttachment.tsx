@@ -150,7 +150,7 @@ export const FileAttachmentExtension = Node.create({
   },
 
   addProseMirrorPlugins() {
-    const extensionThis = this;
+    const { editor } = this;
 
     return [
       new Plugin({
@@ -169,7 +169,7 @@ export const FileAttachmentExtension = Node.create({
 
             // Upload all dropped non-image files
             nonImageFiles.forEach((file) => {
-              handleFileUpload(extensionThis.editor, file);
+              handleFileUpload(editor, file);
             });
 
             return true;
@@ -191,7 +191,7 @@ export const FileAttachmentExtension = Node.create({
             fileItems.forEach((item) => {
               const file = item.getAsFile();
               if (file) {
-                handleFileUpload(extensionThis.editor, file);
+                handleFileUpload(editor, file);
               }
             });
 

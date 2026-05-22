@@ -1,4 +1,4 @@
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/cn';
 
@@ -14,8 +14,14 @@ export function SetupPage() {
   const [isChecking, setIsChecking] = useState(true);
   const [needsSetup, setNeedsSetup] = useState(false);
   const [csrfToken, setCsrfToken] = useState('');
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => nameInputRef.current?.focus(), 0);
+    return () => window.clearTimeout(timeout);
+  }, []);
 
   // Check if setup is needed
   useEffect(() => {
@@ -135,11 +141,11 @@ export function SetupPage() {
               Full name
             </label>
             <input
+              ref={nameInputRef}
               id="name"
               name="name"
               type="text"
               autoComplete="name"
-              autoFocus
               required
               value={name}
               onChange={(e) => setName(e.target.value)}

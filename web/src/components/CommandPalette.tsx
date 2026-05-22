@@ -37,6 +37,13 @@ export function CommandPalette({ open, onOpenChange, currentDocument, onConvertD
   const [documents, setDocuments] = useState<SearchableDocument[]>([]);
   const [loading, setLoading] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const timeout = window.setTimeout(() => inputRef.current?.focus(), 0);
+    return () => window.clearTimeout(timeout);
+  }, [open]);
 
   // Focus trap implementation for WCAG 2.4.3 Focus Order
   useEffect(() => {
@@ -222,7 +229,9 @@ export function CommandPalette({ open, onOpenChange, currentDocument, onConvertD
   return (
     <div className="fixed inset-0 z-50">
       {/* Backdrop */}
-      <div
+      <button
+        type="button"
+        aria-label="Close command palette"
         className="absolute inset-0 bg-black/50"
         onClick={closePalette}
       />
@@ -256,11 +265,11 @@ export function CommandPalette({ open, onOpenChange, currentDocument, onConvertD
         >
           <div className="border-b border-border p-3">
             <Command.Input
+              ref={inputRef}
               value={search}
               onValueChange={setSearch}
               placeholder="Type a command or search..."
               className="w-full bg-transparent text-base text-foreground placeholder:text-muted focus:outline-none"
-              autoFocus
             />
           </div>
 

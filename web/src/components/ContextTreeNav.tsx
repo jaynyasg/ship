@@ -108,7 +108,7 @@ export function ContextTreeNav({ documentId }: ContextTreeNavProps) {
       <ul className="space-y-0.5 px-2" role="tree" aria-label="Document context">
         {/* Ancestors (from root to immediate parent) */}
         {context.ancestors.map((ancestor, index) => (
-          <li key={ancestor.id} role="treeitem">
+          <li key={ancestor.id} role="treeitem" aria-selected={false}>
             <Link
               to={getDocumentPath(ancestor.document_type, ancestor.id)}
               className={cn(
@@ -127,7 +127,7 @@ export function ContextTreeNav({ documentId }: ContextTreeNavProps) {
         ))}
 
         {/* Current document (highlighted) */}
-        <li role="treeitem" aria-current="page">
+        <li role="treeitem" aria-current="page" aria-selected={true}>
           <div
             className={cn(
               'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm',
@@ -150,7 +150,7 @@ export function ContextTreeNav({ documentId }: ContextTreeNavProps) {
 
         {/* Children */}
         {context.children.map((child) => (
-          <li key={child.id} role="treeitem">
+          <li key={child.id} role="treeitem" aria-selected={false}>
             <Link
               to={getDocumentPath(child.document_type, child.id)}
               className={cn(

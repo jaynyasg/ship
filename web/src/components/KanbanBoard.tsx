@@ -267,6 +267,13 @@ function SortableIssueCard({
     onContextMenu?.({ x: rect.right, y: rect.bottom, issueId: issue.id });
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    listeners?.onKeyDown?.(e);
+    if (e.defaultPrevented || e.key !== 'Enter') return;
+    e.preventDefault();
+    onClick();
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -281,9 +288,10 @@ function SortableIssueCard({
       data-dragging={isDragging ? 'true' : undefined}
       data-selected={isSelected ? 'true' : undefined}
       aria-grabbed={isDragging ? 'true' : 'false'}
-      aria-selected={isSelected}
+      aria-pressed={isSelected}
       tabIndex={0}
       role="button"
+      onKeyDown={handleKeyDown}
       aria-roledescription="draggable issue"
       aria-label={`Issue #${issue.ticket_number}: ${issue.title}. Press Space to pick up and move.`}
       className={cn(isDragging && 'opacity-50', 'focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-background rounded-md')}

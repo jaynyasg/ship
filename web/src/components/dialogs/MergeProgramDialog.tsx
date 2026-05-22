@@ -146,13 +146,14 @@ export function MergeProgramDialog({ isOpen, onClose, sourceId, sourceName }: Me
   const confirmMatch = confirmText === sourceName;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      role="dialog"
-      aria-modal="true"
-      onClick={handleBackdropClick}
-    >
-      <div className="w-full max-w-md rounded-lg bg-background p-6 shadow-lg">
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <button
+        type="button"
+        aria-label="Close merge dialog"
+        className="absolute inset-0 bg-black/50"
+        onClick={handleBackdropClick}
+      />
+      <div className="relative w-full max-w-md rounded-lg bg-background p-6 shadow-lg" role="dialog" aria-modal="true">
         <h2 className="mb-1 text-lg font-semibold text-foreground">Merge Program</h2>
         <p className="mb-4 text-sm text-muted">
           Move all content from <strong>{sourceName}</strong> into another program.
@@ -160,10 +161,11 @@ export function MergeProgramDialog({ isOpen, onClose, sourceId, sourceName }: Me
 
         {/* Target selection */}
         <div className="mb-4">
-          <label className="mb-1 block text-xs font-medium text-muted uppercase tracking-wider">
+          <label htmlFor="merge-program-target" className="mb-1 block text-xs font-medium text-muted uppercase tracking-wider">
             Merge into
           </label>
           <select
+            id="merge-program-target"
             value={targetId || ''}
             onChange={(e) => handleTargetChange(e.target.value)}
             disabled={isMerging}

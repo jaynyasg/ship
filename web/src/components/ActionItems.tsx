@@ -95,11 +95,11 @@ function ActionItemRow({ item }: { item: ActionItem }) {
   };
 
   return (
-    <a
-      href="#"
+    <button
+      type="button"
       onClick={handleClick}
       className={cn(
-        "flex items-center gap-3 px-4 py-3 hover:bg-background/80 transition-colors",
+        "flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-background/80 transition-colors",
         navigating && "opacity-50 pointer-events-none"
       )}
     >
@@ -137,7 +137,7 @@ function ActionItemRow({ item }: { item: ActionItem }) {
       <svg className="w-4 h-4 text-muted flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
       </svg>
-    </a>
+    </button>
   );
 }
 

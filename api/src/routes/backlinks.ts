@@ -155,6 +155,7 @@ export default router;
 
 // Type augmentation for Express Request
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       user?: {

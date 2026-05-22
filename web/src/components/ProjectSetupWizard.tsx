@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { usePrograms, Program } from '@/contexts/ProgramsContext';
 
@@ -26,6 +26,13 @@ export function ProjectSetupWizard({
   const [plan, setPlan] = useState('');
   const [targetDate, setTargetDate] = useState('');
   const [errors, setErrors] = useState<{ title?: string; program?: string }>({});
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const timeout = window.setTimeout(() => titleInputRef.current?.focus(), 0);
+    return () => window.clearTimeout(timeout);
+  }, [open]);
 
   const activePrograms = programs.filter((p: Program) => !p.archived_at);
 
@@ -94,6 +101,7 @@ export function ProjectSetupWizard({
                 Project Name <span className="text-red-500">*</span>
               </label>
               <input
+                ref={titleInputRef}
                 id="project-name"
                 type="text"
                 value={title}
@@ -105,7 +113,6 @@ export function ProjectSetupWizard({
                 className={`mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent ${
                   errors.title ? 'border-red-500' : 'border-border'
                 }`}
-                autoFocus
               />
               {errors.title && (
                 <p className="mt-1 text-xs text-red-500">{errors.title}</p>
