@@ -5,14 +5,13 @@ import { buildDocumentTree } from '@/lib/documentTree';
 import { DocumentTreeItem } from '@/components/DocumentTreeItem';
 import { DocumentsListSkeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
-import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/cn';
 import { SelectableList, RowRenderProps, UseSelectionReturn } from '@/components/SelectableList';
 import { useColumnVisibility, ColumnDefinition } from '@/hooks/useColumnVisibility';
-import { useListFilters, ViewMode } from '@/hooks/useListFilters';
+import { useListFilters } from '@/hooks/useListFilters';
 import { DocumentListToolbar } from '@/components/DocumentListToolbar';
-import { FilterTabs, FilterTab } from '@/components/FilterTabs';
-import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from '@/components/ui/ContextMenu';
+import { FilterTabs } from '@/components/FilterTabs';
+import { ContextMenu, ContextMenuItem } from '@/components/ui/ContextMenu';
 
 // Column definitions for list view
 const ALL_COLUMNS: ColumnDefinition[] = [
@@ -42,7 +41,6 @@ export function DocumentsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const queryClient = useQueryClient();
 
   // Use shared hooks for list state management (matches Issues page)
   const { sortBy, setSortBy, viewMode, setViewMode } = useListFilters({
@@ -127,9 +125,10 @@ export function DocumentsPage() {
   }, [filteredDocuments, sortBy, viewMode]);
 
   // Render function for document rows in list view
-  const renderDocumentRow = useCallback((doc: WikiDocument, { isSelected }: RowRenderProps) => (
-    <DocumentRowContent document={doc} visibleColumns={visibleColumns} />
-  ), [visibleColumns]);
+  const renderDocumentRow = useCallback((doc: WikiDocument, rowProps: RowRenderProps) => {
+    void rowProps;
+    return <DocumentRowContent document={doc} visibleColumns={visibleColumns} />;
+  }, [visibleColumns]);
 
   async function handleCreateDocument(parentId?: string) {
     setCreating(true);

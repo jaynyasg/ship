@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { isValidIconName, ICON_NAMES } from './types';
 
 // Test the types module separately since the Icon component requires dynamic imports
@@ -40,9 +40,6 @@ describe('Icon types module', () => {
 // These tests use unit test patterns that don't require lazy loading
 
 describe('Icon component behavior', () => {
-  // Import Icon dynamically to avoid module resolution issues
-  let Icon: typeof import('./Icon').Icon;
-
   beforeEach(async () => {
     // Reset modules to get a fresh Icon component
     vi.resetModules();

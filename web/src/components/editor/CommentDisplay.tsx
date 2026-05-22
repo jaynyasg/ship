@@ -2,7 +2,6 @@ import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import type { Node } from '@tiptap/pm/model';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
-import { createRoot, Root } from 'react-dom/client';
 import { Comment } from '@/hooks/useCommentsQuery';
 import { formatRelativeTime } from '@/lib/date-utils';
 
@@ -63,13 +62,9 @@ interface CommentDisplayStorage {
 function InlineCommentThread({
   thread,
   quotedText,
-  onReply,
-  onResolve,
 }: {
   thread: Comment[];
   quotedText: string;
-  onReply: ((commentId: string, content: string) => void) | null;
-  onResolve: ((commentId: string, resolved: boolean) => void) | null;
 }) {
   const root = thread[0];
   const replies = thread.slice(1);
@@ -252,8 +247,6 @@ export const CommentDisplayExtension = Extension.create<Record<string, never>, C
                 return InlineCommentThread({
                   thread,
                   quotedText,
-                  onReply: storage.onReply,
-                  onResolve: storage.onResolve,
                 });
               }, {
                 side: 1, // Render after the position

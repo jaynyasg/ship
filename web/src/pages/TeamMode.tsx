@@ -196,7 +196,7 @@ export function TeamModePage() {
     issuesOrphaned: Array<{ id: string; title: string }>;
     onConfirm: () => void;
   } | null>(null);
-  const [operationLoading, setOperationLoading] = useState<string | null>(null);
+  const [operationLoading] = useState<string | null>(null);
 
   // Initial load
   useEffect(() => {
@@ -315,7 +315,8 @@ export function TeamModePage() {
           if (previousAssignment) {
             newAssignments[personId] = { ...newAssignments[personId], [sprintNumber]: previousAssignment };
           } else {
-            const { [sprintNumber]: _, ...rest } = newAssignments[personId] || {};
+            const rest = { ...(newAssignments[personId] || {}) };
+            delete rest[sprintNumber];
             newAssignments[personId] = rest;
           }
           return newAssignments;
@@ -323,14 +324,15 @@ export function TeamModePage() {
         setError(json.error || 'Failed to assign');
         return;
       }
-    } catch (err) {
+    } catch {
       // Rollback optimistic update
       setAssignments(prev => {
         const newAssignments = { ...prev };
         if (previousAssignment) {
           newAssignments[personId] = { ...newAssignments[personId], [sprintNumber]: previousAssignment };
         } else {
-          const { [sprintNumber]: _, ...rest } = newAssignments[personId] || {};
+          const rest = { ...(newAssignments[personId] || {}) };
+          delete rest[sprintNumber];
           newAssignments[personId] = rest;
         }
         return newAssignments;
@@ -345,7 +347,8 @@ export function TeamModePage() {
     setAssignments(prev => {
       const newAssignments = { ...prev };
       if (newAssignments[personId]) {
-        const { [sprintNumber]: _, ...rest } = newAssignments[personId];
+        const rest = { ...newAssignments[personId] };
+        delete rest[sprintNumber];
         newAssignments[personId] = rest;
       }
       return newAssignments;
@@ -375,7 +378,7 @@ export function TeamModePage() {
       if (json.issuesOrphaned?.length > 0 && !skipConfirmation) {
         // Issues were already moved to backlog
       }
-    } catch (err) {
+    } catch {
       // Rollback optimistic update
       if (previousAssignment) {
         setAssignments(prev => ({
