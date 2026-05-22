@@ -17,11 +17,26 @@ test.describe.configure({ mode: 'serial' });
 
 // Helper to login
 async function login(page: import('@playwright/test').Page) {
-  await page.goto('/login');
-  await page.locator('#email').fill('dev@ship.local');
-  await page.locator('#password').fill('admin123');
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page).not.toHaveURL('/login', { timeout: 10000 });
+  await page.context().clearCookies();
+
+  const csrfResponse = await page.request.get('/api/csrf-token');
+  expect(csrfResponse.ok()).toBeTruthy();
+  const { token } = await csrfResponse.json();
+
+  const loginResponse = await page.request.post('/api/auth/login', {
+    headers: { 'x-csrf-token': token },
+    data: {
+      email: 'dev@ship.local',
+      password: 'admin123',
+    },
+  });
+
+  if (!loginResponse.ok()) {
+    throw new Error(`Login failed (${loginResponse.status()}): ${await loginResponse.text()}`);
+  }
+
+  await page.goto('/');
+  await expect(page).not.toHaveURL(/\/login(?:[?#]|$)/, { timeout: 10000 });
 }
 
 // Helper to get CSRF token for API requests

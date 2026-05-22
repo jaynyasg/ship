@@ -137,6 +137,8 @@ function WeekWindowCard({
         onDoubleClick={() => onOpenSprint(sprint.id)}
         data-active={status === 'active'}
         data-selected={isSelected}
+        data-sprint-id={sprint.id}
+        data-sprint-number={sprint_number}
         className={cn(
           'flex-shrink-0 w-40 rounded-lg border p-3 text-left transition-colors hover:bg-border/30',
           isSelected ? 'border-accent border-2 bg-accent/10' : status === 'active' ? 'border-accent/50 border' : 'border-border',

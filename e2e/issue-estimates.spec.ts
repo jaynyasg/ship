@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures/isolated-env'
+import type { Locator, Page } from '@playwright/test'
 
 /**
  * Issue Estimates & Status Tracking - E2E Tests
@@ -10,6 +11,24 @@ import { test, expect } from './fixtures/isolated-env'
  * - Status change timestamp tracking
  * - Activity/change history
  */
+
+async function fillEstimateAndWait(page: Page, estimateInput: Locator, value: string) {
+  const expectedPayload = `"estimate":${Number(value)}`
+
+  await expect(async () => {
+    const patchPromise = page.waitForResponse((resp) => {
+      const postData = resp.request().postData() ?? ''
+      return resp.url().includes('/api/documents/')
+        && resp.request().method() === 'PATCH'
+        && postData.includes(expectedPayload)
+    }, { timeout: 5000 })
+
+    await estimateInput.fill(value)
+    const response = await patchPromise
+    expect(response.ok()).toBeTruthy()
+    await expect(estimateInput).toHaveValue(value, { timeout: 1500 })
+  }).toPass({ timeout: 10000, intervals: [250, 500, 1000] })
+}
 
 test.describe('Issue Estimates', () => {
   test.beforeEach(async ({ page }) => {
@@ -40,14 +59,7 @@ test.describe('Issue Estimates', () => {
       // Find and fill estimate input
       const estimateInput = page.locator('input[type="number"]')
       await expect(estimateInput).toBeVisible({ timeout: 5000 })
-      await estimateInput.fill('4.5')
-
-      // Wait for save and React state update
-      await page.waitForResponse(resp => resp.url().includes('/api/documents/') && resp.request().method() === 'PATCH')
-      await page.waitForTimeout(500) // Allow React to process state update
-
-      // Verify value persists
-      await expect(estimateInput).toHaveValue('4.5')
+      await fillEstimateAndWait(page, estimateInput, '4.5')
     })
 
     test('accepts decimal values (0.5 increments)', async ({ page }) => {
@@ -57,11 +69,7 @@ test.describe('Issue Estimates', () => {
 
       const estimateInput = page.locator('input[type="number"]')
       await expect(estimateInput).toBeVisible({ timeout: 5000 })
-      await estimateInput.fill('2.5')
-
-      await page.waitForResponse(resp => resp.url().includes('/api/documents/') && resp.request().method() === 'PATCH')
-      await page.waitForTimeout(500)
-      await expect(estimateInput).toHaveValue('2.5')
+      await fillEstimateAndWait(page, estimateInput, '2.5')
     })
 
     test('shows hours label/hint next to estimate field', async ({ page }) => {

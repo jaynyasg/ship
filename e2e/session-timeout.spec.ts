@@ -25,6 +25,23 @@ const ABSOLUTE_SESSION_TIMEOUT_MS = 12 * 60 * 60 * 1000;
 // Absolute warning appears 5 minutes before timeout
 const ABSOLUTE_WARNING_THRESHOLD_MS = 5 * 60 * 1000;
 
+async function advanceToAbsoluteWarning(page: Page) {
+  const targetMs = ABSOLUTE_SESSION_TIMEOUT_MS - ABSOLUTE_WARNING_THRESHOLD_MS;
+  const chunkMs = 10 * 60 * 1000;
+
+  for (let elapsed = 0; elapsed < targetMs;) {
+    const toAdvance = Math.min(chunkMs, targetMs - elapsed);
+    await page.clock.runFor(toAdvance);
+    elapsed += toAdvance;
+
+    if (elapsed < targetMs) {
+      await page.evaluate(() => {
+        document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+      });
+    }
+  }
+}
+
 test.describe('Session Timeout Warning', () => {
   test('shows warning modal when 60 seconds remain before timeout', async ({ page }) => {
     // Install fake timers BEFORE login/navigation
@@ -348,7 +365,7 @@ test.describe('12-Hour Absolute Timeout', () => {
 
     // Advance to 11 hours 55 minutes (5 minutes before absolute timeout)
     // Using runFor to ensure setTimeout callbacks fire properly
-    await page.clock.runFor(ABSOLUTE_SESSION_TIMEOUT_MS - ABSOLUTE_WARNING_THRESHOLD_MS);
+    await advanceToAbsoluteWarning(page);
 
     const modal = page.getByRole('alertdialog');
     await expect(modal).toBeVisible({ timeout: 5000 });
@@ -361,7 +378,7 @@ test.describe('12-Hour Absolute Timeout', () => {
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
     // Advance to absolute warning time
-    await page.clock.runFor(ABSOLUTE_SESSION_TIMEOUT_MS - ABSOLUTE_WARNING_THRESHOLD_MS);
+    await advanceToAbsoluteWarning(page);
 
     const modal = page.getByRole('alertdialog');
     await expect(modal).toBeVisible({ timeout: 5000 });
@@ -379,7 +396,7 @@ test.describe('12-Hour Absolute Timeout', () => {
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
     // Advance to absolute warning time
-    await page.clock.runFor(ABSOLUTE_SESSION_TIMEOUT_MS - ABSOLUTE_WARNING_THRESHOLD_MS);
+    await advanceToAbsoluteWarning(page);
 
     const modal = page.getByRole('alertdialog');
     await expect(modal).toBeVisible({ timeout: 5000 });
@@ -397,7 +414,7 @@ test.describe('12-Hour Absolute Timeout', () => {
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
     // Advance to absolute warning time
-    await page.clock.runFor(ABSOLUTE_SESSION_TIMEOUT_MS - ABSOLUTE_WARNING_THRESHOLD_MS);
+    await advanceToAbsoluteWarning(page);
 
     const modal = page.getByRole('alertdialog');
     await expect(modal).toBeVisible({ timeout: 5000 });
@@ -450,7 +467,7 @@ test.describe('12-Hour Absolute Timeout', () => {
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
     // Advance to absolute warning time (11:55)
-    await page.clock.runFor(ABSOLUTE_SESSION_TIMEOUT_MS - ABSOLUTE_WARNING_THRESHOLD_MS);
+    await advanceToAbsoluteWarning(page);
 
     const modal = page.getByRole('alertdialog');
     await expect(modal).toBeVisible({ timeout: 5000 });
@@ -785,7 +802,7 @@ test.describe('Accessibility', () => {
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
     // Advance to absolute warning time (11hr 55min)
-    await page.clock.runFor(ABSOLUTE_SESSION_TIMEOUT_MS - ABSOLUTE_WARNING_THRESHOLD_MS);
+    await advanceToAbsoluteWarning(page);
 
     const modal = page.getByRole('alertdialog');
     await expect(modal).toBeVisible({ timeout: 5000 });

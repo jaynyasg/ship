@@ -61,14 +61,16 @@ export function AppLayout() {
   const handleSessionTimeout = useCallback(() => {
     // Redirect to login with expired flag and returnTo URL
     const returnTo = encodeURIComponent(location.pathname + location.search + location.hash);
-    window.location.href = `/login?expired=true&returnTo=${returnTo}`;
-  }, [location]);
+    void logout().finally(() => {
+      window.location.href = `/login?expired=true&returnTo=${returnTo}`;
+    });
+  }, [location, logout]);
 
   const {
     showWarning: showTimeoutWarning,
     timeRemaining,
     warningType,
-    resetTimer: resetSessionTimer,
+    acknowledgeWarning: acknowledgeSessionWarning,
   } = useSessionTimeout(handleSessionTimeout);
 
   // Check if user needs to post a standup today
@@ -564,7 +566,7 @@ export function AppLayout() {
         open={showTimeoutWarning}
         timeRemaining={timeRemaining}
         warningType={warningType}
-        onStayLoggedIn={resetSessionTimer}
+        onStayLoggedIn={acknowledgeSessionWarning}
       />
 
       {/* Upload Navigation Warning Modal */}

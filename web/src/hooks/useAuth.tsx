@@ -154,12 +154,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [setCurrentWorkspace, setWorkspaces]);
 
   const logout = useCallback(async () => {
-    await api.auth.logout();
-    setUser(null);
-    setCurrentWorkspace(null);
-    setWorkspaces([]);
-    setImpersonating(null);
-    clearCachedAuthData();
+    try {
+      await api.auth.logout();
+    } finally {
+      setUser(null);
+      setCurrentWorkspace(null);
+      setWorkspaces([]);
+      setImpersonating(null);
+      clearCachedAuthData();
+    }
   }, [setCurrentWorkspace, setWorkspaces]);
 
   const endImpersonation = useCallback(async () => {

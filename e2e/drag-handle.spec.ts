@@ -33,6 +33,7 @@ test.describe('Drag Handle - Block Reordering', () => {
     for (let i = 0; i < texts.length; i++) {
       await page.keyboard.type(texts[i])
       if (i < texts.length - 1) {
+        await page.keyboard.press('Escape')
         await page.keyboard.press('Enter')
       }
     }
@@ -75,10 +76,9 @@ test.describe('Drag Handle - Block Reordering', () => {
     const dragHandleLocator = page.locator('.editor-drag-handle')
     await expect(dragHandleLocator).toBeVisible({ timeout: 2000 })
 
-    // Use $ to get element handles for dispatchEvent
-    const dragHandle = await page.$('.editor-drag-handle')
-    const targetPara = await page.$(`.ProseMirror p:nth-child(${targetIndex + 1})`)
-    const editor = await page.$('.ProseMirror')
+    const dragHandle = await dragHandleLocator.elementHandle()
+    const targetPara = await paragraphs.nth(targetIndex).elementHandle()
+    const editor = await page.locator('.ProseMirror').elementHandle()
 
     if (!dragHandle || !targetPara || !editor) {
       throw new Error('Required elements not found')
@@ -299,8 +299,9 @@ test.describe('Drag Handle - Block Reordering', () => {
   test.describe('Content Preservation', () => {
     test('drag preserves full paragraph content', async ({ page }) => {
       await createNewDocument(page)
-      const longContent = 'This is a longer paragraph with multiple words and some special chars: @#$%'
+      const longContent = 'This is a longer paragraph with multiple words and some special chars: !#$%'
       await addParagraphs(page, [longContent, 'Second block'])
+      await expect(page.locator('.ProseMirror p')).toHaveCount(2, { timeout: 3000 })
 
       // Drag first to after second
       await dragBlockToPosition(page, 0, 1, 'after')

@@ -6,6 +6,12 @@
  */
 import { expect, type Page, type Locator } from '@playwright/test';
 
+export const shortcutModifier = process.platform === 'darwin' ? 'Meta' : 'Control';
+
+export function shortcut(key: string): string {
+  return `${shortcutModifier}+${key}`;
+}
+
 /**
  * Trigger the TipTap mention autocomplete popup by typing '@' in the editor.
  *

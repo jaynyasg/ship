@@ -22,17 +22,22 @@ test.describe.configure({ mode: 'serial' })
 
 // Helper function to clean up extra sprints
 async function cleanupExtraSprints(request: any) {
+  const csrfResponse = await request.get('/api/csrf-token')
+  if (!csrfResponse.ok()) return
+  const { token } = await csrfResponse.json()
+
   const loginResponse = await request.post('/api/auth/login', {
+    headers: { 'x-csrf-token': token },
     data: { email: 'dev@ship.local', password: 'admin123' }
   })
 
   if (loginResponse.ok()) {
-    // Get CSRF token for protected routes
-    const csrfResponse = await request.get('/api/auth/csrf')
+    // Get a fresh CSRF token for protected routes after the auth cookie is set.
+    const csrfResponse = await request.get('/api/csrf-token')
     let csrfToken = ''
     if (csrfResponse.ok()) {
       const csrfData = await csrfResponse.json()
-      csrfToken = csrfData.csrfToken
+      csrfToken = csrfData.token
     }
 
     const sprintsResponse = await request.get('/api/programs')
@@ -42,8 +47,19 @@ async function cleanupExtraSprints(request: any) {
         const programSprintsResponse = await request.get(`/api/programs/${program.id}/sprints`)
         if (programSprintsResponse.ok()) {
           const data = await programSprintsResponse.json()
+          const workspaceStartDate = data.workspace_sprint_start_date
+            ? new Date(data.workspace_sprint_start_date)
+            : null
+          const currentSprintNumber = workspaceStartDate
+            ? Math.max(1, Math.floor((Date.now() - workspaceStartDate.getTime()) / (1000 * 60 * 60 * 24 * 7)) + 1)
+            : null
+
           for (const sprint of data.weeks || []) {
-            if (sprint.sprint_number > 10) {
+            const isSeedSprint = currentSprintNumber !== null
+              && sprint.sprint_number >= currentSprintNumber - 2
+              && sprint.sprint_number <= currentSprintNumber + 2
+
+            if (!isSeedSprint) {
               await request.delete(`/api/weeks/${sprint.id}`, {
                 headers: { 'X-CSRF-Token': csrfToken }
               })
@@ -65,11 +81,23 @@ test.beforeEach(async ({ request }) => {
 // =============================================================================
 
 async function login(page: Page) {
-  await page.goto('/login')
-  await page.locator('#email').fill('dev@ship.local')
-  await page.locator('#password').fill('admin123')
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await expect(page).not.toHaveURL('/login', { timeout: 5000 })
+  await page.context().clearCookies()
+
+  const csrfResponse = await page.request.get('/api/csrf-token')
+  expect(csrfResponse.ok()).toBeTruthy()
+  const { token } = await csrfResponse.json()
+
+  const loginResponse = await page.request.post('/api/auth/login', {
+    headers: { 'x-csrf-token': token },
+    data: {
+      email: 'dev@ship.local',
+      password: 'admin123',
+    },
+  })
+
+  if (!loginResponse.ok()) {
+    throw new Error(`Login failed (${loginResponse.status()}): ${await loginResponse.text()}`)
+  }
 }
 
 async function navigateToProgram(page: Page, programName: string = 'Ship Core') {
@@ -369,17 +397,26 @@ test.describe('Phase 2: Weeks Tab UI', () => {
   test('clicking sprint card selects it in the chart', async ({ page }) => {
     await clickSprintsTab(page)
 
-    // Sprint cards are buttons with data-active - only exist if sprint documents exist
-    const sprintCard = page.locator('button[data-active]').first()
+    // Sprint cards are buttons with data-sprint-id - only exist if sprint documents exist
+    const sprintCard = page.locator('button[data-sprint-id]').first()
     const cardCount = await sprintCard.count()
 
     if (cardCount > 0) {
-      await sprintCard.click()
-      // Clicking a sprint card navigates to /documents/{id}/sprints/{sprintId}
-      // Wait for URL to update which indicates selection worked
-      await expect(page).toHaveURL(/\/documents\/[a-f0-9-]+\/sprints\/[a-f0-9-]+/, { timeout: 5000 })
+      const sprintId = await sprintCard.getAttribute('data-sprint-id')
+      expect(sprintId).toBeTruthy()
+
+      await sprintCard.scrollIntoViewIfNeeded()
+      await expect(sprintCard).toBeVisible({ timeout: 5000 })
+
+      // Clicking a sprint card navigates to /documents/{id}/weeks/{sprintId}
+      // Wait for URL to update which indicates selection worked.
+      await Promise.all([
+        page.waitForURL(new RegExp(`/documents/[a-f0-9-]+/weeks/${sprintId}`), { timeout: 10000 }),
+        sprintCard.click(),
+      ])
+
       // After navigation, verify a card shows as selected
-      await expect(page.locator('button[data-selected="true"]')).toBeVisible({ timeout: 5000 })
+      await expect(page.locator(`button[data-sprint-id="${sprintId}"][data-selected="true"]`)).toBeVisible({ timeout: 15000 })
     } else {
       // No sprint documents - timeline shows empty week windows (divs, not clickable)
       await expect(page.getByText(/Week of/).first()).toBeVisible()
@@ -395,8 +432,8 @@ test.describe('Phase 2: Weeks Tab UI', () => {
 
     if (cardCount > 0) {
       await sprintCard.dblclick()
-      // Application navigates to /documents/{programId}/sprints/{sprintId}
-      await expect(page).toHaveURL(/\/documents\/[a-f0-9-]+\/sprints\/[a-f0-9-]+/, { timeout: 5000 })
+      // Application navigates to /documents/{programId}/weeks/{sprintId}
+      await expect(page).toHaveURL(/\/documents\/[a-f0-9-]+\/weeks\/[a-f0-9-]+/, { timeout: 5000 })
     } else {
       // No sprint documents - verify timeline displays week windows
       await expect(page.getByText(/Week of/).first()).toBeVisible()
@@ -411,8 +448,8 @@ test.describe('Phase 2: Weeks Tab UI', () => {
 
     if (await completedCard.isVisible().catch(() => false)) {
       await completedCard.dblclick()
-      // Application navigates to /documents/{programId}/sprints/{sprintId}
-      await expect(page).toHaveURL(/\/documents\/[a-f0-9-]+\/sprints\/[a-f0-9-]+/, { timeout: 5000 })
+      // Application navigates to /documents/{programId}/weeks/{sprintId}
+      await expect(page).toHaveURL(/\/documents\/[a-f0-9-]+\/weeks\/[a-f0-9-]+/, { timeout: 5000 })
     }
     // If no completed sprint exists, test passes (conditional test)
   })

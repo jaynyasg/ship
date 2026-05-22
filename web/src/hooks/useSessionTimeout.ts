@@ -16,6 +16,7 @@ export interface SessionTimeoutState {
   timeRemaining: number | null;
   warningType: WarningType | null;
   resetTimer: () => void;
+  acknowledgeWarning: () => void;
   lastActivity: number;
 }
 
@@ -42,6 +43,7 @@ export function useSessionTimeout(onTimeout: () => void): SessionTimeoutState {
   const scheduleInactivityWarningRef = useRef<() => void>(() => {});
   // Guard to prevent duplicate extend-session API calls
   const extendingSessionRef = useRef(false);
+  const absoluteWarningAcknowledgedRef = useRef(false);
 
   // Keep onTimeout ref updated
   useEffect(() => {
@@ -59,6 +61,7 @@ export function useSessionTimeout(onTimeout: () => void): SessionTimeoutState {
           const data = await response.json();
           if (data.success && data.data) {
             const info: SessionInfo = data.data;
+            absoluteWarningAcknowledgedRef.current = false;
             setSessionCreatedAt(new Date(info.createdAt).getTime());
           }
         }
@@ -176,7 +179,7 @@ export function useSessionTimeout(onTimeout: () => void): SessionTimeoutState {
 
     if (timeUntilAbsoluteWarning <= 0) {
       // Already past warning time - show immediately if not already showing inactivity warning
-      if (!showWarning || warningType !== 'inactivity') {
+      if ((!showWarning || warningType !== 'inactivity') && !absoluteWarningAcknowledgedRef.current) {
         setShowWarning(true);
         setTimeRemaining(300); // 5 minutes
         setWarningType('absolute');
@@ -203,7 +206,7 @@ export function useSessionTimeout(onTimeout: () => void): SessionTimeoutState {
     absoluteWarningTimerRef.current = setTimeout(() => {
       // Only show absolute warning if we're not already showing inactivity warning
       // Inactivity warning takes precedence
-      if (!showWarning) {
+      if (!showWarning && !absoluteWarningAcknowledgedRef.current) {
         setShowWarning(true);
         setTimeRemaining(300); // 5 minutes
         setWarningType('absolute');
@@ -322,11 +325,22 @@ export function useSessionTimeout(onTimeout: () => void): SessionTimeoutState {
     };
   }, [sessionCreatedAt]);
 
+  const acknowledgeWarning = useCallback(() => {
+    if (warningType === 'absolute') {
+      absoluteWarningAcknowledgedRef.current = true;
+      setShowWarning(false);
+      return;
+    }
+
+    resetTimer();
+  }, [resetTimer, warningType]);
+
   return {
     showWarning,
     timeRemaining,
     warningType,
     resetTimer,
+    acknowledgeWarning,
     lastActivity,
   };
 }

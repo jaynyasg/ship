@@ -213,31 +213,36 @@ test.describe('Table of Contents (TOC)', () => {
     let tocText = await toc.textContent()
     expect(tocText).toContain('Original Title')
 
-    // Use purely keyboard-based approach to avoid inline comment overlay issues
-    // The cursor is currently in the editor after TOC insertion
-    // First dismiss any tooltips/menus
+    // Replace the heading text while keeping the interaction in the editor.
     await page.keyboard.press('Escape')
     await page.waitForTimeout(300)
+    const headingSelected = await page.evaluate(() => {
+      const editor = document.querySelector('.ProseMirror') as HTMLElement | null
+      const heading = Array.from(editor?.querySelectorAll('h1,h2,h3') ?? [])
+        .find((el) => el.textContent?.trim() === 'Original Title')
 
-    // Go to the very start of the document (above TOC, into heading)
-    await page.keyboard.press('Meta+ArrowUp')
-    await page.waitForTimeout(100)
-    // Select the entire first line (the heading text)
-    await page.keyboard.press('Shift+Meta+ArrowDown')
-    await page.waitForTimeout(100)
-    // Now type replacement - but Shift+Meta+ArrowDown may select too much
-    // Instead, select just to end of current line
-    await page.keyboard.press('Meta+ArrowUp')  // Reset to start
-    await page.waitForTimeout(100)
-    await page.keyboard.press('Meta+Shift+ArrowRight')  // Select to end of line
-    await page.waitForTimeout(100)
+      if (!editor || !heading) {
+        return false
+      }
+
+      editor.focus()
+      const range = document.createRange()
+      range.selectNodeContents(heading)
+      const selection = window.getSelection()
+      selection?.removeAllRanges()
+      selection?.addRange(range)
+      return true
+    })
+    expect(headingSelected).toBe(true)
+
     await page.keyboard.type('New Title')
-    await page.waitForTimeout(1000)
 
     // TOC should update
-    tocText = await toc.textContent()
-    expect(tocText).toContain('New Title')
-    expect(tocText).not.toContain('Original Title')
+    await expect(async () => {
+      tocText = await toc.textContent()
+      expect(tocText).toContain('New Title')
+      expect(tocText).not.toContain('Original Title')
+    }).toPass({ timeout: 5000 })
   })
 
   test('clicking TOC item scrolls to heading', async ({ page }) => {

@@ -1,4 +1,5 @@
 import { test, expect, Page } from './fixtures/isolated-env';
+import { shortcut } from './fixtures/test-helpers';
 
 // Helper to create a new document using the available buttons
 async function createNewDocument(page: Page) {
@@ -406,7 +407,8 @@ test.describe('Tables', () => {
       await expect(table).toBeHidden({ timeout: 3000 });
     } else {
       // Alternative: Select table and press Delete/Backspace
-      await page.keyboard.press('Meta+a'); // Select all in table
+      await page.keyboard.press(shortcut('a'));
+      await page.keyboard.press(shortcut('a'));
       await page.keyboard.press('Backspace');
       await page.waitForTimeout(300);
 

@@ -1,4 +1,5 @@
 import { test, expect, Page } from './fixtures/isolated-env'
+import { shortcut } from './fixtures/test-helpers'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
@@ -65,6 +66,14 @@ test.describe('Edge Cases', () => {
     const titleInput = page.locator('textarea[placeholder="Untitled"]')
     await expect(titleInput).toBeVisible({ timeout: 5000 })
 
+    const titleSave = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'PATCH' &&
+        response.url().includes('/api/documents/') &&
+        response.ok(),
+      { timeout: 15000 }
+    )
+
     // Click and clear first, then fill (ensures React receives the event properly)
     await titleInput.click()
     await titleInput.clear()
@@ -80,11 +89,7 @@ test.describe('Edge Cases', () => {
     // Blur the input to trigger save by pressing Tab
     await page.keyboard.press('Tab')
 
-    // Wait for the "Saved" indicator
-    await expect(page.getByText(/Saved|Cached|Saving|Offline/).first()).toBeVisible({ timeout: 10000 })
-
-    // Wait a bit more for the sync to actually complete
-    await page.waitForTimeout(2000)
+    await titleSave
 
     // Title should be saved (verify by reloading)
     await page.reload()
@@ -353,13 +358,13 @@ test.describe('Edge Cases', () => {
     await page.keyboard.type('Bold and italic text')
 
     // Select all
-    await page.keyboard.press('Meta+a')
+    await page.keyboard.press(shortcut('a'))
 
     // Apply bold
-    await page.keyboard.press('Meta+b')
+    await page.keyboard.press(shortcut('b'))
 
     // Apply italic
-    await page.keyboard.press('Meta+i')
+    await page.keyboard.press(shortcut('i'))
 
     // Wait for formatting to apply
     await page.waitForTimeout(500)
