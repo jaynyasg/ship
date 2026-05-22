@@ -37,6 +37,12 @@ export function BacklogPickerModal({ isOpen, onClose, context, onIssuesAdded }: 
   const [searchQuery, setSearchQuery] = useState('');
   const { showToast } = useToast();
 
+  const handleClose = useCallback(() => {
+    setSelectedIds(new Set());
+    setSearchQuery('');
+    onClose();
+  }, [onClose]);
+
   // Fetch all issues (no filter)
   const { data: allIssues = [], isLoading } = useIssuesQuery({}, { enabled: isOpen });
 
@@ -110,20 +116,12 @@ export function BacklogPickerModal({ isOpen, onClose, context, onIssuesAdded }: 
     if (!isOpen || isAdding) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        handleClose();
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, isAdding, onClose]);
-
-  // Reset state when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      setSelectedIds(new Set());
-      setSearchQuery('');
-    }
-  }, [isOpen]);
+  }, [isOpen, isAdding, handleClose]);
 
   const toggleSelection = useCallback((id: string) => {
     setSelectedIds(prev => {
@@ -190,23 +188,23 @@ export function BacklogPickerModal({ isOpen, onClose, context, onIssuesAdded }: 
       if (errors.length === 0) {
         showToast(`${selectedIds.size} issue${selectedIds.size === 1 ? '' : 's'} added to ${contextName}`, 'success');
         onIssuesAdded?.();
-        onClose();
+        handleClose();
       } else if (errors.length < selectedIds.size) {
         showToast(`Some issues added, but ${errors.length} failed`, 'error');
         onIssuesAdded?.();
-        onClose();
+        handleClose();
       } else {
         showToast('Failed to add issues', 'error');
       }
     } finally {
       setIsAdding(false);
     }
-  }, [selectedIds, availableIssues, context, contextName, onClose, onIssuesAdded, showToast]);
+  }, [selectedIds, availableIssues, context, contextName, handleClose, onIssuesAdded, showToast]);
 
   // Handle click outside dialog
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget && !isAdding) {
-      onClose();
+      handleClose();
     }
   };
 
@@ -227,7 +225,7 @@ export function BacklogPickerModal({ isOpen, onClose, context, onIssuesAdded }: 
             <p className="text-sm text-muted">Select issues from the backlog to add to this {contextType}</p>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             disabled={isAdding}
             className="text-muted hover:text-foreground transition-colors disabled:opacity-50"
             aria-label="Close"
@@ -328,7 +326,7 @@ export function BacklogPickerModal({ isOpen, onClose, context, onIssuesAdded }: 
           </span>
           <div className="flex items-center gap-2">
             <button
-              onClick={onClose}
+              onClick={handleClose}
               disabled={isAdding}
               className="rounded px-3 py-1.5 text-sm text-muted hover:text-foreground transition-colors disabled:opacity-50"
             >

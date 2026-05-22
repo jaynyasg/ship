@@ -1,6 +1,5 @@
 import {
   forwardRef,
-  useEffect,
   useImperativeHandle,
   useState,
   useCallback,
@@ -27,6 +26,7 @@ interface MentionListRef {
 export const MentionList = forwardRef<MentionListRef, MentionListProps>(
   ({ items, command, query }, ref) => {
     const [selectedIndex, setSelectedIndex] = useState(0);
+    const activeIndex = items.length > 0 ? Math.min(selectedIndex, items.length - 1) : 0;
 
     const selectItem = useCallback(
       (index: number) => {
@@ -37,10 +37,6 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(
       },
       [items, command]
     );
-
-    useEffect(() => {
-      setSelectedIndex(0);
-    }, [items]);
 
     useImperativeHandle(ref, () => ({
       onKeyDown: ({ event }: { event: KeyboardEvent }) => {
@@ -55,7 +51,7 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(
         }
 
         if (event.key === 'Enter') {
-          selectItem(selectedIndex);
+          selectItem(activeIndex);
           return true;
         }
 
@@ -122,10 +118,10 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(
                   className={cn(
                     'flex w-full items-center gap-2 px-3 py-2 text-left text-sm',
                     'hover:bg-border/50 transition-colors',
-                    globalIndex === selectedIndex && 'bg-border/50'
+                    globalIndex === activeIndex && 'bg-border/50'
                   )}
                   role="option"
-                  aria-selected={globalIndex === selectedIndex}
+                  aria-selected={globalIndex === activeIndex}
                 >
                   <PersonIcon />
                   <span className="flex-1 truncate">{highlightMatch(item.label)}</span>
@@ -150,10 +146,10 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(
                   className={cn(
                     'flex w-full items-center gap-2 px-3 py-2 text-left text-sm',
                     'hover:bg-border/50 transition-colors',
-                    globalIndex === selectedIndex && 'bg-border/50'
+                    globalIndex === activeIndex && 'bg-border/50'
                   )}
                   role="option"
-                  aria-selected={globalIndex === selectedIndex}
+                  aria-selected={globalIndex === activeIndex}
                 >
                   <DocumentTypeIcon type={item.documentType} />
                   <span className="flex-1 truncate">{highlightMatch(item.label)}</span>

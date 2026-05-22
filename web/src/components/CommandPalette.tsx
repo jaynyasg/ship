@@ -100,10 +100,15 @@ export function CommandPalette({ open, onOpenChange, currentDocument, onConvertD
     };
   }, [open]);
 
-  const runCommand = useCallback((command: () => void) => {
+  const closePalette = useCallback(() => {
+    setSearch('');
     onOpenChange(false);
-    command();
   }, [onOpenChange]);
+
+  const runCommand = useCallback((command: () => void) => {
+    closePalette();
+    command();
+  }, [closePalette]);
 
   const createIssue = async () => {
     try {
@@ -143,7 +148,6 @@ export function CommandPalette({ open, onOpenChange, currentDocument, onConvertD
   // Fetch documents when palette opens
   useEffect(() => {
     if (!open) {
-      setSearch('');
       return;
     }
 
@@ -220,7 +224,7 @@ export function CommandPalette({ open, onOpenChange, currentDocument, onConvertD
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50"
-        onClick={() => onOpenChange(false)}
+        onClick={closePalette}
       />
 
       {/* Command dialog */}
@@ -235,7 +239,7 @@ export function CommandPalette({ open, onOpenChange, currentDocument, onConvertD
         <Tooltip content="Close">
           <button
             type="button"
-            onClick={() => onOpenChange(false)}
+            onClick={closePalette}
             aria-label="Close dialog"
             className="absolute right-2 top-2 z-10 rounded p-1 text-muted hover:bg-border hover:text-foreground transition-colors"
           >
@@ -247,7 +251,7 @@ export function CommandPalette({ open, onOpenChange, currentDocument, onConvertD
         <Command
           className="rounded-lg border border-border bg-background shadow-2xl"
           onKeyDown={(e) => {
-            if (e.key === 'Escape') onOpenChange(false);
+            if (e.key === 'Escape') closePalette();
           }}
         >
           <div className="border-b border-border p-3">

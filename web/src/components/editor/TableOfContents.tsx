@@ -1,6 +1,6 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import { NodeViewWrapper, ReactNodeViewRenderer, NodeViewProps } from '@tiptap/react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 interface HeadingItem {
   id: string;
@@ -11,10 +11,7 @@ interface HeadingItem {
 
 // The React component that renders the TOC
 function TableOfContentsComponent({ editor }: NodeViewProps) {
-  const [headings, setHeadings] = useState<HeadingItem[]>([]);
-
-  // Scan document for headings
-  const updateHeadings = () => {
+  const collectHeadings = useCallback(() => {
     const items: HeadingItem[] = [];
     const { state } = editor;
 
@@ -28,23 +25,21 @@ function TableOfContentsComponent({ editor }: NodeViewProps) {
       }
     });
 
-    setHeadings(items);
-  };
+    return items;
+  }, [editor]);
+  const [headings, setHeadings] = useState<HeadingItem[]>(() => collectHeadings());
 
-  // Update on mount and when editor updates
+  // Update when editor content changes
   useEffect(() => {
-    updateHeadings();
-
-    // Listen to editor updates
     const handleUpdate = () => {
-      updateHeadings();
+      setHeadings(collectHeadings());
     };
 
     editor.on('update', handleUpdate);
     return () => {
       editor.off('update', handleUpdate);
     };
-  }, [editor]);
+  }, [editor, collectHeadings]);
 
   const scrollToHeading = (pos: number) => {
     // Set cursor position to the heading

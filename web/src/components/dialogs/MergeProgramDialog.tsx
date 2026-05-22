@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { apiGet, apiPost } from '@/lib/api';
 import { usePrograms } from '@/hooks/useProgramsQuery';
 import { useToast } from '@/components/ui/Toast';
@@ -32,32 +32,43 @@ export function MergeProgramDialog({ isOpen, onClose, sourceId, sourceName }: Me
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  const resetDialog = useCallback(() => {
+    setTargetId(null);
+    setPreview(null);
+    setPreviewLoading(false);
+    setConfirmText('');
+    setError(null);
+    setIsMerging(false);
+  }, []);
+
+  const handleClose = useCallback(() => {
+    resetDialog();
+    onClose();
+  }, [onClose, resetDialog]);
+
+  const handleTargetChange = useCallback((nextTargetId: string) => {
+    const value = nextTargetId || null;
+    setTargetId(value);
+    setPreview(null);
+    setError(null);
+    setPreviewLoading(Boolean(value));
+    if (!value) {
+      setPreviewLoading(false);
+    }
+  }, []);
+
   // Filter out current program and archived programs
   const availableTargets = programs.filter(
     (p) => p.id !== sourceId && !p.archived_at
   );
 
-  // Reset state when dialog opens/closes
-  useEffect(() => {
-    if (!isOpen) {
-      setTargetId(null);
-      setPreview(null);
-      setConfirmText('');
-      setError(null);
-      setIsMerging(false);
-    }
-  }, [isOpen]);
-
   // Fetch preview when target is selected
   useEffect(() => {
     if (!targetId) {
-      setPreview(null);
       return;
     }
 
     let cancelled = false;
-    setPreviewLoading(true);
-    setError(null);
 
     apiGet(`/api/programs/${sourceId}/merge-preview?target_id=${targetId}`)
       .then(async (res) => {
@@ -85,11 +96,11 @@ export function MergeProgramDialog({ isOpen, onClose, sourceId, sourceName }: Me
   useEffect(() => {
     if (!isOpen || isMerging) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') handleClose();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, isMerging, onClose]);
+  }, [isOpen, isMerging, handleClose]);
 
   const handleMerge = async () => {
     if (!targetId || confirmText !== sourceName) return;
@@ -114,7 +125,7 @@ export function MergeProgramDialog({ isOpen, onClose, sourceId, sourceName }: Me
       queryClient.invalidateQueries({ queryKey: ['programs'] });
 
       showToast(`Merged "${sourceName}" into "${preview?.target.name}"`, 'success');
-      onClose();
+      handleClose();
       navigate(`/documents/${targetId}`);
     } catch {
       setError('Merge failed. Please try again.');
@@ -123,7 +134,7 @@ export function MergeProgramDialog({ isOpen, onClose, sourceId, sourceName }: Me
   };
 
   const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget && !isMerging) onClose();
+    if (e.target === e.currentTarget && !isMerging) handleClose();
   };
 
   if (!isOpen) return null;
@@ -154,7 +165,7 @@ export function MergeProgramDialog({ isOpen, onClose, sourceId, sourceName }: Me
           </label>
           <select
             value={targetId || ''}
-            onChange={(e) => setTargetId(e.target.value || null)}
+            onChange={(e) => handleTargetChange(e.target.value)}
             disabled={isMerging}
             className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
           >
@@ -233,7 +244,7 @@ export function MergeProgramDialog({ isOpen, onClose, sourceId, sourceName }: Me
         {/* Actions */}
         <div className="flex justify-end gap-2">
           <button
-            onClick={onClose}
+            onClick={handleClose}
             disabled={isMerging}
             className="rounded px-3 py-1.5 text-sm text-muted hover:text-foreground transition-colors disabled:opacity-50"
           >
