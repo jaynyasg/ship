@@ -1,9 +1,9 @@
 import {
   type ComponentType,
   type SVGProps,
+  createElement,
   lazy,
   Suspense,
-  useMemo,
 } from 'react';
 import { type IconName, isValidIconName } from './types';
 
@@ -36,20 +36,10 @@ for (const [path, loader] of Object.entries(iconModules)) {
   }
 }
 
-// Cache for lazy-loaded icon components
-const iconCache = new Map<string, ReturnType<typeof lazy<SvgComponent>>>();
-
-// Get or create a lazy-loaded icon component
-function getLazyIcon(name: string) {
-  if (!iconCache.has(name)) {
-    const loader = iconLoaders.get(name);
-    if (!loader) return null;
-
-    const LazyIcon = lazy<SvgComponent>(loader);
-    iconCache.set(name, LazyIcon);
-  }
-
-  return iconCache.get(name)!;
+// Pre-create lazy-loaded icon components so render only does a map lookup.
+const iconComponents = new Map<string, ReturnType<typeof lazy<SvgComponent>>>();
+for (const [name, loader] of iconLoaders) {
+  iconComponents.set(name, lazy<SvgComponent>(loader));
 }
 
 /**
@@ -88,8 +78,7 @@ export function Icon({
     return null;
   }
 
-  // Memoize the lazy icon component lookup
-  const LazyIcon = useMemo(() => getLazyIcon(name), [name]);
+  const LazyIcon = iconComponents.get(name);
 
   // Handle case where icon loader wasn't found (shouldn't happen if types are in sync)
   if (!LazyIcon) {
@@ -118,11 +107,11 @@ export function Icon({
 
   return (
     <Suspense fallback={<span className={className} />}>
-      <LazyIcon
-        className={className}
-        fill="currentColor"
-        {...accessibilityProps}
-      />
+      {createElement(LazyIcon, {
+        className,
+        fill: 'currentColor',
+        ...accessibilityProps,
+      })}
     </Suspense>
   );
 }

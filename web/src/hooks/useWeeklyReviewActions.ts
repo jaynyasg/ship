@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { useReviewQueue } from '@/contexts/ReviewQueueContext';
@@ -74,7 +74,11 @@ export function useWeeklyReviewActions(
   const projectId = docProperties.project_id;
 
   const [approving, setApproving] = useState(false);
-  const [localApprovalOverride, setLocalApprovalOverride] = useState<ApprovalDetails | null>(null);
+  const initialApprovalScopeKey = `${weeklyDocument?.id ?? 'none'}:${sprintIdFromQuery ?? 'none'}`;
+  const [localApprovalOverrideState, setLocalApprovalOverrideState] = useState<{
+    scopeKey: string;
+    value: ApprovalDetails | null;
+  }>(() => ({ scopeKey: initialApprovalScopeKey, value: null }));
 
   // Fetch person name
   const { data: personDoc } = useQuery<{ title: string }>({
@@ -133,11 +137,13 @@ export function useWeeklyReviewActions(
   });
 
   const effectiveSprintId = sprintData?.id || sprintIdFromQuery || null;
-
-  // Clear local overrides when navigating between weekly docs
-  useEffect(() => {
-    setLocalApprovalOverride(null);
-  }, [weeklyDocument?.id, effectiveSprintId]);
+  const approvalScopeKey = `${weeklyDocument?.id ?? 'none'}:${effectiveSprintId ?? 'none'}`;
+  const localApprovalOverride = localApprovalOverrideState.scopeKey === approvalScopeKey
+    ? localApprovalOverrideState.value
+    : null;
+  const setLocalApprovalOverride = useCallback((value: ApprovalDetails | null) => {
+    setLocalApprovalOverrideState({ scopeKey: approvalScopeKey, value });
+  }, [approvalScopeKey]);
 
   // Derive approval state from sprint data (or local override after action)
   const sprintProps = (sprintData?.properties || {}) as Record<string, unknown>;
@@ -204,7 +210,7 @@ export function useWeeklyReviewActions(
     } finally {
       setApproving(false);
     }
-  }, [approving, currentRating, effectiveSprintId, queueActive, reviewQueue]);
+  }, [approving, currentRating, effectiveSprintId, queueActive, reviewQueue, setLocalApprovalOverride]);
 
   const requestChanges = useCallback(async (feedbackInput: string): Promise<boolean> => {
     if (!effectiveSprintId || approving) return false;
@@ -240,7 +246,7 @@ export function useWeeklyReviewActions(
     } finally {
       setApproving(false);
     }
-  }, [approving, currentRating, effectiveSprintId, isRetro, queueActive, reviewQueue]);
+  }, [approving, currentRating, effectiveSprintId, isRetro, queueActive, reviewQueue, setLocalApprovalOverride]);
 
   const approveRetro = useCallback(async (rating: number, comment: string): Promise<boolean> => {
     if (!effectiveSprintId || !rating || approving) return false;
@@ -276,7 +282,7 @@ export function useWeeklyReviewActions(
     } finally {
       setApproving(false);
     }
-  }, [approving, effectiveSprintId, queueActive, reviewQueue]);
+  }, [approving, effectiveSprintId, queueActive, reviewQueue, setLocalApprovalOverride]);
 
   return useMemo(() => {
     if (!weeklyDocument) return null;

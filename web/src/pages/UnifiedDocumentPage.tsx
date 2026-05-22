@@ -78,7 +78,7 @@ export function UnifiedDocumentPage() {
 
 
   // Set default active tab when document loads (status-aware for sprints)
-  const tabConfig = document ? getTabsForDocument(document) : [];
+  const tabConfig = useMemo(() => document ? getTabsForDocument(document) : [], [document]);
   const hasTabs = document ? documentTypeHasTabs(document.document_type) : false;
 
   // Derive activeTab from URL - if valid tab in URL, use it; otherwise default to first tab

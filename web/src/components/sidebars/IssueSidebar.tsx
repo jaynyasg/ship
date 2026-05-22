@@ -115,8 +115,11 @@ export function IssueSidebar({
 }: IssueSidebarProps) {
   // Helper to check if a field should be highlighted
   const isHighlighted = (field: string) => highlightedFields.includes(field);
-  const [sprints, setSprints] = useState<Sprint[]>([]);
-  const [workspaceSprintStartDate, setWorkspaceSprintStartDate] = useState<Date | null>(null);
+  const [sprintOptionsState, setSprintOptionsState] = useState<{
+    programId: string | null;
+    sprints: Sprint[];
+    workspaceSprintStartDate: Date | null;
+  }>({ programId: null, sprints: [], workspaceSprintStartDate: null });
   const [sprintError, setSprintError] = useState<string | null>(null);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
@@ -129,6 +132,12 @@ export function IssueSidebar({
 
   // Get current associations from issue - memoize to prevent infinite re-renders
   const belongsTo = useMemo(() => issue.belongs_to || [], [issue.belongs_to]);
+  const currentProgramId = belongsTo.find(bt => bt.type === 'program')?.id ?? null;
+  const currentSprintId = belongsTo.find(bt => bt.type === 'sprint')?.id ?? null;
+  const sprints = sprintOptionsState.programId === currentProgramId ? sprintOptionsState.sprints : [];
+  const workspaceSprintStartDate = sprintOptionsState.programId === currentProgramId
+    ? sprintOptionsState.workspaceSprintStartDate
+    : null;
 
   // Handle state change with cascade warning detection
   const handleStateChange = async (newState: string) => {
@@ -165,37 +174,35 @@ export function IssueSidebar({
 
   // Fetch sprints when issue's program changes
   useEffect(() => {
-    // Get program from belongs_to
-    const programAssoc = belongsTo.find(bt => bt.type === 'program');
-    const programId = programAssoc?.id;
-
-    if (!programId) {
-      setSprints([]);
-      setWorkspaceSprintStartDate(null);
-      return;
-    }
+    if (!currentProgramId) return;
 
     let cancelled = false;
 
-    fetch(`${API_URL}/api/programs/${programId}/sprints`, { credentials: 'include' })
+    fetch(`${API_URL}/api/programs/${currentProgramId}/sprints`, { credentials: 'include' })
       .then(res => res.ok ? res.json() : { weeks: [], workspace_sprint_start_date: null })
       .then(data => {
         if (!cancelled) {
-          setSprints(data.weeks || []);
-          if (data.workspace_sprint_start_date) {
-            setWorkspaceSprintStartDate(new Date(data.workspace_sprint_start_date));
-          }
+          setSprintOptionsState({
+            programId: currentProgramId,
+            sprints: data.weeks || [],
+            workspaceSprintStartDate: data.workspace_sprint_start_date
+              ? new Date(data.workspace_sprint_start_date)
+              : null,
+          });
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setSprints([]);
-          setWorkspaceSprintStartDate(null);
+          setSprintOptionsState({
+            programId: currentProgramId,
+            sprints: [],
+            workspaceSprintStartDate: null,
+          });
         }
       });
 
     return () => { cancelled = true; };
-  }, [belongsTo]);
+  }, [currentProgramId]);
 
   // Add association via junction table API
   const handleAddAssociation = useCallback(async (relatedId: string, type: BelongsToType) => {
@@ -242,10 +249,6 @@ export function IssueSidebar({
       setShowRejectDialog(false);
     }
   };
-
-  // Get current program/sprint from belongs_to
-  const currentProgramId = belongsTo.find(bt => bt.type === 'program')?.id ?? null;
-  const currentSprintId = belongsTo.find(bt => bt.type === 'sprint')?.id ?? null;
 
   return (
     <div className="space-y-4 p-4">

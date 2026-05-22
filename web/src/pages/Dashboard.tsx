@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useActiveWeeksQuery, ActiveWeek } from '@/hooks/useWeeksQuery';
 import { useProjects, Project } from '@/contexts/ProjectsContext';
@@ -52,7 +52,7 @@ export function DashboardPage() {
   const [recentStandups, setRecentStandups] = useState<Standup[]>([]);
   const [standupsLoading, setStandupsLoading] = useState(true);
 
-  const activeWeeks = weeksData?.weeks || [];
+  const activeWeeks = useMemo(() => weeksData?.weeks || [], [weeksData?.weeks]);
   const actionItems = actionItemsData?.action_items || [];
 
   // Fetch recent standups from all active sprints

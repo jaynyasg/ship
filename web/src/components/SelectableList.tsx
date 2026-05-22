@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, ReactNode } from 'react';
+import { useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 import { useSelection, UseSelectionReturn } from '@/hooks/useSelection';
 import { cn } from '@/lib/cn';
 
@@ -78,13 +78,19 @@ export function SelectableList<T extends { id: string }>({
     hoveredId,
     initialSelectedIds,
   });
+  const selectionRef = useRef(selection);
+
+  useEffect(() => {
+    selectionRef.current = selection;
+  }, [selection]);
 
   // Notify parent of selection changes with both IDs and selection object
   // NOTE: We intentionally don't include moveFocus/extendSelection in dependencies
   // because extendSelection depends on focusedId, causing infinite loops when hover
   // changes focus. The parent receives fresh selection object on selectedIds/focusedId changes.
   useEffect(() => {
-    onSelectionChange?.(selection.selectedIds, selection);
+    const currentSelection = selectionRef.current;
+    onSelectionChange?.(currentSelection.selectedIds, currentSelection);
   }, [selection.selectedIds, selection.focusedId, onSelectionChange]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, item: T) => {

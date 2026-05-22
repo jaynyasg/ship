@@ -12,6 +12,7 @@ export function useAutoSave({ onSave, throttleMs = 500, maxRetries = 3 }: UseAut
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveSequenceRef = useRef(0);
   const isSavingRef = useRef(false);
+  const saveRef = useRef<(value: string, sequence: number, retryCount?: number) => Promise<void>>(async () => {});
 
   // Cleanup on unmount
   useEffect(() => {
@@ -34,13 +35,13 @@ export function useAutoSave({ onSave, throttleMs = 500, maxRetries = 3 }: UseAut
         const pending = pendingValueRef.current;
         pendingValueRef.current = null;
         saveSequenceRef.current++;
-        await save(pending, saveSequenceRef.current);
+        await saveRef.current(pending, saveSequenceRef.current);
       }
     } catch (err) {
       // Silent retry
       if (retryCount < maxRetries) {
         await new Promise(r => setTimeout(r, 1000 * (retryCount + 1)));
-        await save(value, sequence, retryCount + 1);
+        await saveRef.current(value, sequence, retryCount + 1);
       } else {
         console.error('Auto-save failed after retries:', err);
       }
@@ -48,6 +49,10 @@ export function useAutoSave({ onSave, throttleMs = 500, maxRetries = 3 }: UseAut
       isSavingRef.current = false;
     }
   }, [onSave, maxRetries]);
+
+  useEffect(() => {
+    saveRef.current = save;
+  }, [save]);
 
   const throttledSave = useCallback((value: string) => {
     const now = Date.now();

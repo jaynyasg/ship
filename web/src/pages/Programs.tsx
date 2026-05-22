@@ -86,7 +86,7 @@ export function ProgramsPage() {
     return sorted;
   }, [programs, sortBy]);
 
-  const handleCreateProgram = async () => {
+  const handleCreateProgram = useCallback(async () => {
     if (creating) return;
     setCreating(true);
 
@@ -100,7 +100,7 @@ export function ProgramsPage() {
     } finally {
       setCreating(false);
     }
-  };
+  }, [createProgram, creating, navigate]);
 
   // Clear selection helper
   const clearSelection = useCallback(() => {

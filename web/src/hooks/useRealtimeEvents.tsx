@@ -49,6 +49,7 @@ export function RealtimeEventsProvider({ children }: { children: ReactNode }) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const subscribersRef = useRef<Map<RealtimeEventType, Set<EventCallback>>>(new Map());
+  const connectRef = useRef<() => void>(() => {});
   const [isConnected, setIsConnected] = useState(false);
 
   // Subscribe to events
@@ -106,7 +107,7 @@ export function RealtimeEventsProvider({ children }: { children: ReactNode }) {
       if (user) {
         reconnectTimeoutRef.current = setTimeout(() => {
           console.log('[RealtimeEvents] Reconnecting...');
-          connect();
+          connectRef.current();
         }, 3000);
       }
     };
@@ -116,6 +117,10 @@ export function RealtimeEventsProvider({ children }: { children: ReactNode }) {
       ws.close();
     };
   }, [user]);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   // Disconnect from WebSocket
   const disconnect = useCallback(() => {
@@ -132,15 +137,9 @@ export function RealtimeEventsProvider({ children }: { children: ReactNode }) {
 
   // Connect when user logs in, disconnect when they log out
   useEffect(() => {
-    if (user) {
-      connect();
-    } else {
-      disconnect();
-    }
-
-    return () => {
-      disconnect();
-    };
+    if (!user) return;
+    connect();
+    return disconnect;
   }, [user, connect, disconnect]);
 
   // Keepalive ping every 30 seconds

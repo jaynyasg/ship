@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PropertyRow } from '@/components/ui/PropertyRow';
 import { Combobox } from '@/components/ui/Combobox';
@@ -96,7 +96,19 @@ export function WeekSidebar({
   onApprovalUpdate,
 }: WeekSidebarProps) {
   const navigate = useNavigate();
-  const [selectedReviewRating, setSelectedReviewRating] = useState<number | null>(sprint.review_rating?.value ?? null);
+  const currentReviewRating = sprint.review_rating?.value ?? null;
+  const [selectedReviewRatingState, setSelectedReviewRatingState] = useState(() => ({
+    sprintId: sprint.id,
+    baseValue: currentReviewRating,
+    value: currentReviewRating,
+  }));
+  const selectedReviewRating = selectedReviewRatingState.sprintId === sprint.id
+    && selectedReviewRatingState.baseValue === currentReviewRating
+    ? selectedReviewRatingState.value
+    : currentReviewRating;
+  const setSelectedReviewRating = useCallback((value: number | null) => {
+    setSelectedReviewRatingState({ sprintId: sprint.id, baseValue: currentReviewRating, value });
+  }, [currentReviewRating, sprint.id]);
   const [ratingInProgress, setRatingInProgress] = useState(false);
   // Helper to check if a field should be highlighted
   const isHighlighted = (field: string) => highlightedFields.includes(field);
@@ -131,10 +143,6 @@ export function WeekSidebar({
         };
       });
   }, [people, existingSprints]);
-
-  useEffect(() => {
-    setSelectedReviewRating(sprint.review_rating?.value ?? null);
-  }, [sprint.id, sprint.review_rating?.value]);
 
   async function handleApproveReviewWithRating() {
     if (!canApprove || !sprint.has_review || !selectedReviewRating || ratingInProgress) return;
