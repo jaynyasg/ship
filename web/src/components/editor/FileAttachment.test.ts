@@ -3,6 +3,10 @@ import { FileAttachmentExtension } from './FileAttachment';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 
+type FileAttachmentCommands = Editor['commands'] & {
+  setFileAttachment?: unknown;
+};
+
 describe('FileAttachmentExtension', () => {
   it('should create a valid TipTap extension', () => {
     const extension = FileAttachmentExtension;
@@ -67,8 +71,9 @@ describe('FileAttachmentExtension', () => {
     });
 
     // Check that the command exists
-    expect((editor.commands as any).setFileAttachment).toBeDefined();
-    expect(typeof (editor.commands as any).setFileAttachment).toBe('function');
+    const commands = editor.commands as FileAttachmentCommands;
+    expect(commands.setFileAttachment).toBeDefined();
+    expect(typeof commands.setFileAttachment).toBe('function');
 
     editor.destroy();
   });

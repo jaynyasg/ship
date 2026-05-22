@@ -3,8 +3,8 @@ import { apiGet } from '@/lib/api';
 
 export interface ContentHistoryEntry {
   id: number;
-  old_content: any | null;
-  new_content: any | null;
+  old_content: unknown | null;
+  new_content: unknown | null;
   created_at: string;
   changed_by: {
     id: string;

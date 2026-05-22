@@ -185,7 +185,14 @@ export function ProjectsPage() {
     }
   }, [createProject, navigate, user, showToast]);
 
-  const setFilter = (status: string) => {
+  // Clear selection helper
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+    selectionRef.current?.clearSelection();
+    setContextMenu(null);
+  }, []);
+
+  const setFilter = useCallback((status: string) => {
     setSearchParams((prev) => {
       if (status) {
         prev.set('status', status);
@@ -194,30 +201,18 @@ export function ProjectsPage() {
       }
       return prev;
     });
-  };
-
-  // Clear selection helper
-  const clearSelection = useCallback(() => {
-    setSelectedIds(new Set());
-    selectionRef.current?.clearSelection();
-    setContextMenu(null);
-  }, []);
-
-  // Clear selection when filter changes
-  useEffect(() => {
     clearSelection();
-  }, [statusFilter, clearSelection]);
+  }, [setSearchParams, clearSelection]);
 
   // Bulk action handlers
   const handleBulkArchive = useCallback(async () => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
-    const count = ids.length;
 
     // Archive each project
     let success = 0;
     for (const id of ids) {
-      const result = await updateProject(id, { archived_at: new Date().toISOString() } as any);
+      const result = await updateProject(id, { archived_at: new Date().toISOString() });
       if (result) success++;
     }
 
@@ -230,7 +225,7 @@ export function ProjectsPage() {
           label: 'Undo',
           onClick: async () => {
             for (const id of ids) {
-              await updateProject(id, { archived_at: null } as any);
+              await updateProject(id, { archived_at: null });
             }
             showToast('Archive undone', 'info');
             refreshProjects();
@@ -244,7 +239,6 @@ export function ProjectsPage() {
   const handleBulkDelete = useCallback(async () => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
-    const count = ids.length;
 
     let success = 0;
     for (const id of ids) {
