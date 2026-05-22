@@ -57,28 +57,28 @@ Evidence:
 
 ## Residual Risks
 
-No dependency audit advisories remain after Phase 08. The remediation uses targeted `pnpm.overrides` to keep parent package APIs stable while forcing patched transitive versions. A 2026-05-22 override retirement pass removed 12 now-redundant overrides while keeping the zero-advisory gate green.
+No dependency audit advisories remain after Phase 08. The remediation uses targeted `pnpm.overrides` where parent packages still resolve stale transitive versions. A 2026-05-22 override retirement pass removed 26 now-redundant overrides while keeping the zero-advisory gate green; only `uuid` and `ws` remain pinned because trial removal reintroduced stale resolver paths.
 
-Phase 15 adjusts the `ip-address` override from `10.1.1` to `10.2.0` because `express-rate-limit@8.5.2` depends on the newer `Address6.networkForm()` API for the fixed IPv6 key generator. This remains above the `ip-address` advisory's patched floor (`>=10.1.1`) and keeps `pnpm audit:ci` at zero advisories.
+Phase 15 temporarily adjusted the `ip-address` override from `10.1.1` to `10.2.0` because `express-rate-limit@8.5.2` depends on the newer `Address6.networkForm()` API for the fixed IPv6 key generator. The later 2026-05-22 parent-range refresh removed that override while preserving the zero-advisory gate.
 
 | Risk | Current Status | Rationale |
 |---|---|---|
 | High/moderate production dependency advisories | Mitigated | Phase 08 reduces the audit count to zero while preserving the current API and frontend parent package surfaces. |
 | Testcontainers advisories outside critical path | Mitigated with overrides | Testcontainers remains dev/E2E tooling, but its audited transitive packages are now forced to patched versions. |
-| AWS SDK transitive XML parser drift | Mitigated with override | The patched parser is forced while preserving the current AWS SDK API surface. Revisit when AWS SDK parent packages naturally absorb the patched dependency. |
-| Override maintenance | Reduced, still accepted temporarily | `eval/results/dependency-override-retirement.md` retires 12 overrides. The remaining 16 should be revisited as upstream parent packages widen dependency ranges to patched versions. |
+| AWS SDK transitive XML parser drift | Resolved by parent update | The AWS SDK packages now resolve patched XML parser dependencies without a root override. |
+| Override maintenance | Reduced, still accepted temporarily | `eval/results/dependency-override-retirement.md` retires 26 overrides. The remaining 2 (`uuid`, `ws`) should be revisited once upstream parent packages stop resolving stale transitive versions. |
 | `pnpm approve-builds` pending for native build scripts | Accepted temporarily | Existing install flow already ignores these scripts; no new runtime code depends on approving them in this pass. |
 
 ## Phase 08 High/Moderate Remediation
 
-Phase 08 cleared the remaining high, moderate, and low dependency advisories with targeted overrides and a refreshed lockfile. On 2026-05-22, a follow-up pass retired 12 overrides without reintroducing advisories.
+Phase 08 cleared the remaining high, moderate, and low dependency advisories with targeted overrides and a refreshed lockfile. On 2026-05-22, follow-up passes retired 26 overrides without reintroducing advisories.
 
 | Cluster | Patched packages |
 |---|---|
-| API runtime and MCP transitive deps | Remaining overrides: `ip-address`, `hono`, `@hono/node-server`, `ajv`, `fast-uri`, `uuid`, `ws`. Retired overrides: `express-rate-limit`, `path-to-regexp`. |
-| Web build/editor deps | Remaining overrides: `markdown-it`, `svgo`. Retired overrides: `vite`, `rollup`, `postcss`, `picomatch`. |
-| Test/dev tooling deps | Remaining overrides: `flatted`, `undici`, `lodash`, `brace-expansion`, `yaml`. Retired overrides: `qs`, `minimatch`. |
-| AWS/protobuf transitive deps | Remaining overrides: `fast-xml-parser`, `protobufjs`. Retired override: `@protobufjs/utf8`. |
+| API runtime and MCP transitive deps | Remaining overrides: `uuid`, `ws`. Retired overrides: `express-rate-limit`, `path-to-regexp`, `ip-address`, `hono`, `@hono/node-server`, `ajv`, `fast-uri`. |
+| Web build/editor deps | Remaining overrides: none. Retired overrides: `vite`, `rollup`, `postcss`, `picomatch`, `markdown-it`, `svgo`. |
+| Test/dev tooling deps | Remaining overrides: `uuid`, `ws`. Retired overrides: `qs`, `minimatch`, `flatted`, `undici`, `lodash`, `brace-expansion`, `yaml`. |
+| AWS/protobuf transitive deps | Remaining overrides: none. Retired overrides: `fast-xml-parser`, `protobufjs`, `@protobufjs/utf8`. |
 
 Evidence:
 

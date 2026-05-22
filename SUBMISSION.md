@@ -160,4 +160,4 @@ Result: 869 passed, 0 failed, 0 skipped, 0 pending.
 
 ## Known Follow-Ups
 
-- Dependency override maintenance is reduced but not fully eliminated: the 2026-05-22 pass retired 12 overrides and left 16 that still protect current parent-package surfaces. Evidence: `eval/results/dependency-override-retirement.md`.
+- Dependency override maintenance is nearly eliminated: the 2026-05-22 passes retired 26 overrides and left only `uuid` and `ws`, both retained because trial removal reintroduced stale resolver paths. Evidence: `eval/results/dependency-override-retirement.md`.
