@@ -4,6 +4,10 @@ import crypto from 'crypto';
 import { createApp } from '../app.js';
 import { pool } from '../db/client.js';
 
+type BacklinkResponse = {
+  id: string;
+};
+
 describe('Backlinks API', () => {
   const app = createApp('http://localhost:5173');
   // Use unique identifiers to avoid conflicts between concurrent test runs
@@ -132,7 +136,7 @@ describe('Backlinks API', () => {
       expect(backlink).toHaveProperty('title');
 
       // Verify we got the correct documents
-      const ids = response.body.map((b: any) => b.id);
+      const ids = (response.body as BacklinkResponse[]).map((b) => b.id);
       expect(ids).toContain(testDoc2Id);
       expect(ids).toContain(testDoc3Id);
     });

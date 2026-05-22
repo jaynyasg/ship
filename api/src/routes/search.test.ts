@@ -4,6 +4,13 @@ import crypto from 'crypto';
 import { createApp } from '../app.js';
 import { pool } from '../db/client.js';
 
+type LearningSearchResult = {
+  id: string;
+  title: string;
+  tags?: string[];
+  source_prd?: string;
+};
+
 describe('Search API', () => {
   const app = createApp('http://localhost:5173');
   // Use unique identifiers to avoid conflicts between concurrent test runs
@@ -227,8 +234,9 @@ describe('Search Learnings API', () => {
     expect(Array.isArray(res.body.learnings)).toBe(true);
 
     // Should find our learning document
-    const learning = res.body.learnings.find((l: any) => l.id === learningDocId);
+    const learning = (res.body.learnings as LearningSearchResult[]).find((l) => l.id === learningDocId);
     expect(learning).toBeDefined();
+    if (!learning) throw new Error('Expected learning search result');
     expect(learning.title).toBe('Learning: API Token Authentication');
   });
 
@@ -248,8 +256,9 @@ describe('Search Learnings API', () => {
       .set('Cookie', sessionCookie);
 
     expect(res.status).toBe(200);
-    const learning = res.body.learnings.find((l: any) => l.id === learningDocId);
+    const learning = (res.body.learnings as LearningSearchResult[]).find((l) => l.id === learningDocId);
     expect(learning).toBeDefined();
+    if (!learning) throw new Error('Expected learning search result');
     expect(learning.tags).toContain('security');
     expect(learning.source_prd).toBe('test-prd');
   });
@@ -261,7 +270,7 @@ describe('Search Learnings API', () => {
 
     expect(res.status).toBe(200);
     // Regular wiki doc should not appear
-    const regularDoc = res.body.learnings.find((l: any) => l.id === regularWikiId);
+    const regularDoc = (res.body.learnings as LearningSearchResult[]).find((l) => l.id === regularWikiId);
     expect(regularDoc).toBeUndefined();
   });
 
