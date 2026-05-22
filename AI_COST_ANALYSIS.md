@@ -1,0 +1,67 @@
+# AI Cost Analysis
+
+## Summary
+
+This audit used Codex as the primary AI engineering assistant for codebase comprehension, implementation, verification, and submission synthesis. The work also used local command-line tools from the repository: `pnpm`, TypeScript, ESLint, Vitest, Playwright through the compact runner, PostgreSQL, and Git.
+
+The exact billable AI dollar spend is not stored in this repository and was not exposed by the local Codex workspace during the audit. The final submission should fill the billing amount from the account or provider dashboard used to run the sessions.
+
+| Cost item | Amount | Source |
+|---|---:|---|
+| AI assistant billable usage | TBD | Fill from Codex/OpenAI billing or subscription records |
+| Added third-party SaaS tools | $0 | No new paid telemetry, analytics, security, or hosted test services were added |
+| Local development tools | $0 incremental | Existing local Node, pnpm, PostgreSQL, Docker, and Git tooling |
+| New dependency cost | $0 | Added packages are open-source dev/runtime dependencies installed through pnpm |
+| Deployment infrastructure | Existing account cost | See `DEPLOYMENT_CHECKLIST.md` for rough AWS monthly estimates if a fresh environment is provisioned |
+
+## How to Complete the Dollar Figure
+
+Use the AI provider billing dashboard for the audit date range and record the actual spend here before final submission:
+
+```text
+AI provider:
+Billing date range:
+Total billable usage:
+Pricing basis:
+Notes:
+```
+
+If the work was performed under a flat monthly subscription instead of usage-based billing, use a pro-rated estimate:
+
+```text
+Pro-rated AI cost = monthly subscription price * (audit work days / billing-cycle days)
+```
+
+## What AI Was Effective At
+
+**Codebase orientation.** AI was most valuable during the first-contact phase: scanning `README.md`, `ORIENTATION.md`, `AUDIT.md`, `AGENTS.md`, package scripts, and source directories to build a map of what mattered. This was especially useful because Ship is a monorepo with a unified document model, API routes, frontend pages, E2E harnesses, deployment scripts, and evidence artifacts.
+
+**Evidence stitching.** The assistant helped keep before/after measurements connected to their raw artifacts. Examples include linking audit categories in `AUDIT.md` and `SUBMISSION.md` to `eval/results/*`, preserving command outputs, and avoiding unsupported claims when a gate had not actually run.
+
+**Mechanical cleanup at scale.** AI was effective for broad but shallow cleanup work such as ESLint burn-down, unused variables, React Hooks findings, and JSX accessibility fixes. These tasks benefit from fast pattern recognition but still require verification because a mechanically valid lint fix can change interaction behavior.
+
+**Verification discipline.** The most important value was not code generation alone. It was repeatedly running the appropriate checks after changes: `pnpm type-check`, focused tests, `pnpm build:api`, `pnpm build:web`, `pnpm audit:ci`, `pnpm security:audit`, and the compact E2E runner.
+
+## Where AI Needed Guardrails
+
+**Exact cost accounting.** The assistant could not derive exact AI billing from repository state. Any exact dollar number must come from the user's billing dashboard.
+
+**Deployment authority.** The assistant can inspect deployment scripts and readiness, but it should not deploy without explicit approval and credentials. The Ship deploy path touches AWS, Terraform state, SSM parameters, S3, CloudFront, Elastic Beanstalk, and Docker.
+
+**Local noise and generated files.** The working tree had recurring local/generated entries such as `.codex/`, `api/coverage/`, and line-ending/index noise. The assistant had to stage files surgically and avoid committing local artifacts.
+
+**Behavioral review after lint fixes.** Lint fixes can alter keyboard, focus, or click behavior. For example, converting interactive `div` elements to semantic controls still required review to avoid double-toggle and drag-and-drop keyboard conflicts.
+
+## Cost Effectiveness Reflection
+
+AI was most cost-effective for comprehension and high-volume mechanical work. It compressed the time required to discover project conventions, trace audit evidence, and apply many small consistency fixes. It was less suited to tasks that require external authority or private data, such as exact billing totals and production deployment credentials.
+
+The best workflow was:
+
+1. Read the code and docs first.
+2. Make narrow changes that match existing patterns.
+3. Run focused checks immediately.
+4. Commit in logical batches.
+5. Keep raw evidence in `eval/results/`.
+
+The audit would have been slower without AI because the work crossed many surfaces: TypeScript, React, Express, PostgreSQL, WebSocket collaboration, dependency security, Playwright, CI, and AWS deployment scripts. The main risk of using AI was overconfidence. That was managed by grounding every claim in source files, commands, and committed measurement artifacts.
