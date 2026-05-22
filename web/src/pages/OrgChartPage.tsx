@@ -174,10 +174,9 @@ export function OrgChartPage() {
   const { isWorkspaceAdmin } = useWorkspace();
   const [people, setPeople] = useState<PersonData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [expandedIds, setExpandedIds] = useState<Set<string> | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [preSearchExpanded, setPreSearchExpanded] = useState<Set<string> | null>(null);
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; undoFn: (() => void) | null } | null>(null);
@@ -206,10 +205,24 @@ export function OrgChartPage() {
     }
   }, []);
 
-  useEffect(() => { fetchPeople(); }, [fetchPeople]);
+  useEffect(() => {
+    const timeout = window.setTimeout(fetchPeople, 0);
+    return () => window.clearTimeout(timeout);
+  }, [fetchPeople]);
 
   // Build tree
   const tree = useMemo(() => buildTree(people), [people]);
+  const defaultExpandedIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const root of tree) {
+      ids.add(root.personId);
+      for (const child of root.children) {
+        ids.add(child.personId);
+      }
+    }
+    return ids;
+  }, [tree]);
+  const baseExpandedIds = expandedIds ?? defaultExpandedIds;
 
   // Compute invalid drop targets when dragging
   const invalidDropIds = useMemo(() => {
@@ -220,20 +233,6 @@ export function OrgChartPage() {
     descendants.add(activeId); // can't drop on yourself
     return descendants;
   }, [activeId, tree]);
-
-  // Set default expanded (first 2 levels) once tree is built
-  useEffect(() => {
-    if (tree.length > 0 && expandedIds.size === 0) {
-      const defaultExpanded = new Set<string>();
-      for (const root of tree) {
-        defaultExpanded.add(root.personId);
-        for (const child of root.children) {
-          defaultExpanded.add(child.personId);
-        }
-      }
-      setExpandedIds(defaultExpanded);
-    }
-  }, [tree]);
 
   // Debounce search
   useEffect(() => {
@@ -254,39 +253,31 @@ export function OrgChartPage() {
     return matchIds;
   }, [debouncedQuery, people]);
 
-  // Auto-expand ancestors when searching
-  useEffect(() => {
-    if (searchMatches !== null) {
-      if (!preSearchExpanded) {
-        setPreSearchExpanded(new Set(expandedIds));
-      }
-      if (searchMatches.size > 0) {
-        const ancestorIds = collectAncestorIds(people, searchMatches);
-        setExpandedIds(new Set([...ancestorIds, ...searchMatches]));
-      }
-    } else if (preSearchExpanded) {
-      setExpandedIds(preSearchExpanded);
-      setPreSearchExpanded(null);
+  const visibleExpandedIds = useMemo(() => {
+    if (searchMatches === null || searchMatches.size === 0) {
+      return baseExpandedIds;
     }
-  }, [searchMatches]);
+    const ancestorIds = collectAncestorIds(people, searchMatches);
+    return new Set([...baseExpandedIds, ...ancestorIds, ...searchMatches]);
+  }, [baseExpandedIds, people, searchMatches]);
 
   const flatRows = useMemo(() => {
-    const rows = flattenTree(tree, expandedIds);
+    const rows = flattenTree(tree, visibleExpandedIds);
     if (searchMatches === null) return rows;
     if (searchMatches.size === 0) return [];
     const ancestorIds = collectAncestorIds(people, searchMatches);
     const visibleIds = new Set([...searchMatches, ...ancestorIds]);
     return rows.filter(row => visibleIds.has(row.node.personId));
-  }, [tree, expandedIds, searchMatches, people]);
+  }, [tree, visibleExpandedIds, searchMatches, people]);
 
   const toggleExpand = useCallback((personId: string) => {
     setExpandedIds(prev => {
-      const next = new Set(prev);
+      const next = new Set(prev ?? baseExpandedIds);
       if (next.has(personId)) next.delete(personId);
       else next.add(personId);
       return next;
     });
-  }, []);
+  }, [baseExpandedIds]);
 
   // Keyboard navigation
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -663,6 +654,7 @@ function OrgChartRow({
       role="treeitem"
       aria-expanded={hasChildren ? isExpanded : undefined}
       aria-level={depth + 1}
+      aria-selected={isFocused}
       tabIndex={isFocused ? 0 : -1}
       onFocus={onFocus}
       className={`flex items-start gap-1.5 rounded-md px-2 py-1 text-sm transition-colors ${

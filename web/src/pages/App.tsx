@@ -118,8 +118,11 @@ export function AppLayout() {
   useEffect(() => {
     if (localStorage.getItem('ship:disableActionItemsModal') === 'true') return;
     if (!actionItemsModalShownOnLoad && hasActionItems && actionItemsData?.items) {
-      setActionItemsModalOpen(true);
-      setActionItemsModalShownOnLoad(true);
+      const timeout = window.setTimeout(() => {
+        setActionItemsModalOpen(true);
+        setActionItemsModalShownOnLoad(true);
+      }, 0);
+      return () => window.clearTimeout(timeout);
     }
   }, [actionItemsModalShownOnLoad, hasActionItems, actionItemsData?.items]);
 
@@ -251,7 +254,7 @@ export function AppLayout() {
     if (success) {
       setWorkspaceSwitcherOpen(false);
       // Refresh the page to reload all data for new workspace
-      window.location.href = '/docs';
+      window.location.assign('/docs');
     }
   };
 
@@ -308,7 +311,9 @@ export function AppLayout() {
             {/* Workspace dropdown */}
             {workspaceSwitcherOpen && (
               <>
-                <div
+                <button
+                  type="button"
+                  aria-label="Close workspace switcher"
                   className="fixed inset-0 z-40"
                   onClick={() => setWorkspaceSwitcherOpen(false)}
                 />
@@ -730,7 +735,8 @@ function DocumentTreeItem({
   // Update isOpen when activeId changes (for navigation)
   useEffect(() => {
     if (shouldAutoExpand && !isOpen) {
-      setIsOpen(true);
+      const timeout = window.setTimeout(() => setIsOpen(true), 0);
+      return () => window.clearTimeout(timeout);
     }
   }, [shouldAutoExpand, isOpen]);
 
@@ -1173,16 +1179,22 @@ function ProjectsList({
   // Auto-expand when currentProjectId or activeId changes
   useEffect(() => {
     if (currentProjectId && !expandedProjects.has(currentProjectId)) {
-      setExpandedProjects(prev => new Set([...prev, currentProjectId]));
+      const timeout = window.setTimeout(() => {
+        setExpandedProjects(prev => new Set([...prev, currentProjectId]));
+      }, 0);
+      return () => window.clearTimeout(timeout);
     }
-  }, [currentProjectId]);
+  }, [currentProjectId, expandedProjects]);
 
   // Auto-expand when viewing a project's tab
   useEffect(() => {
     if (activeId && activeProjectTab && !expandedProjects.has(activeId)) {
-      setExpandedProjects(prev => new Set([...prev, activeId]));
+      const timeout = window.setTimeout(() => {
+        setExpandedProjects(prev => new Set([...prev, activeId]));
+      }, 0);
+      return () => window.clearTimeout(timeout);
     }
-  }, [activeId, activeProjectTab]);
+  }, [activeId, activeProjectTab, expandedProjects]);
 
   const toggleProject = useCallback((projectId: string) => {
     setExpandedProjects(prev => {
@@ -1240,7 +1252,13 @@ function ProjectsList({
           const isExpanded = expandedProjects.has(project.id);
           const currentTab = getCurrentTab(project.id);
           return (
-            <li key={project.id} data-testid="project-item" role="treeitem" aria-expanded={isExpanded}>
+            <li
+              key={project.id}
+              data-testid="project-item"
+              role="treeitem"
+              aria-expanded={isExpanded}
+              aria-selected={activeId === project.id}
+            >
               <div className="group relative">
                 <div
                   onContextMenu={(e) => handleContextMenu(e, project)}
@@ -1293,7 +1311,7 @@ function ProjectsList({
               {/* Expanded content - Project tabs */}
               {isExpanded && (
                 <ul className="ml-6 space-y-0.5 mt-0.5" role="group">
-                  <li role="treeitem">
+                  <li role="treeitem" aria-selected={currentTab === 'details'}>
                     <Link
                       to={`/documents/${project.id}`}
                       className={cn(
@@ -1307,7 +1325,7 @@ function ProjectsList({
                       <span>Details</span>
                     </Link>
                   </li>
-                  <li role="treeitem">
+                  <li role="treeitem" aria-selected={currentTab === 'weeks'}>
                     <Link
                       to={`/documents/${project.id}/weeks`}
                       className={cn(
@@ -1321,7 +1339,7 @@ function ProjectsList({
                       <span>Weeks</span>
                     </Link>
                   </li>
-                  <li role="treeitem">
+                  <li role="treeitem" aria-selected={currentTab === 'issues'}>
                     <Link
                       to={`/documents/${project.id}/issues`}
                       className={cn(
@@ -1335,7 +1353,7 @@ function ProjectsList({
                       <span>Issues</span>
                     </Link>
                   </li>
-                  <li role="treeitem">
+                  <li role="treeitem" aria-selected={currentTab === 'retro'}>
                     <Link
                       to={`/documents/${project.id}/retro`}
                       className={cn(
