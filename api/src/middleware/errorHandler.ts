@@ -13,8 +13,9 @@ export function errorHandler(
   err: unknown,
   req: Request,
   res: Response,
-  _next: NextFunction,
+  next: NextFunction,
 ): void {
+  void next;
   const captured = captureError(err, 'express', {
     method: req.method,
     path: req.path,

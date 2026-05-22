@@ -3,7 +3,7 @@
  */
 
 import { z, registry } from '../registry.js';
-import { UuidSchema, DateTimeSchema, BelongsToTypeSchema, AssociationRelationshipTypeSchema } from './common.js';
+import { UuidSchema, DateTimeSchema, AssociationRelationshipTypeSchema } from './common.js';
 import { DocumentTypeSchema } from './documents.js';
 
 // ============== Backlink ==============

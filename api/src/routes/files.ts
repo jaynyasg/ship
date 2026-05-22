@@ -77,7 +77,7 @@ const BLOCKED_EXTENSIONS = new Set([
   '.jar', '.ps1', '.psm1', '.psd1',
 ]);
 
-function isAllowedFile(filename: string, _mimeType: string): boolean {
+function isAllowedFile(filename: string): boolean {
   // Check extension against blocklist (allow everything except dangerous types)
   const ext = filename.toLowerCase().slice(filename.lastIndexOf('.'));
   return !BLOCKED_EXTENSIONS.has(ext);
@@ -99,7 +99,7 @@ filesRouter.post('/upload', authMiddleware, async (req: Request, res: Response) 
     const userId = req.userId;
 
     // Validate file type
-    if (!isAllowedFile(filename, mimeType)) {
+    if (!isAllowedFile(filename)) {
       res.status(400).json({ error: 'File type not allowed' });
       return;
     }

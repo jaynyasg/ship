@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { pool } from '../db/client.js';
 import { getVisibilityContext, VISIBILITY_FILTER_SQL } from '../middleware/visibility.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { TEMPLATE_HEADINGS, extractText, hasContent } from '../utils/document-content.js';
+import { hasContent } from '../utils/document-content.js';
 
 type RouterType = ReturnType<typeof Router>;
 const router: RouterType = Router();
@@ -100,23 +100,6 @@ router.get('/grid', authMiddleware, async (req: Request, res: Response) => {
         isCurrent: i === currentSprintNumber,
       });
     }
-
-    // Get all sprints from database that fall within our date range
-    const minDate = sprints[0]?.startDate || today.toISOString().split('T')[0];
-    const maxDate = sprints[sprints.length - 1]?.endDate || today.toISOString().split('T')[0];
-
-    const dbSprintsResult = await pool.query(
-      `SELECT d.id, d.title as name, d.properties->>'start_date' as start_date, d.properties->>'end_date' as end_date,
-              prog_da.related_id as program_id,
-              p.title as program_name, p.properties->>'emoji' as program_emoji, p.properties->>'color' as program_color
-       FROM documents d
-       LEFT JOIN document_associations prog_da ON d.id = prog_da.document_id AND prog_da.relationship_type = 'program'
-       LEFT JOIN documents p ON prog_da.related_id = p.id AND p.document_type = 'program'
-       WHERE d.workspace_id = $1 AND d.document_type = 'sprint'
-         AND (d.properties->>'start_date')::date >= $2 AND (d.properties->>'end_date')::date <= $3
-         AND ${VISIBILITY_FILTER_SQL('d', '$4', '$5')}`,
-      [workspaceId, minDate, maxDate, userId, isAdmin]
-    );
 
     // Get issues with sprint and assignee info (only visible issues)
     const issuesResult = await pool.query(
@@ -578,7 +561,7 @@ router.post('/assign', authMiddleware, async (req: Request, res: Response) => {
 
     // Find existing sprint for this program, project, and sprint number
     // Use IS NOT DISTINCT FROM for program_id to handle NULL values correctly
-    let sprintResult = await pool.query(
+    const sprintResult = await pool.query(
       `SELECT id, properties FROM documents
        WHERE workspace_id = $1 AND document_type = 'sprint'
          AND ($2::uuid IS NULL AND NOT EXISTS (SELECT 1 FROM document_associations WHERE document_id = documents.id AND relationship_type = 'program') OR id IN (SELECT document_id FROM document_associations WHERE related_id = $2 AND relationship_type = 'program'))

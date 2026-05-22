@@ -3,7 +3,7 @@
  */
 
 import { z, registry } from '../registry.js';
-import { UuidSchema, DateTimeSchema, BelongsToResponseSchema } from './common.js';
+import { UuidSchema, DateTimeSchema } from './common.js';
 
 // ============== Document Types ==============
 

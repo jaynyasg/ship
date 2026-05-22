@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import request from 'supertest'
 import crypto from 'crypto'
 import { createApp } from '../app.js'
@@ -545,7 +545,6 @@ describe('Invite Validation API', () => {
 
   let testWorkspaceId: string
   let testUserId: string
-  let sessionCookie: string
   let validInviteToken: string
 
   beforeAll(async () => {
@@ -570,15 +569,6 @@ describe('Invite Validation API', () => {
        VALUES ($1, $2, 'admin')`,
       [testWorkspaceId, testUserId]
     )
-
-    // sessions.id is TEXT not UUID, generated from crypto.randomBytes
-    const sessionId = crypto.randomBytes(32).toString('hex')
-    await pool.query(
-      `INSERT INTO sessions (id, user_id, workspace_id, expires_at)
-       VALUES ($1, $2, $3, now() + interval '1 hour')`,
-      [sessionId, testUserId, testWorkspaceId]
-    )
-    sessionCookie = `session_id=${sessionId}`
 
     // Create a valid invite with unique token
     const inviteResult = await pool.query(

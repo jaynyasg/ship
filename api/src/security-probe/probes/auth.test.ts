@@ -4,7 +4,7 @@ import {
   classifySessionCookieFlags,
   runAuthSessionProbes,
 } from './auth.js';
-import type { SecurityProbeConfig, SecurityProbeCredentialConfig } from '../types.js';
+import type { SecurityProbeConfig } from '../types.js';
 import type { LoginProbeResult, ProbeHttpResponse } from '../http-client.js';
 
 function testConfig(overrides: Partial<SecurityProbeConfig> = {}): SecurityProbeConfig {
@@ -74,7 +74,7 @@ class FakeAuthClient {
     return response(this.requestStatuses.shift() || 403);
   }
 
-  async login(_credential?: SecurityProbeCredentialConfig): Promise<LoginProbeResult> {
+  async login(): Promise<LoginProbeResult> {
     return this.loginResponse;
   }
 }

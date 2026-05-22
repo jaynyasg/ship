@@ -5,7 +5,7 @@ import {
   runInputSanitizationProbes,
 } from './input.js';
 import type { ProbeHttpResponse } from '../http-client.js';
-import type { SecurityProbeConfig, SecurityProbeCredentialConfig } from '../types.js';
+import type { SecurityProbeConfig } from '../types.js';
 
 function testConfig(): SecurityProbeConfig {
   return {
@@ -71,7 +71,7 @@ class FakeInputClient {
     return this.responses.shift() || response(404, '{}');
   }
 
-  async login(_credential?: SecurityProbeCredentialConfig): Promise<{ success: boolean; status: number }> {
+  async login(): Promise<{ success: boolean; status: number }> {
     return { success: this.loginSuccess, status: this.loginSuccess ? 200 : 401 };
   }
 }

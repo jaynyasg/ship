@@ -233,7 +233,6 @@ describe('Auth API', () => {
 
   describe('GET /api/auth/me', () => {
     let sessionCookie: string
-    let csrfToken: string
 
     beforeAll(async () => {
       // Login to get a session
@@ -247,7 +246,6 @@ describe('Auth API', () => {
         .get('/api/csrf-token')
         .set('Cookie', sessionCookie)
 
-      csrfToken = csrfRes.body.token
       const connectSidCookie = csrfRes.headers['set-cookie']?.[0]?.split(';')[0] || ''
       if (connectSidCookie) {
         sessionCookie = `${sessionCookie}; ${connectSidCookie}`

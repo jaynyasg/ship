@@ -1454,7 +1454,6 @@ router.patch('/:id/plan', authMiddleware, async (req: Request, res: Response) =>
     const newProps = { ...currentProps };
     const data = parsed.data;
     const now = new Date().toISOString();
-    let planWasWritten = false;
 
     // If plan is being updated, append old one to history
     if (data.plan !== undefined && data.plan !== currentProps.plan) {
@@ -1476,10 +1475,6 @@ router.patch('/:id/plan', authMiddleware, async (req: Request, res: Response) =>
       newProps.plan = data.plan;
       newProps.plan_history = currentHistory;
 
-      // Track if we're writing a non-empty plan for the first time
-      if (data.plan && !currentProps.plan) {
-        planWasWritten = true;
-      }
     }
 
     // Update success_criteria and confidence directly
@@ -2900,7 +2895,8 @@ router.post('/:id/unapprove-plan', authMiddleware, async (req: Request, res: Res
     );
 
     // Remove the approval from properties
-    const { plan_approval: _, ...restProps } = currentProps;
+    const restProps = { ...currentProps };
+    delete restProps.plan_approval;
 
     await pool.query(
       `UPDATE documents SET properties = $1, updated_at = now()
