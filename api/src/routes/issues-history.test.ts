@@ -1,4 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type MockedFunction } from 'vitest';
+import type { NextFunction, Request, Response } from 'express';
+import type { PoolClient, QueryResult } from 'pg';
 
 // Mock pool before importing routes
 const { mockClient } = vi.hoisted(() => {
@@ -23,7 +25,7 @@ vi.mock('../middleware/visibility.js', () => ({
 
 // Mock auth middleware
 vi.mock('../middleware/auth.js', () => ({
-  authMiddleware: vi.fn((req, res, next) => {
+  authMiddleware: vi.fn((req: Request, _res: Response, next: NextFunction) => {
     req.userId = 'user-123';
     req.workspaceId = 'ws-123';
     next();
@@ -35,15 +37,33 @@ import express from 'express';
 import request from 'supertest';
 import issuesRouter from './issues.js';
 
+type QueryRow = Record<string, unknown>;
+
+const queryRows = <Row extends QueryRow>(rows: Row[]): QueryResult<Row> => ({
+  command: 'SELECT',
+  rowCount: rows.length,
+  oid: 0,
+  fields: [],
+  rows,
+});
+
+type PoolQueryMock = MockedFunction<(
+  queryText: string,
+  values?: unknown[]
+) => Promise<QueryResult<QueryRow>>>;
+
+const queryMock = vi.mocked(pool.query) as unknown as PoolQueryMock;
+const connectMock = vi.mocked(pool.connect) as unknown as MockedFunction<() => Promise<PoolClient>>;
+
 describe('Issues History API', () => {
   let app: express.Express;
 
   beforeEach(() => {
     vi.clearAllMocks();
     // Reset mockClient defaults after clearAllMocks
-    mockClient.query.mockResolvedValue({ rows: [] } as any);
+    mockClient.query.mockResolvedValue(queryRows([]));
     mockClient.release.mockReturnValue(undefined);
-    vi.mocked(pool).connect = vi.fn().mockResolvedValue(mockClient) as any;
+    connectMock.mockResolvedValue(mockClient as unknown as PoolClient);
     app = express();
     app.use(express.json());
     app.use('/api/issues', issuesRouter);
@@ -53,11 +73,11 @@ describe('Issues History API', () => {
     it('creates history entry with valid data', async () => {
       const issueId = 'issue-123';
 
-      vi.mocked(pool.query)
+      queryMock
         // Issue access check
-        .mockResolvedValueOnce({ rows: [{ id: issueId }] } as any)
+        .mockResolvedValueOnce(queryRows([{ id: issueId }]))
         // Insert history
-        .mockResolvedValueOnce({ rows: [] } as any);
+        .mockResolvedValueOnce(queryRows([]));
 
       const res = await request(app)
         .post(`/api/issues/${issueId}/history`)
@@ -75,9 +95,9 @@ describe('Issues History API', () => {
     it('creates history entry without automated_by', async () => {
       const issueId = 'issue-123';
 
-      vi.mocked(pool.query)
-        .mockResolvedValueOnce({ rows: [{ id: issueId }] } as any)
-        .mockResolvedValueOnce({ rows: [] } as any);
+      queryMock
+        .mockResolvedValueOnce(queryRows([{ id: issueId }]))
+        .mockResolvedValueOnce(queryRows([]));
 
       const res = await request(app)
         .post(`/api/issues/${issueId}/history`)
@@ -130,8 +150,8 @@ describe('Issues History API', () => {
     });
 
     it('returns 404 for non-existent issue', async () => {
-      vi.mocked(pool.query)
-        .mockResolvedValueOnce({ rows: [] } as any);
+      queryMock
+        .mockResolvedValueOnce(queryRows([]));
 
       const res = await request(app)
         .post('/api/issues/nonexistent/history')
@@ -148,9 +168,9 @@ describe('Issues History API', () => {
     it('accepts null values', async () => {
       const issueId = 'issue-123';
 
-      vi.mocked(pool.query)
-        .mockResolvedValueOnce({ rows: [{ id: issueId }] } as any)
-        .mockResolvedValueOnce({ rows: [] } as any);
+      queryMock
+        .mockResolvedValueOnce(queryRows([{ id: issueId }]))
+        .mockResolvedValueOnce(queryRows([]));
 
       const res = await request(app)
         .post(`/api/issues/${issueId}/history`)
@@ -191,11 +211,11 @@ describe('Issues History API', () => {
         },
       ];
 
-      vi.mocked(pool.query)
+      queryMock
         // Issue access check
-        .mockResolvedValueOnce({ rows: [{ id: issueId }] } as any)
+        .mockResolvedValueOnce(queryRows([{ id: issueId }]))
         // Get history
-        .mockResolvedValueOnce({ rows: historyEntries } as any);
+        .mockResolvedValueOnce(queryRows(historyEntries));
 
       const res = await request(app)
         .get(`/api/issues/${issueId}/history`);
@@ -208,8 +228,8 @@ describe('Issues History API', () => {
     });
 
     it('returns 404 for non-existent issue', async () => {
-      vi.mocked(pool.query)
-        .mockResolvedValueOnce({ rows: [] } as any);
+      queryMock
+        .mockResolvedValueOnce(queryRows([]));
 
       const res = await request(app)
         .get('/api/issues/nonexistent/history');
@@ -246,24 +266,24 @@ describe('Issues History API', () => {
       // Client queries (within transaction)
       vi.mocked(mockClient.query)
         // Get existing issue
-        .mockResolvedValueOnce({ rows: [existingIssue] } as any)
+        .mockResolvedValueOnce(queryRows([existingIssue]))
         // Check for children (cascade warning check)
-        .mockResolvedValueOnce({ rows: [] } as any)
+        .mockResolvedValueOnce(queryRows([]))
         // BEGIN
-        .mockResolvedValueOnce({ rows: [] } as any)
+        .mockResolvedValueOnce(queryRows([]))
         // Log state change (document_history insert)
-        .mockResolvedValueOnce({ rows: [] } as any)
+        .mockResolvedValueOnce(queryRows([]))
         // Update issue
-        .mockResolvedValueOnce({ rows: [updatedRow] } as any)
+        .mockResolvedValueOnce(queryRows([updatedRow]))
         // Fetch updated issue after UPDATE
-        .mockResolvedValueOnce({ rows: [updatedRow] } as any)
+        .mockResolvedValueOnce(queryRows([updatedRow]))
         // COMMIT
-        .mockResolvedValueOnce({ rows: [] } as any);
+        .mockResolvedValueOnce(queryRows([]));
 
       // Pool queries (post-commit, non-transactional)
-      vi.mocked(pool.query)
+      queryMock
         // Get belongs_to associations
-        .mockResolvedValueOnce({ rows: [] } as any);
+        .mockResolvedValueOnce(queryRows([]));
 
       const res = await request(app)
         .patch(`/api/issues/${issueId}`)
