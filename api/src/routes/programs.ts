@@ -13,8 +13,22 @@ import {
 type RouterType = ReturnType<typeof Router>;
 const router: RouterType = Router();
 
+type ProgramRow = {
+  id: string;
+  title: string;
+  properties?: Record<string, unknown> | null;
+  archived_at?: Date | string | null;
+  created_at?: Date | string;
+  updated_at?: Date | string;
+  issue_count?: string | number;
+  sprint_count?: string | number;
+  owner_id?: string | null;
+  owner_name?: string | null;
+  owner_email?: string | null;
+};
+
 // Helper to extract program from row
-function extractProgramFromRow(row: any) {
+function extractProgramFromRow(row: ProgramRow) {
   const props = row.properties || {};
   return {
     id: row.id,
@@ -291,7 +305,7 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response) => {
 
     const currentProps = existing.rows[0].properties || {};
     const updates: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
     let paramIndex = 1;
 
     const data = parsed.data;

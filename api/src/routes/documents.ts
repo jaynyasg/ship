@@ -3,7 +3,7 @@ import { pool } from '../db/client.js';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { isWorkspaceAdmin } from '../middleware/visibility.js';
-import { handleVisibilityChange, handleDocumentConversion, invalidateDocumentCache, broadcastToUser } from '../collaboration/index.js';
+import { handleVisibilityChange, invalidateDocumentCache, broadcastToUser } from '../collaboration/index.js';
 import { extractHypothesisFromContent, extractSuccessCriteriaFromContent, extractVisionFromContent, extractGoalsFromContent, checkDocumentCompleteness } from '../utils/extractHypothesis.js';
 import { loadContentFromYjsState } from '../utils/yjsConverter.js';
 
@@ -13,6 +13,48 @@ const MAX_DOCUMENT_LIST_LIMIT = 500;
 const DEFAULT_DOCUMENT_PAGE_SIZE = 50;
 
 type DocumentListParam = string | boolean | number | null;
+type DocumentProperties = Record<string, unknown> & {
+  accountable_id?: string | null;
+  assignee_id?: string | null;
+  assignee_ids?: string[];
+  color?: string | null;
+  confidence?: number | null;
+  consulted_ids?: string[];
+  design_review_notes?: string | null;
+  ease?: number | null;
+  estimate?: number | null;
+  goals?: string | null;
+  has_design_review?: boolean | null;
+  impact?: number | null;
+  informed_ids?: string[];
+  is_complete?: boolean;
+  missing_fields?: string[];
+  owner_id?: string | null;
+  person_id?: string | null;
+  plan?: string | null;
+  plan_approval?: unknown;
+  prefix?: string | null;
+  priority?: string | null;
+  program_id?: string | null;
+  review_approval?: unknown;
+  review_rating?: unknown;
+  source?: string | null;
+  state?: string | null;
+  status?: string | null;
+  success_criteria?: string | null;
+  vision?: string | null;
+};
+type AccessibleDocumentRow = Record<string, unknown> & {
+  can_access: boolean;
+  converted_to_id?: string | null;
+  created_by?: string;
+  document_type?: string;
+  id?: string;
+  properties?: DocumentProperties | null;
+  ticket_number?: number | null;
+  title?: string;
+  visibility?: string;
+};
 
 function getQueryString(value: unknown): string | undefined {
   if (value === undefined) return undefined;
@@ -55,7 +97,7 @@ async function canAccessDocument(
   docId: string,
   userId: string,
   workspaceId: string
-): Promise<{ canAccess: boolean; doc: any | null }> {
+): Promise<{ canAccess: boolean; doc: AccessibleDocumentRow | null }> {
   const result = await pool.query(
     `SELECT d.*,
             (d.visibility = 'workspace' OR d.created_by = $2 OR
@@ -69,7 +111,8 @@ async function canAccessDocument(
     return { canAccess: false, doc: null };
   }
 
-  return { canAccess: result.rows[0].can_access, doc: result.rows[0] };
+  const doc = result.rows[0] as AccessibleDocumentRow;
+  return { canAccess: doc.can_access, doc };
 }
 
 // Validation schemas
@@ -81,7 +124,7 @@ const createDocumentSchema = z.object({
   sprint_id: z.string().uuid().optional().nullable(),
   properties: z.record(z.unknown()).optional(),
   visibility: z.enum(['private', 'workspace']).optional(),
-  content: z.any().optional(),
+  content: z.unknown().optional(),
   belongs_to: z.array(z.object({
     id: z.string().uuid(),
     type: z.enum(['program', 'project', 'sprint', 'parent']),
@@ -90,7 +133,7 @@ const createDocumentSchema = z.object({
 
 const updateDocumentSchema = z.object({
   title: z.string().min(1).max(255).optional(),
-  content: z.any().optional(),
+  content: z.unknown().optional(),
   parent_id: z.string().uuid().optional().nullable(),
   position: z.number().int().min(0).optional(),
   properties: z.record(z.unknown()).optional(),
@@ -773,7 +816,7 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response) => {
     await client.query('BEGIN');
 
     const updates: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
     let paramIndex = 1;
 
     // Track extracted values from content (content is source of truth)
@@ -865,7 +908,7 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response) => {
     if (data.properties !== undefined || contentUpdated || hasTopLevelProps) {
       const currentProps = existing.properties || {};
       const dataProps = data.properties || {};
-      let newProps = {
+      let newProps: DocumentProperties = {
         ...currentProps,
         ...dataProps,
         ...topLevelProps,
@@ -916,7 +959,7 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response) => {
     }
 
     // Handle document_type change
-    if (data.document_type !== undefined && data.document_type !== existing.document_type) {
+      if (data.document_type !== undefined && data.document_type !== existing.document_type) {
       // Only the document creator can change its type
       if (existing.created_by !== userId) {
         res.status(403).json({ error: 'Only the document creator can change its type' });
@@ -925,7 +968,7 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response) => {
 
       // Restrict certain type changes (can't change to/from program or person)
       const restrictedTypes = ['program', 'person'];
-      if (restrictedTypes.includes(existing.document_type) || restrictedTypes.includes(data.document_type)) {
+      if (restrictedTypes.includes(String(existing.document_type)) || restrictedTypes.includes(data.document_type)) {
         res.status(400).json({ error: 'Cannot change to or from program or person document types' });
         return;
       }
@@ -1154,7 +1197,7 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response) => {
 
     // Notify WebSocket collaboration server to disconnect users who lost access
     if (data.visibility !== undefined && data.visibility !== existing.visibility) {
-      handleVisibilityChange(id, data.visibility, existing.created_by).catch((err) => {
+      handleVisibilityChange(id, data.visibility, String(existing.created_by)).catch((err) => {
         console.error('Failed to handle visibility change for collaboration:', err);
       });
     }
@@ -1323,7 +1366,7 @@ router.post('/:id/convert', authMiddleware, async (req: Request, res: Response) 
 
     await client.query('BEGIN');
 
-    const currentProps = doc.properties || {};
+    const currentProps = (doc.properties || {}) as DocumentProperties;
     const sourceType = doc.document_type;
 
     // 1. Create snapshot of current state for undo capability
@@ -1518,7 +1561,7 @@ router.post('/:id/undo-conversion', authMiddleware, async (req: Request, res: Re
     }
 
     const snapshot = snapshotResult.rows[0];
-    const currentProps = currentDoc.properties || {};
+    const currentProps = (currentDoc.properties || {}) as DocumentProperties;
     const restoredType = snapshot.document_type;
 
     // 1. Create snapshot of current state (so user can re-convert if needed)
@@ -1641,6 +1684,7 @@ export default router;
 
 // Type augmentation for Express Request
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       user?: {

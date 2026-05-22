@@ -8,7 +8,6 @@ import {
   getTimestampUpdates,
   getBelongsToAssociations,
   getBelongsToAssociationsBatch,
-  TRACKED_FIELDS,
   type BelongsToEntry,
 } from '../utils/document-crud.js';
 import { broadcastToUser } from '../collaboration/index.js';
@@ -829,7 +828,7 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response) => {
     const existingIssue = existing.rows[0];
     const currentProps = existingIssue.properties || {};
     const updates: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
     let paramIndex = 1;
 
     const data = parsed.data;
@@ -1323,7 +1322,7 @@ router.post('/bulk', authMiddleware, async (req: Request, res: Response) => {
         );
         break;
 
-      case 'update':
+      case 'update': {
         if (!updates || Object.keys(updates).length === 0) {
           await client.query('ROLLBACK');
           res.status(400).json({ error: 'Updates required for update action' });
@@ -1331,7 +1330,7 @@ router.post('/bulk', authMiddleware, async (req: Request, res: Response) => {
         }
 
         const setClauses: string[] = ['updated_at = NOW()'];
-        const values: any[] = [validIds, workspaceId];
+        const values: unknown[] = [validIds, workspaceId];
         let paramIdx = 3;
 
         if (updates.state !== undefined) {
@@ -1421,6 +1420,7 @@ router.post('/bulk', authMiddleware, async (req: Request, res: Response) => {
           }
         }
         break;
+      }
 
       default:
         await client.query('ROLLBACK');

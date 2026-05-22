@@ -13,7 +13,6 @@ import cookie from 'cookie';
 
 const messageSync = 0;
 const messageAwareness = 1;
-const messageCustomEvent = 2;
 const messageClearCache = 3; // Tells browser to clear IndexedDB cache before sync
 
 // Rate limiting configuration
@@ -259,7 +258,7 @@ async function getOrCreateDoc(docName: string): Promise<Y.Doc> {
   }
 
   // Set up persistence and broadcast on changes
-  doc.on('update', (update: Uint8Array, origin: any) => {
+  doc.on('update', (update: Uint8Array, origin: unknown) => {
     schedulePersist(docName, doc!);
 
     // Broadcast update to all other clients in this room (except sender)
