@@ -35,6 +35,7 @@ export function useDocumentConversion(options: UseDocumentConversionOptions = {}
     sourceType: DocumentType,
     documentTitle: string
   ): Promise<ConversionResult | null> => {
+    void documentTitle;
     setIsConverting(true);
     const targetType = sourceType === 'issue' ? 'project' : 'issue';
 
@@ -81,6 +82,7 @@ export function useDocumentConversion(options: UseDocumentConversionOptions = {}
     documentId: string,
     documentType: DocumentType
   ): Promise<ConversionResult | null> => {
+    void documentType;
     setIsConverting(true);
 
     try {

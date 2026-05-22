@@ -942,7 +942,7 @@ export function IssuesList({
   });
 
   // Kanban checkbox click handler
-  const handleKanbanCheckboxClick = useCallback((id: string, e: React.MouseEvent) => {
+  const handleKanbanCheckboxClick = useCallback((id: string) => {
     setSelectedIds(prev => {
       const newSet = new Set(prev);
       if (newSet.has(id)) {

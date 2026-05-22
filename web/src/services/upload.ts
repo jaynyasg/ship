@@ -92,7 +92,7 @@ export async function uploadFile(
       throw new Error(error.error || 'Failed to create upload request');
     }
 
-    const { fileId, uploadUrl, s3Key } = await uploadReqRes.json();
+    const { fileId, uploadUrl } = await uploadReqRes.json();
     updateProgress({ fileId, progress: 20 });
 
     // Step 2: Upload file data

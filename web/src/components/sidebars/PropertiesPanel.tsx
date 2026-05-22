@@ -5,17 +5,14 @@
  * It adapts based on document_type while maintaining the same rendering patterns.
  */
 import { useMemo, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { WikiSidebar } from '@/components/sidebars/WikiSidebar';
 import { IssueSidebar } from '@/components/sidebars/IssueSidebar';
 import { ProjectSidebar } from '@/components/sidebars/ProjectSidebar';
 import { WeekSidebar } from '@/components/sidebars/WeekSidebar';
 import { ProgramSidebar } from '@/components/sidebars/ProgramSidebar';
 import { ContentHistoryPanel } from '@/components/ContentHistoryPanel';
-import { PlanQualityAssistant, RetroQualityAssistant } from '@/components/sidebars/QualityAssistant';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useAuth } from '@/hooks/useAuth';
-import { apiGet } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import type { WeeklyReviewActionsState } from '@/hooks/useWeeklyReviewActions';
 import type { Person } from '@/components/PersonCombobox';
@@ -419,41 +416,6 @@ function WeeklyDocumentSidebar({
   );
 }
 
-/** Wrapper that fetches plan content for the retro quality assistant */
-function RetroQualityAssistantWrapper({
-  documentId,
-  content,
-  personId,
-  weekNumber,
-}: {
-  documentId: string;
-  content: Record<string, unknown>;
-  personId?: string;
-  weekNumber?: number;
-}) {
-  // Fetch the corresponding weekly plan for comparison
-  const { data: planContent } = useQuery<Record<string, unknown> | null>({
-    queryKey: ['weekly-plan-for-retro', personId, weekNumber],
-    queryFn: async () => {
-      if (!personId || !weekNumber) return null;
-      const res = await apiGet(`/api/weekly-plans?person_id=${personId}&week_number=${weekNumber}`);
-      if (!res.ok) return null;
-      const plans = await res.json();
-      if (plans.length > 0 && plans[0].content) return plans[0].content;
-      return null;
-    },
-    enabled: !!personId && !!weekNumber,
-    staleTime: 60 * 1000,
-  });
-
-  return (
-    <RetroQualityAssistant
-      documentId={documentId}
-      content={content}
-      planContent={planContent ?? null}
-    />
-  );
-}
 
 /**
  * PropertiesPanel - Unified component that renders the appropriate sidebar

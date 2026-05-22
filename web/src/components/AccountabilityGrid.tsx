@@ -88,7 +88,7 @@ export function AccountabilityGrid({ showArchived = false }: AccountabilityGridP
         }
         const json = await res.json();
         setData(json);
-      } catch (err) {
+      } catch {
         setError('Failed to load accountability data');
       } finally {
         setLoading(false);

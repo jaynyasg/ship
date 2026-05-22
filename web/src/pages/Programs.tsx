@@ -148,9 +148,10 @@ export function ProgramsPage() {
   }, [selectedIds, deleteProgram, clearSelection, showToast]);
 
   // Render function for program rows
-  const renderProgramRow = useCallback((program: Program, { isSelected }: RowRenderProps) => (
-    <ProgramRowContent program={program} visibleColumns={visibleColumns} />
-  ), [visibleColumns]);
+  const renderProgramRow = useCallback((program: Program, rowProps: RowRenderProps) => {
+    void rowProps;
+    return <ProgramRowContent program={program} visibleColumns={visibleColumns} />;
+  }, [visibleColumns]);
 
   // Empty state
   const emptyState = useMemo(() => (

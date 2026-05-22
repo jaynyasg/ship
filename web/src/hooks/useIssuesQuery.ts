@@ -369,7 +369,9 @@ export function useBulkUpdateIssues() {
             }
 
             // Apply state and assignee_id updates directly
-            const { project_id: _p, sprint_id: _s, ...directUpdates } = updates;
+            const directUpdates = { ...updates };
+            delete directUpdates.project_id;
+            delete directUpdates.sprint_id;
             return { ...i, ...directUpdates, belongs_to: newBelongsTo };
           });
         }

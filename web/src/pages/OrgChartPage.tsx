@@ -651,7 +651,9 @@ function OrgChartRow({
   });
 
   // Exclude role and tabIndex from dnd-kit attributes — we set our own for the tree
-  const { role: _role, tabIndex: _tabIndex, ...dragAttributes } = attributes;
+  const { role, tabIndex, ...dragAttributes } = attributes;
+  void role;
+  void tabIndex;
 
   const style = transform ? { opacity: 0.5 } : undefined;
 

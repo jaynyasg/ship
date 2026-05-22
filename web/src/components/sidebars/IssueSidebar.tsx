@@ -220,16 +220,6 @@ export function IssueSidebar({
     onAssociationChange?.();
   }, [issue.id, onAssociationChange]);
 
-  // Legacy program change handler (updates belongs_to via onUpdate)
-  const handleProgramChange = async (programId: string | null) => {
-    // Build new belongs_to array with updated program
-    const newBelongsTo = belongsTo.filter(bt => bt.type !== 'program' && bt.type !== 'sprint');
-    if (programId) {
-      newBelongsTo.push({ id: programId, type: 'program' });
-    }
-    await onUpdate({ belongs_to: newBelongsTo } as Partial<Issue>);
-  };
-
   // Legacy sprint change handler
   const handleSprintChange = async (sprintId: string | null) => {
     if (sprintId && !issue.estimate) {

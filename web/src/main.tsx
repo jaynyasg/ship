@@ -1,7 +1,6 @@
 import React, { Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
-import { QueryClientProvider } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { queryClient, queryPersister } from '@/lib/queryClient';
@@ -84,15 +83,6 @@ function SprintTabRedirect({ tab }: { tab?: string }) {
     ? `/documents/${id}/${mappedTab}`
     : `/documents/${id}`;
   return <Navigate to={targetPath} replace />;
-}
-
-function PlaceholderPage({ title, subtitle }: { title: string; subtitle: string }) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center">
-      <h1 className="text-xl font-medium text-foreground">{title}</h1>
-      <p className="mt-1 text-sm text-muted">{subtitle}</p>
-    </div>
-  );
 }
 
 function RouteLoading() {
