@@ -34,8 +34,13 @@ export function useGlobalListNavigation({
   const onEnterRef = useRef(onEnter);
 
   // Keep refs up to date
-  internalSelectionRef.current = selection;
-  onEnterRef.current = onEnter;
+  useEffect(() => {
+    internalSelectionRef.current = selection;
+  }, [selection]);
+
+  useEffect(() => {
+    onEnterRef.current = onEnter;
+  }, [onEnter]);
 
   // Use external ref if provided (allows reading latest value without waiting for re-render)
   const effectiveSelectionRef = externalSelectionRef || internalSelectionRef;
@@ -102,7 +107,7 @@ export function useGlobalListNavigation({
         }
         break;
     }
-  }, [enabled]); // Only depend on enabled - refs handle the rest
+  }, [effectiveSelectionRef, enabled]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);

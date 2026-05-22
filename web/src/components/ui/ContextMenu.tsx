@@ -168,8 +168,7 @@ let globalItemIndex = 0;
 export function ContextMenuItem({ onClick, disabled, destructive, children, index: providedIndex }: ContextMenuItemProps) {
   const context = useContext(ContextMenuContext);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const indexRef = useRef(providedIndex ?? globalItemIndex++);
-  const index = indexRef.current;
+  const [index] = useState(() => providedIndex ?? globalItemIndex++);
 
   // Register with parent
   useEffect(() => {
@@ -219,8 +218,7 @@ export function ContextMenuSubmenu({ label, children }: ContextMenuSubmenuProps)
   const [isOpen, setIsOpen] = useState(false);
   const context = useContext(ContextMenuContext);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const indexRef = useRef(globalItemIndex++);
-  const index = indexRef.current;
+  const [index] = useState(() => globalItemIndex++);
 
   // Register with parent
   useEffect(() => {

@@ -34,7 +34,7 @@ export function useSessionTimeout(onTimeout: () => void): SessionTimeoutState {
   const [sessionCreatedAt, setSessionCreatedAt] = useState<number | null>(null);
 
   const lastActivityRef = useRef(lastActivity);
-  const lastThrottledActivityRef = useRef(Date.now());
+  const lastThrottledActivityRef = useRef(lastActivity);
   const warningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const absoluteWarningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -157,13 +157,15 @@ export function useSessionTimeout(onTimeout: () => void): SessionTimeoutState {
         }, 1000);
       } else {
         // Re-schedule based on actual last activity
-        scheduleInactivityWarning();
+        scheduleInactivityWarningRef.current();
       }
     }, timeUntilWarning);
   }, []);
 
   // Keep the ref updated for resetTimer to use
-  scheduleInactivityWarningRef.current = scheduleInactivityWarning;
+  useEffect(() => {
+    scheduleInactivityWarningRef.current = scheduleInactivityWarning;
+  }, [scheduleInactivityWarning]);
 
   // Schedule absolute timeout warning
   const scheduleAbsoluteWarning = useCallback(() => {
