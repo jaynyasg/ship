@@ -111,7 +111,8 @@ The grader-facing deliverable must be reproducible from a fresh app instance wit
 
 - Full multi-role privilege escalation testing is included only when multiple credential sets are provided or available.
 - Production probing is allowed, but probes should remain bounded, identifiable, and cleanup-oriented rather than destructive stress testing.
-- The paused full E2E release gate remains paused until Category 8 is planned and executed.
+- The paused full E2E release gate remained paused until Category 8 was planned and executed.
+- Resolved 2026-05-22: Category 8 is complete and the final full release gate ran with `pnpm test:e2e -- --workers=2`, passing 869/869 tests.
 - Broad penetration testing beyond the PDF surfaces is out of scope for this phase.
 - External third-party scanners are not a substitute for the required Ship-specific probe tool, though dependency audit output is included as one required input.
 

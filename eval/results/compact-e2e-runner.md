@@ -26,4 +26,6 @@ git diff --check
 
 ## Residual Risk
 
-This phase verifies runner parsing and integration without launching the full E2E suite. A full release check should still run `pnpm test:e2e` with local PostgreSQL available.
+This phase verified runner parsing and integration without launching the full E2E suite. At the time, a full release check remained pending with local PostgreSQL available.
+
+Resolved 2026-05-22: the final full release gate ran through this compact runner with `pnpm test:e2e -- --workers=2` and completed with 869 passed, 0 failed, 0 skipped, and 0 pending tests. See `eval/results/full-e2e-gate.md`.

@@ -32,4 +32,6 @@ pnpm type-check
 pnpm audit:ci
 ```
 
-The focused E2E slice passed 4/4. The full suite should still be run before release, preferably with `--workers=1` or `--workers=2` on low-memory Windows machines.
+The focused E2E slice passed 4/4. At the time of this phase, the full suite remained a release prerequisite, preferably with `--workers=1` or `--workers=2` on low-memory Windows machines.
+
+Resolved 2026-05-22: the final full release gate ran with `pnpm test:e2e -- --workers=2` and completed with 869 passed, 0 failed, 0 skipped, and 0 pending tests. See `eval/results/full-e2e-gate.md`.

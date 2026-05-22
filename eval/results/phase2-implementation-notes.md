@@ -31,6 +31,7 @@
 | U16/U7 | `eval/results/error-after.md`, `eval/results/websocket-reconnect-ui.md` | Target met: top-level React `ErrorBoundary`, global client listeners, Express `errorHandler`, shared in-house capture, and `process.on('unhandledRejection')`; Phase 13 closes the WebSocket reconnect UI stretch |
 | U17 | `eval/results/axe-after.json` | 0 Critical/Serious/Moderate/Minor axe violations across login/docs/projects/team after final contrast fixes |
 
-## Not started / deferred
+## Deferred then closed
 
-- Full all-suite Playwright E2E should still be run before release with `pnpm test:e2e`. Phase 14 added the compact runner and Phase 15 verified the isolated E2E harness with `pnpm test:e2e -- e2e/spike-isolated.spec.ts --workers=1`.
+- Full all-suite Playwright E2E was deferred during the Phase 2 implementation pass. Phase 14 added the compact runner and Phase 15 verified the isolated E2E harness with `pnpm test:e2e -- e2e/spike-isolated.spec.ts --workers=1`.
+- Resolved 2026-05-22: the final release gate ran with `pnpm test:e2e -- --workers=2` and completed with 869 passed, 0 failed, 0 skipped, and 0 pending tests. See `eval/results/full-e2e-gate.md`.

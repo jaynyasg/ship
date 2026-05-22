@@ -26,3 +26,5 @@ git diff --check
 ```
 
 Full Playwright execution was intentionally not run in this phase because the change is the execution wrapper itself and the repo still requires a running local PostgreSQL environment for the E2E suite. The wrapper's dry-run and help paths verify command parsing without triggering the large test stream this phase is designed to avoid.
+
+Resolved 2026-05-22: the final full release gate ran through the compact runner with `pnpm test:e2e -- --workers=2` and completed with 869 passed, 0 failed, 0 skipped, and 0 pending tests. See `eval/results/full-e2e-gate.md`.
