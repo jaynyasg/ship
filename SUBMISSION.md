@@ -83,6 +83,10 @@ Ship now has a runnable Category 8 security audit probe via `pnpm security:audit
 
 Both findings are fixed with before/after proof. `eval/results/security-audit-after.md` reports 0 verified findings, and `eval/results/security-audit-fixes.md` records the vulnerability class, reproduction steps, fix summary, and before/after evidence for each fix.
 
+## Final E2E Release Gate
+
+The full Playwright gate now passes through the compact runner on Windows. On 2026-05-22, `pnpm test:e2e -- --workers=2` completed with 869 passed, 0 failed, 0 skipped, and 0 pending tests.
+
 ## Files To Read
 
 - `AUDIT.md` - full audit narrative with baseline, severity, and after status.
@@ -109,6 +113,7 @@ Both findings are fixed with before/after proof. `eval/results/security-audit-af
 - `eval/results/websocket-reconnect-ui.md` - verification note for collaboration reconnect UI.
 - `eval/results/compact-e2e-runner.md` - verification note for compact E2E runner wiring.
 - `eval/results/e2e-windows-runner-hardening.md` - verification note for focused isolated E2E execution on Windows.
+- `eval/results/full-e2e-gate.md` - final full Playwright release-gate result.
 - `eval/results/security-audit-baseline.md` - Category 8 baseline with exact audit deliverable matrix.
 - `eval/results/security-audit-after.md` - Category 8 after-remediation report with zero verified findings.
 - `eval/results/security-audit-fixes.md` - Category 8 two-fix before/after proof.
@@ -145,7 +150,14 @@ pnpm build:api
 pnpm security:audit -- --mode local --non-interactive --report-name security-audit-after
 ```
 
+This was the final full E2E release gate:
+
+```powershell
+pnpm test:e2e -- --workers=2
+```
+
+Result: 869 passed, 0 failed, 0 skipped, 0 pending.
+
 ## Known Follow-Ups
 
-- Full Playwright E2E should still be run before release with `pnpm test:e2e`; use `--workers=1` or `--workers=2` on low-memory machines.
 - Dependency overrides should be retired as upstream parent packages naturally absorb patched transitive versions.

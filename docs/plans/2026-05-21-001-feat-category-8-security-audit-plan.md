@@ -1,7 +1,7 @@
 ---
 title: Category 8 Security Audit
 type: feat
-status: active
+status: complete
 date: 2026-05-21
 origin: docs/brainstorms/2026-05-21-phase-16-category-8-security-audit.md
 ---
@@ -76,7 +76,7 @@ Source: `docs/brainstorms/2026-05-21-phase-16-category-8-security-audit.md`.
 - Production probing is in scope, but destructive stress testing, high-volume fuzzing, broad port scanning, and third-party infrastructure scanning are out of scope.
 - Active write probes are in scope by default because input failures are part of the deliverable. Created records must use a unique marker such as `ship-security-probe-<runId>` and be deleted where authenticated cleanup routes allow it.
 - Dependency scanning is required but is not a substitute for the live Ship-specific probe.
-- The paused full E2E release gate remains separate from this phase and should restart only after Category 8 reaches a stable point.
+- The paused full E2E release gate remained separate from this phase and was completed after Category 8 reached a stable point.
 
 ## Context & Research
 

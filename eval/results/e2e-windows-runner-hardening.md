@@ -4,6 +4,16 @@
 
 `pnpm test:e2e -- --workers=2` initialized the real Playwright suite with 869 tests, but the command overran the execution timeout. The compact summary reached 252 failures and 617 pending tests before cleanup. Sampled failure logs all pointed to the same infrastructure issue: `spawn npx ENOENT` from the isolated E2E fixture.
 
+## Final Full-Suite Gate
+
+After the runner hardening and focused fixes, the full suite was rerun on 2026-05-22:
+
+```powershell
+pnpm test:e2e -- --workers=2
+```
+
+Result: 869 passed, 0 failed, 0 skipped, 0 pending. See `eval/results/full-e2e-gate.md`.
+
 ## Fixes Verified
 
 - Windows preview server spawn now routes through `cmd.exe /c pnpm exec vite preview`.

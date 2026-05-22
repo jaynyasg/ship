@@ -4,7 +4,7 @@
 > **Auditor:** Jay Godfrey
 > **Phase 1 Gate completed:** 2026-05-19
 > **Target repo:** `US-Department-of-the-Treasury/ship` (forked to `jaynyasg/ship`)
-> **Status:** Phase 2 measurement pass completed 2026-05-20. Baselines and after-measurements are in `eval/results/`; all seven original PDF category targets are closed (U11, U12, U13, U14, U15, U16/U7, U17). Category 8 Security Audit was added and completed 2026-05-21 with a runnable probe, baseline, two verified fixes, and after-proof. Phase 13 later closed the WebSocket reconnect UI stretch follow-up, and Phase 15 hardened the Windows E2E runner path with a focused isolated Playwright pass.
+> **Status:** Phase 2 measurement pass completed 2026-05-20. Baselines and after-measurements are in `eval/results/`; all seven original PDF category targets are closed (U11, U12, U13, U14, U15, U16/U7, U17). Category 8 Security Audit was added and completed 2026-05-21 with a runnable probe, baseline, two verified fixes, and after-proof. Phase 13 later closed the WebSocket reconnect UI stretch follow-up, Phase 15 hardened the Windows E2E runner path, and the final full Playwright gate passed on 2026-05-22 with 869/869 tests passing.
 
 This audit follows the **diagnostic-before-treatment** principle from the ShipShape PDF: every finding was measured first, classified by severity, and then addressed by a targeted improvement with reproducible before/after evidence. During the Phase 1 baseline pass, only additive documentation and evidence artifacts were created; Phase 2 contains the source changes.
 
@@ -38,6 +38,7 @@ All quantitative evidence is in `eval/results/`. Each result file is JSON or Mar
 | 8. Security Audit | `pnpm security:audit` live probe + dependency audit + manual review collectors | `eval/results/security-audit-baseline.md`, `security-audit-after.md`, `security-audit-fixes.md` |
 | Supplemental: Architectural health | `madge --circular`, code inspection | `eval/results/madge-circular-baseline.txt` (no circular deps) |
 | Supplemental: Dependency security | `pnpm audit`, `pnpm outdated` | `eval/results/dependency-summary-baseline.md`, audit + outdated JSONs |
+| Supplemental: Full E2E release gate | `pnpm test:e2e -- --workers=2` | `eval/results/full-e2e-gate.md` |
 
 ---
 
@@ -589,5 +590,6 @@ The PDF explicitly requires this separation: *"Diagnosis comes before treatment.
 - `eval/results/security-audit-baseline.md` — Category 8 baseline with exact audit deliverable matrix
 - `eval/results/security-audit-after.md` — Category 8 after-remediation report with zero verified findings
 - `eval/results/security-audit-fixes.md` — Category 8 two-fix before/after proof
+- `eval/results/full-e2e-gate.md` — final full Playwright release-gate pass on Windows
 - `docs/brainstorms/2026-05-21-phase-16-category-8-security-audit.md` — Category 8 requirements and acceptance examples
 - Implementation plan: `docs/plans/2026-05-18-001-feat-shipshape-audit-enhancement-plan.md` (in Week4 planning repo)
