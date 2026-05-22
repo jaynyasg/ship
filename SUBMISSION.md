@@ -83,6 +83,14 @@ Ship now has a runnable Category 8 security audit probe via `pnpm security:audit
 
 Both findings are fixed with before/after proof. `eval/results/security-audit-after.md` reports 0 verified findings, and `eval/results/security-audit-fixes.md` records the vulnerability class, reproduction steps, fix summary, and before/after evidence for each fix.
 
+## Phase 17 ESLint Quality Burn-down
+
+The maintained-source ESLint baseline is fully burned down. `eval/results/eslint-phase05-summary.md` now records 357 files checked with 0 files containing findings, 0 errors, and 0 warnings across `api`, `web`, and `shared`.
+
+## Phase 18 Hosted Quality Gates
+
+GitHub Actions and GitLab CI now enforce hosted quality checks for `pnpm lint`, `pnpm type-check`, `pnpm build:api`, and `pnpm build:web` in addition to the existing `pnpm audit:ci` dependency gate. The carried-forward `uuid` and `ws` overrides stay pinned until upstream dependency ranges naturally resolve patched versions. A new `qs@6.15.2` override covers the 2026-05-22 Express 4 transitive advisory (`GHSA-q8mj-m7cp-5q26`) while preserving the zero-advisory gate. `eval/results/dependency-override-retirement.md` now includes the retest criteria for retiring the pins safely.
+
 ## Final E2E Release Gate
 
 The full Playwright gate now passes through the compact runner on Windows. On 2026-05-22, `pnpm test:e2e -- --workers=2` completed with 869 passed, 0 failed, 0 skipped, and 0 pending tests.
@@ -162,4 +170,4 @@ Result: 869 passed, 0 failed, 0 skipped, 0 pending.
 
 ## Known Follow-Ups
 
-- Dependency override maintenance is nearly eliminated: the 2026-05-22 passes retired 26 overrides and left only `uuid` and `ws`, both retained because trial removal reintroduced stale resolver paths. Evidence: `eval/results/dependency-override-retirement.md`.
+- Dependency override maintenance is nearly eliminated: the 2026-05-22 passes retired 25 overrides, kept the carried-forward `uuid` and `ws` pins because trial removal reintroduced stale resolver paths, and added a narrow `qs@6.15.2` pin for the same-day Express transitive advisory. Evidence: `eval/results/dependency-override-retirement.md`.

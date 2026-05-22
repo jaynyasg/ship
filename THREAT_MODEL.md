@@ -66,18 +66,18 @@ Phase 15 temporarily adjusted the `ip-address` override from `10.1.1` to `10.2.0
 | High/moderate production dependency advisories | Mitigated | Phase 08 reduces the audit count to zero while preserving the current API and frontend parent package surfaces. |
 | Testcontainers advisories outside critical path | Mitigated with overrides | Testcontainers remains dev/E2E tooling, but its audited transitive packages are now forced to patched versions. |
 | AWS SDK transitive XML parser drift | Resolved by parent update | The AWS SDK packages now resolve patched XML parser dependencies without a root override. |
-| Override maintenance | Reduced, still accepted temporarily | `eval/results/dependency-override-retirement.md` retires 26 overrides. The remaining 2 (`uuid`, `ws`) should be revisited once upstream parent packages stop resolving stale transitive versions. |
+| Override maintenance | Reduced, still accepted temporarily | `eval/results/dependency-override-retirement.md` retires 25 overrides. The carried-forward `uuid` and `ws` pins should be revisited once upstream parent packages stop resolving stale transitive versions; `qs` is pinned separately for the 2026-05-22 Express transitive advisory. |
 | `pnpm approve-builds` pending for native build scripts | Accepted temporarily | Existing install flow already ignores these scripts; no new runtime code depends on approving them in this pass. |
 
 ## Phase 08 High/Moderate Remediation
 
-Phase 08 cleared the remaining high, moderate, and low dependency advisories with targeted overrides and a refreshed lockfile. On 2026-05-22, follow-up passes retired 26 overrides without reintroducing advisories.
+Phase 08 cleared the remaining high, moderate, and low dependency advisories with targeted overrides and a refreshed lockfile. On 2026-05-22, follow-up passes retired 25 overrides, retained the carried-forward `uuid` and `ws` pins, and added a narrow `qs@6.15.2` pin after `GHSA-q8mj-m7cp-5q26` appeared through `api > express > qs`.
 
 | Cluster | Patched packages |
 |---|---|
-| API runtime and MCP transitive deps | Remaining overrides: `uuid`, `ws`. Retired overrides: `express-rate-limit`, `path-to-regexp`, `ip-address`, `hono`, `@hono/node-server`, `ajv`, `fast-uri`. |
+| API runtime and MCP transitive deps | Remaining overrides: `qs`, `uuid`, `ws`. Retired overrides: `express-rate-limit`, `path-to-regexp`, `ip-address`, `hono`, `@hono/node-server`, `ajv`, `fast-uri`. |
 | Web build/editor deps | Remaining overrides: none. Retired overrides: `vite`, `rollup`, `postcss`, `picomatch`, `markdown-it`, `svgo`. |
-| Test/dev tooling deps | Remaining overrides: `uuid`, `ws`. Retired overrides: `qs`, `minimatch`, `flatted`, `undici`, `lodash`, `brace-expansion`, `yaml`. |
+| Test/dev tooling deps | Remaining overrides: `uuid`, `ws`. Retired overrides: `minimatch`, `flatted`, `undici`, `lodash`, `brace-expansion`, `yaml`. |
 | AWS/protobuf transitive deps | Remaining overrides: none. Retired overrides: `fast-xml-parser`, `protobufjs`, `@protobufjs/utf8`. |
 
 Evidence:
