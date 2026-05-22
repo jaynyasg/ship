@@ -57,57 +57,68 @@ export function AdminWorkspaceDetailPage() {
   const [addingUser, setAddingUser] = useState(false);
   const [addUserError, setAddUserError] = useState<string | null>(null);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const isUserSearchReady = userSearch.length >= 2;
+  const visibleSearchResults = isUserSearchReady ? searchResults : [];
 
   useEffect(() => {
     if (!isSuperAdmin) {
       navigate('/docs');
       return;
     }
-    if (id) {
-      loadData();
-    }
+    if (!id) return;
+
+    let cancelled = false;
+    Promise.all([
+      api.admin.getWorkspace(id),
+      api.admin.getWorkspaceMembers(id),
+      api.admin.getWorkspaceInvites(id),
+    ])
+      .then(([wsRes, membersRes, invitesRes]) => {
+        if (cancelled) return;
+        if (!wsRes.success) {
+          setError(wsRes.error?.message || 'Workspace not found');
+          setLoading(false);
+          return;
+        }
+
+        setError(null);
+        if (wsRes.data) setWorkspace(wsRes.data.workspace);
+        if (membersRes.success && membersRes.data) setMembers(membersRes.data.members);
+        if (invitesRes.success && invitesRes.data) setInvites(invitesRes.data.invites);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setError('Failed to load workspace');
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [isSuperAdmin, navigate, id]);
 
   // Debounced user search
   useEffect(() => {
-    if (!userSearch || userSearch.length < 2) {
-      setSearchResults([]);
+    if (!isUserSearchReady) {
       return;
     }
 
+    let cancelled = false;
     const timer = setTimeout(async () => {
       const res = await api.admin.searchUsers(userSearch, id);
+      if (cancelled) return;
       if (res.success && res.data) {
         setSearchResults(res.data.users);
         setShowSearchResults(true);
       }
     }, 300);
 
-    return () => clearTimeout(timer);
-  }, [userSearch, id]);
-
-  async function loadData() {
-    if (!id) return;
-    setLoading(true);
-    setError(null);
-
-    const [wsRes, membersRes, invitesRes] = await Promise.all([
-      api.admin.getWorkspace(id),
-      api.admin.getWorkspaceMembers(id),
-      api.admin.getWorkspaceInvites(id),
-    ]);
-
-    if (!wsRes.success) {
-      setError(wsRes.error?.message || 'Workspace not found');
-      setLoading(false);
-      return;
-    }
-
-    if (wsRes.data) setWorkspace(wsRes.data.workspace);
-    if (membersRes.success && membersRes.data) setMembers(membersRes.data.members);
-    if (invitesRes.success && invitesRes.data) setInvites(invitesRes.data.invites);
-    setLoading(false);
-  }
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [userSearch, id, isUserSearchReady]);
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
@@ -377,7 +388,7 @@ export function AdminWorkspaceDetailPage() {
                     type="text"
                     value={userSearch}
                     onChange={(e) => setUserSearch(e.target.value)}
-                    onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
+                    onFocus={() => visibleSearchResults.length > 0 && setShowSearchResults(true)}
                     onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
                     placeholder="Search by email..."
                     className={cn(
@@ -385,9 +396,9 @@ export function AdminWorkspaceDetailPage() {
                       addUserError ? "border-red-500" : "border-border"
                     )}
                   />
-                  {showSearchResults && searchResults.length > 0 && (
+                  {showSearchResults && visibleSearchResults.length > 0 && (
                     <div className="absolute z-10 w-full mt-1 bg-background border border-border rounded-md shadow-lg max-h-48 overflow-auto">
-                      {searchResults.map((user) => (
+                      {visibleSearchResults.map((user) => (
                         <button
                           key={user.id}
                           onClick={() => {
@@ -404,7 +415,7 @@ export function AdminWorkspaceDetailPage() {
                       ))}
                     </div>
                   )}
-                  {showSearchResults && userSearch.length >= 2 && searchResults.length === 0 && (
+                  {showSearchResults && isUserSearchReady && visibleSearchResults.length === 0 && (
                     <div className="absolute z-10 w-full mt-1 bg-background border border-border rounded-md shadow-lg p-3 text-sm text-muted">
                       No users found
                     </div>

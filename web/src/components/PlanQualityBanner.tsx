@@ -96,6 +96,11 @@ const WORKLOAD_COLORS = {
   excessive: 'text-red-400 bg-red-500/10 border-red-500/30',
 };
 
+type DocumentScopedState<T> = {
+  documentId: string;
+  value: T;
+};
+
 export function PlanQualityBanner({
   documentId,
   editorContent,
@@ -105,19 +110,42 @@ export function PlanQualityBanner({
   editorContent: Record<string, unknown> | null;
   onAnalysisChange?: (analysis: PlanAnalysisResult | null) => void;
 }) {
-  const [analysis, setAnalysisRaw] = useState<PlanAnalysisResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [aiAvailable, setAiAvailable] = useState<boolean | null>(null);
+  const [analysisState, setAnalysisState] = useState<DocumentScopedState<PlanAnalysisResult | null>>(() => ({
+    documentId,
+    value: null,
+  }));
+  const [loadingState, setLoadingState] = useState<DocumentScopedState<boolean>>(() => ({
+    documentId,
+    value: false,
+  }));
+  const [aiAvailableState, setAiAvailableState] = useState<DocumentScopedState<boolean | null>>(() => ({
+    documentId,
+    value: null,
+  }));
+  const analysis = analysisState.documentId === documentId ? analysisState.value : null;
+  const loading = loadingState.documentId === documentId ? loadingState.value : false;
+  const aiAvailable = aiAvailableState.documentId === documentId ? aiAvailableState.value : null;
   const lastContentRef = useRef<string>('');
   const requestIdRef = useRef(0);
   const persistedHashRef = useRef<string | null>(null);
   const onAnalysisChangeRef = useRef(onAnalysisChange);
-  onAnalysisChangeRef.current = onAnalysisChange;
+
+  useEffect(() => {
+    onAnalysisChangeRef.current = onAnalysisChange;
+  }, [onAnalysisChange]);
 
   const setAnalysis = useCallback((data: PlanAnalysisResult | null) => {
-    setAnalysisRaw(data);
+    setAnalysisState({ documentId, value: data });
     onAnalysisChangeRef.current?.(data);
-  }, []);
+  }, [documentId]);
+
+  const setLoading = useCallback((value: boolean) => {
+    setLoadingState({ documentId, value });
+  }, [documentId]);
+
+  const setAiAvailable = useCallback((value: boolean | null) => {
+    setAiAvailableState({ documentId, value });
+  }, [documentId]);
 
   // Reinitialize state when switching documents, then load persisted data for this doc.
   useEffect(() => {
@@ -127,9 +155,7 @@ export function PlanQualityBanner({
     requestIdRef.current++;
     lastContentRef.current = '';
     persistedHashRef.current = null;
-    setLoading(false);
-    setAiAvailable(null);
-    setAnalysis(null);
+    onAnalysisChangeRef.current?.(null);
 
     quietGet('/api/ai/status')
       .then(r => r.ok ? r.json() : null)
@@ -157,7 +183,7 @@ export function PlanQualityBanner({
     return () => {
       cancelled = true;
     };
-  }, [documentId, setAnalysis]);
+  }, [documentId, setAiAvailable, setAnalysis]);
 
   // Save analysis to document properties
   const persistAnalysis = useCallback((data: PlanAnalysisResult) => {
@@ -200,7 +226,7 @@ export function PlanQualityBanner({
         if (thisRequestId !== requestIdRef.current) return;
         setLoading(false);
       });
-  }, [persistAnalysis]);
+  }, [persistAnalysis, setAnalysis, setLoading]);
 
   // Analyze when editorContent changes (debounced by Editor's onContentChange)
   useEffect(() => {
@@ -315,29 +341,57 @@ export function RetroQualityBanner({
     suggestions: string[];
     content_hash?: string;
   };
-  const [planContent, setPlanContent] = useState<Record<string, unknown> | null>(externalPlanContent);
-  const [analysis, setAnalysisRaw] = useState<RetroAnalysis | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [aiAvailable, setAiAvailable] = useState<boolean | null>(null);
+  const [loadedPlanContentState, setLoadedPlanContentState] = useState<DocumentScopedState<Record<string, unknown> | null>>(() => ({
+    documentId,
+    value: null,
+  }));
+  const [analysisState, setAnalysisState] = useState<DocumentScopedState<RetroAnalysis | null>>(() => ({
+    documentId,
+    value: null,
+  }));
+  const [loadingState, setLoadingState] = useState<DocumentScopedState<boolean>>(() => ({
+    documentId,
+    value: false,
+  }));
+  const [aiAvailableState, setAiAvailableState] = useState<DocumentScopedState<boolean | null>>(() => ({
+    documentId,
+    value: null,
+  }));
+  const loadedPlanContent = loadedPlanContentState.documentId === documentId ? loadedPlanContentState.value : null;
+  const planContent = externalPlanContent ?? loadedPlanContent;
+  const analysis = analysisState.documentId === documentId ? analysisState.value : null;
+  const loading = loadingState.documentId === documentId ? loadingState.value : false;
+  const aiAvailable = aiAvailableState.documentId === documentId ? aiAvailableState.value : null;
   const lastContentRef = useRef<string>('');
   const requestIdRef = useRef(0);
   const persistedHashRef = useRef<string | null>(null);
   const externalPlanContentRef = useRef(externalPlanContent);
   const onAnalysisChangeRef = useRef(onAnalysisChange);
-  externalPlanContentRef.current = externalPlanContent;
-  onAnalysisChangeRef.current = onAnalysisChange;
+
+  useEffect(() => {
+    externalPlanContentRef.current = externalPlanContent;
+  }, [externalPlanContent]);
+
+  useEffect(() => {
+    onAnalysisChangeRef.current = onAnalysisChange;
+  }, [onAnalysisChange]);
+
+  const setFetchedPlanContent = useCallback((content: Record<string, unknown>) => {
+    setLoadedPlanContentState({ documentId, value: content });
+  }, [documentId]);
 
   const setAnalysis = useCallback((data: RetroAnalysis | null) => {
-    setAnalysisRaw(data);
+    setAnalysisState({ documentId, value: data });
     onAnalysisChangeRef.current?.(data);
-  }, []);
+  }, [documentId]);
 
-  // Keep externally provided plan content in sync without resetting analysis state.
-  useEffect(() => {
-    if (externalPlanContent) {
-      setPlanContent(externalPlanContent);
-    }
-  }, [externalPlanContent]);
+  const setLoading = useCallback((value: boolean) => {
+    setLoadingState({ documentId, value });
+  }, [documentId]);
+
+  const setAiAvailable = useCallback((value: boolean | null) => {
+    setAiAvailableState({ documentId, value });
+  }, [documentId]);
 
   // Reinitialize state when switching documents, then load persisted data for this doc.
   useEffect(() => {
@@ -347,10 +401,7 @@ export function RetroQualityBanner({
     requestIdRef.current++;
     lastContentRef.current = '';
     persistedHashRef.current = null;
-    setLoading(false);
-    setAiAvailable(null);
-    setAnalysis(null);
-    setPlanContent(externalPlanContentRef.current);
+    onAnalysisChangeRef.current?.(null);
 
     quietGet('/api/ai/status')
       .then(r => r.ok ? r.json() : null)
@@ -377,7 +428,6 @@ export function RetroQualityBanner({
         // Fetch corresponding plan content
         const currentExternalPlan = externalPlanContentRef.current;
         if (currentExternalPlan) {
-          setPlanContent(currentExternalPlan);
           return;
         }
         const personId = doc.properties?.person_id;
@@ -389,13 +439,13 @@ export function RetroQualityBanner({
           const plans = planRes.ok ? await planRes.json() : [];
           if (cancelled) return;
           if (plans && plans.length > 0 && plans[0].content) {
-            setPlanContent(plans[0].content);
+            setFetchedPlanContent(plans[0].content);
           } else {
             // No plan found — use empty doc so analysis can still run
-            setPlanContent({ type: 'doc', content: [] });
+            setFetchedPlanContent({ type: 'doc', content: [] });
           }
         } else {
-          setPlanContent({ type: 'doc', content: [] });
+          setFetchedPlanContent({ type: 'doc', content: [] });
         }
       })
       .catch(() => {});
@@ -403,7 +453,7 @@ export function RetroQualityBanner({
     return () => {
       cancelled = true;
     };
-  }, [documentId, setAnalysis]);
+  }, [documentId, setAiAvailable, setAnalysis, setFetchedPlanContent]);
 
   const persistAnalysis = useCallback((data: RetroAnalysis) => {
     quietPatch(`/api/documents/${documentId}`, {
@@ -444,7 +494,7 @@ export function RetroQualityBanner({
         if (thisRequestId !== requestIdRef.current) return;
         setLoading(false);
       });
-  }, [persistAnalysis]);
+  }, [persistAnalysis, setAnalysis, setLoading]);
 
   // Analyze on editor content change
   useEffect(() => {

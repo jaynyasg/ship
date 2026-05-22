@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import type { WarningType } from '@/hooks/useSessionTimeout';
 
@@ -19,8 +19,6 @@ export function SessionTimeoutModal({
   onStayLoggedIn,
 }: SessionTimeoutModalProps) {
   const stayLoggedInButtonRef = useRef<HTMLButtonElement>(null);
-  const [lastAnnouncement, setLastAnnouncement] = useState<number | null>(null);
-  const announcementRef = useRef<HTMLDivElement>(null);
 
   // Format time as M:SS
   const formatTime = (seconds: number): string => {
@@ -37,27 +35,6 @@ export function SessionTimeoutModal({
         stayLoggedInButtonRef.current?.focus();
       }, 50);
       return () => clearTimeout(timer);
-    }
-  }, [open]);
-
-  // Screen reader announcements at key intervals
-  useEffect(() => {
-    if (!open || timeRemaining === null) return;
-
-    // Check if we should announce
-    if (
-      ANNOUNCEMENT_THRESHOLDS.includes(timeRemaining) &&
-      timeRemaining !== lastAnnouncement
-    ) {
-      setLastAnnouncement(timeRemaining);
-      // The aria-live region will automatically announce
-    }
-  }, [open, timeRemaining, lastAnnouncement]);
-
-  // Reset announcement tracking when modal closes
-  useEffect(() => {
-    if (!open) {
-      setLastAnnouncement(null);
     }
   }, [open]);
 
@@ -106,6 +83,7 @@ export function SessionTimeoutModal({
     : 'For security, your session will end in 5 minutes. Please save your work and log in again to continue.';
 
   const buttonText = isInactivity ? 'Stay Logged In' : 'I Understand';
+  const shouldAnnounce = open && ANNOUNCEMENT_THRESHOLDS.includes(timeRemaining ?? -1);
 
   // Generate announcement text
   const getAnnouncementText = (): string => {
@@ -137,15 +115,12 @@ export function SessionTimeoutModal({
         >
           {/* Screen reader announcement region */}
           <div
-            ref={announcementRef}
             role="status"
             aria-live="assertive"
             aria-atomic="true"
             className="sr-only"
           >
-            {ANNOUNCEMENT_THRESHOLDS.includes(timeRemaining ?? -1)
-              ? getAnnouncementText()
-              : ''}
+            {shouldAnnounce ? getAnnouncementText() : ''}
           </div>
 
           <Dialog.Title

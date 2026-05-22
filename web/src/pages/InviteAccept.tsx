@@ -24,40 +24,41 @@ export function InviteAcceptPage() {
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
+  const currentStatus: InviteStatus = token ? status : 'invalid';
 
   useEffect(() => {
     if (!token) {
-      setStatus('invalid');
       return;
     }
 
-    validateInvite();
+    let cancelled = false;
+    api.invites.validate(token).then((res) => {
+      if (cancelled) return;
+      if (res.success && res.data) {
+        setInviteInfo(res.data);
+        // Check if user is already a member - invite was auto-consumed
+        if (res.data.alreadyMember) {
+          setStatus('already_member');
+        } else {
+          setStatus('valid');
+        }
+      } else {
+        const errorMsg = res.error?.message || '';
+        if (errorMsg.includes('expired')) {
+          setStatus('expired');
+        } else if (errorMsg.includes('already accepted') || errorMsg.includes('already used')) {
+          setStatus('accepted');
+        } else {
+          setStatus('invalid');
+        }
+        setError(errorMsg);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
-
-  async function validateInvite() {
-    if (!token) return;
-
-    const res = await api.invites.validate(token);
-    if (res.success && res.data) {
-      setInviteInfo(res.data);
-      // Check if user is already a member - invite was auto-consumed
-      if (res.data.alreadyMember) {
-        setStatus('already_member');
-      } else {
-        setStatus('valid');
-      }
-    } else {
-      const errorMsg = res.error?.message || '';
-      if (errorMsg.includes('expired')) {
-        setStatus('expired');
-      } else if (errorMsg.includes('already accepted') || errorMsg.includes('already used')) {
-        setStatus('accepted');
-      } else {
-        setStatus('invalid');
-      }
-      setError(errorMsg);
-    }
-  }
 
   async function handleAccept() {
     if (!token) return;
@@ -79,7 +80,7 @@ export function InviteAcceptPage() {
     }
   }
 
-  if (authLoading || status === 'loading') {
+  if (authLoading || currentStatus === 'loading') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-muted">Loading...</div>
@@ -88,7 +89,7 @@ export function InviteAcceptPage() {
   }
 
   // Invalid token
-  if (status === 'invalid') {
+  if (currentStatus === 'invalid') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="w-full max-w-md px-6">
@@ -113,7 +114,7 @@ export function InviteAcceptPage() {
   }
 
   // Expired token
-  if (status === 'expired') {
+  if (currentStatus === 'expired') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="w-full max-w-md px-6">
@@ -138,7 +139,7 @@ export function InviteAcceptPage() {
   }
 
   // Already accepted
-  if (status === 'accepted') {
+  if (currentStatus === 'accepted') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="w-full max-w-md px-6">
@@ -163,7 +164,7 @@ export function InviteAcceptPage() {
   }
 
   // User is already a member of this workspace
-  if (status === 'already_member') {
+  if (currentStatus === 'already_member') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="w-full max-w-md px-6">

@@ -19,12 +19,12 @@ export function PublicFeedbackPage() {
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const displayLoading = programId ? loading : false;
+  const displayError = programId ? error : 'Invalid program';
 
   // Fetch program info
   useEffect(() => {
     if (!programId) {
-      setError('Invalid program');
-      setLoading(false);
       return;
     }
 
@@ -71,7 +71,7 @@ export function PublicFeedbackPage() {
     }
   };
 
-  if (loading) {
+  if (displayLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-muted">Loading...</div>
@@ -79,12 +79,12 @@ export function PublicFeedbackPage() {
     );
   }
 
-  if (error && !program) {
+  if (displayError && !program) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
           <h1 className="text-xl font-medium text-foreground">Error</h1>
-          <p className="mt-2 text-muted">{error}</p>
+          <p className="mt-2 text-muted">{displayError}</p>
         </div>
       </div>
     );
@@ -116,9 +116,9 @@ export function PublicFeedbackPage() {
           </p>
         )}
 
-        {error && (
+        {displayError && (
           <div className="mb-4 rounded border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
-            {error}
+            {displayError}
           </div>
         )}
 
