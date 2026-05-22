@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, useMemo, useLayoutEffect } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useEditor, EditorContent, JSONContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -194,7 +194,7 @@ export function Editor({
   // This ensures the Y.Doc is atomically recreated when documentId changes,
   // preventing race conditions where the WebSocket provider might use a stale Y.Doc
   // that contains content from a different document (cross-document contamination bug)
-  const ydoc = useMemo(() => new Y.Doc(), [documentId]);
+  const ydoc = useMemo(() => new Y.Doc({ guid: documentId }), [documentId]);
 
   // Sync title when initialTitle prop changes (e.g., from context update)
   // Only update if user hasn't made local changes (prevents stale responses from overwriting)
@@ -203,8 +203,11 @@ export function Editor({
     // Only update if this is a genuinely new value from server
     // AND user hasn't made local changes since
     if (!hasLocalChangesRef.current && initialTitle !== lastSyncedTitleRef.current) {
-      setTitle(newTitle);
-      lastSyncedTitleRef.current = initialTitle;
+      const timeout = window.setTimeout(() => {
+        setTitle(newTitle);
+        lastSyncedTitleRef.current = initialTitle;
+      }, 0);
+      return () => window.clearTimeout(timeout);
     }
   }, [initialTitle]);
 
@@ -231,11 +234,13 @@ export function Editor({
   const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(() => {
     return localStorage.getItem('ship:rightSidebarCollapsed') === 'true';
   });
-  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  const portalTarget = document.getElementById('properties-portal');
 
-  // AbortController for cancelling async uploads (images, files) when navigating away
-  // This prevents uploads from completing into a different document after navigation
-  const imageUploadAbortRef = useRef<AbortController>(new AbortController());
+  // AbortController for cancelling async uploads (images, files) when navigating away.
+  const imageUploadAbortController = useMemo(() => {
+    void documentId;
+    return new AbortController();
+  }, [documentId]);
   const lastCollabSessionCheckRef = useRef(0);
 
   const verifyCollaborationSession = useCallback(() => {
@@ -250,12 +255,6 @@ export function Editor({
     apiGet('/api/auth/session').catch((error) => {
       console.warn('[Editor] Collaboration session check failed:', error);
     });
-  }, []);
-
-  // Find portal target for properties sidebar (for proper landmark order)
-  useLayoutEffect(() => {
-    const target = document.getElementById('properties-portal');
-    setPortalTarget(target);
   }, []);
 
   // Persist right sidebar state
@@ -294,7 +293,7 @@ export function Editor({
         });
       });
     }
-  }, []);
+  }, [title]);
 
   // Setup IndexedDB persistence and WebSocket provider
   useEffect(() => {
@@ -304,7 +303,7 @@ export function Editor({
     // Store the updateUsers callback so we can properly remove it on cleanup
     let updateUsersCallback: (() => void) | null = null;
 
-    setSyncStatus('connecting');
+    const connectingStatusTimeout = window.setTimeout(() => setSyncStatus('connecting'), 0);
 
     // Create IndexedDB persistence for content caching
     // This loads cached content BEFORE WebSocket connects for instant navigation
@@ -502,11 +501,10 @@ export function Editor({
 
     return () => {
       cancelled = true;
+      window.clearTimeout(connectingStatusTimeout);
 
       // Abort any pending image uploads to prevent them from completing into wrong document
-      imageUploadAbortRef.current.abort();
-      // Create a new AbortController for the next document
-      imageUploadAbortRef.current = new AbortController();
+      imageUploadAbortController.abort();
 
       if (wsProvider) {
         // CRITICAL: Clear awareness state before destroying to prevent ghost cursors
@@ -525,7 +523,7 @@ export function Editor({
       setProvider(null);
       setConnectedUsers([]);
     };
-  }, [documentId, userName, color, ydoc, roomPrefix, onBack, onDocumentConverted, verifyCollaborationSession]);
+  }, [documentId, userName, color, ydoc, roomPrefix, onBack, onDocumentConverted, verifyCollaborationSession, imageUploadAbortController]);
 
   // Create slash commands extension (memoized to avoid recreation)
   // documentId is in deps to ensure fresh AbortSignal when switching documents
@@ -534,9 +532,9 @@ export function Editor({
       onCreateSubDocument,
       onNavigateToDocument,
       documentType,
-      abortSignal: imageUploadAbortRef.current.signal,
+      abortSignal: imageUploadAbortController.signal,
     });
-  }, [onCreateSubDocument, onNavigateToDocument, documentType, documentId]);
+  }, [onCreateSubDocument, onNavigateToDocument, documentType, imageUploadAbortController]);
 
   // Create mention extension (memoized to avoid recreation)
   const mentionExtension = useMemo(() => {
@@ -613,7 +611,7 @@ export function Editor({
       onUploadStart: () => {},
       onUploadComplete: () => {},
       onUploadError: (error) => console.error('Upload error:', error),
-      abortController: imageUploadAbortRef.current,
+      abortController: imageUploadAbortController,
     }),
     FileAttachmentExtension,
     DocumentEmbed,
@@ -653,11 +651,17 @@ export function Editor({
 
   // Refs for stable comment callbacks (avoid re-render loops)
   const commentsRef = useRef(comments);
-  commentsRef.current = comments;
   const createCommentRef = useRef(createComment);
-  createCommentRef.current = createComment;
   const updateCommentRef = useRef(updateComment);
-  updateCommentRef.current = updateComment;
+  useEffect(() => {
+    commentsRef.current = comments;
+  }, [comments]);
+  useEffect(() => {
+    createCommentRef.current = createComment;
+  }, [createComment]);
+  useEffect(() => {
+    updateCommentRef.current = updateComment;
+  }, [updateComment]);
 
   // Sync comment data into the CommentDisplay extension storage
   useEffect(() => {
@@ -845,9 +849,31 @@ export function Editor({
   const handleRetrySync = useCallback(() => {
     if (!provider || !isBrowserOnline) return;
     setSyncStatus('connecting');
-    provider.shouldConnect = true;
+    Reflect.set(provider, 'shouldConnect', true);
     provider.connect();
   }, [provider, isBrowserOnline]);
+
+  const focusEditorAtEnd = useCallback(() => {
+    if (!editor) return;
+    const lastNode = editor.state.doc.lastChild;
+    const isLastNodeEmpty = lastNode?.type.name === 'paragraph' && lastNode.content.size === 0;
+
+    if (isLastNodeEmpty) {
+      editor.chain().focus('end').run();
+    } else {
+      const endPos = editor.state.doc.content.size;
+      editor.chain()
+        .insertContentAt(endPos, { type: 'paragraph' })
+        .focus('end')
+        .run();
+    }
+  }, [editor]);
+
+  const handleEditorSpacerKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    focusEditorAtEnd();
+  }, [focusEditorAtEnd]);
 
   return (
     <div className="flex h-full flex-col">
@@ -1071,24 +1097,11 @@ export function Editor({
           {/* Spacer to fill remaining height - clickable to focus editor at end */}
           <div
             className="flex-1 min-h-[200px]"
-            onClick={() => {
-              if (!editor) return;
-              // Focus editor at the end
-              const lastNode = editor.state.doc.lastChild;
-              const isLastNodeEmpty = lastNode?.type.name === 'paragraph' && lastNode.content.size === 0;
-
-              if (isLastNodeEmpty) {
-                // Focus the existing empty paragraph at the end
-                editor.chain().focus('end').run();
-              } else {
-                // Insert a new empty paragraph at the end of the document and focus it
-                const endPos = editor.state.doc.content.size;
-                editor.chain()
-                  .insertContentAt(endPos, { type: 'paragraph' })
-                  .focus('end')
-                  .run();
-              }
-            }}
+            role="button"
+            tabIndex={0}
+            aria-label="Focus editor at end"
+            onClick={focusEditorAtEnd}
+            onKeyDown={handleEditorSpacerKeyDown}
           />
         </div>
 
