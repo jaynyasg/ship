@@ -160,4 +160,4 @@ Result: 869 passed, 0 failed, 0 skipped, 0 pending.
 
 ## Known Follow-Ups
 
-- Dependency overrides should be retired as upstream parent packages naturally absorb patched transitive versions.
+- Dependency override maintenance is reduced but not fully eliminated: the 2026-05-22 pass retired 12 overrides and left 16 that still protect current parent-package surfaces. Evidence: `eval/results/dependency-override-retirement.md`.

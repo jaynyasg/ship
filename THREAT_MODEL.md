@@ -57,7 +57,7 @@ Evidence:
 
 ## Residual Risks
 
-No dependency audit advisories remain after Phase 08. The remediation uses targeted `pnpm.overrides` to keep parent package APIs stable while forcing patched transitive versions.
+No dependency audit advisories remain after Phase 08. The remediation uses targeted `pnpm.overrides` to keep parent package APIs stable while forcing patched transitive versions. A 2026-05-22 override retirement pass removed 12 now-redundant overrides while keeping the zero-advisory gate green.
 
 Phase 15 adjusts the `ip-address` override from `10.1.1` to `10.2.0` because `express-rate-limit@8.5.2` depends on the newer `Address6.networkForm()` API for the fixed IPv6 key generator. This remains above the `ip-address` advisory's patched floor (`>=10.1.1`) and keeps `pnpm audit:ci` at zero advisories.
 
@@ -66,22 +66,24 @@ Phase 15 adjusts the `ip-address` override from `10.1.1` to `10.2.0` because `ex
 | High/moderate production dependency advisories | Mitigated | Phase 08 reduces the audit count to zero while preserving the current API and frontend parent package surfaces. |
 | Testcontainers advisories outside critical path | Mitigated with overrides | Testcontainers remains dev/E2E tooling, but its audited transitive packages are now forced to patched versions. |
 | AWS SDK transitive XML parser drift | Mitigated with override | The patched parser is forced while preserving the current AWS SDK API surface. Revisit when AWS SDK parent packages naturally absorb the patched dependency. |
-| Override maintenance | Accepted temporarily | Overrides should be retired as upstream parent packages widen dependency ranges to patched versions. |
+| Override maintenance | Reduced, still accepted temporarily | `eval/results/dependency-override-retirement.md` retires 12 overrides. The remaining 16 should be revisited as upstream parent packages widen dependency ranges to patched versions. |
 | `pnpm approve-builds` pending for native build scripts | Accepted temporarily | Existing install flow already ignores these scripts; no new runtime code depends on approving them in this pass. |
 
 ## Phase 08 High/Moderate Remediation
 
-Phase 08 cleared the remaining high, moderate, and low dependency advisories with targeted overrides and a refreshed lockfile.
+Phase 08 cleared the remaining high, moderate, and low dependency advisories with targeted overrides and a refreshed lockfile. On 2026-05-22, a follow-up pass retired 12 overrides without reintroducing advisories.
 
 | Cluster | Patched packages |
 |---|---|
-| API runtime and MCP transitive deps | `express-rate-limit`, `ip-address`, `hono`, `@hono/node-server`, `ajv`, `fast-uri`, `path-to-regexp`, `uuid`, `ws` |
-| Web build/editor deps | `vite`, `rollup`, `postcss`, `markdown-it`, `svgo`, `picomatch` |
-| Test/dev tooling deps | `flatted`, `undici`, `lodash`, `qs`, `brace-expansion`, `minimatch`, `yaml` |
+| API runtime and MCP transitive deps | Remaining overrides: `ip-address`, `hono`, `@hono/node-server`, `ajv`, `fast-uri`, `uuid`, `ws`. Retired overrides: `express-rate-limit`, `path-to-regexp`. |
+| Web build/editor deps | Remaining overrides: `markdown-it`, `svgo`. Retired overrides: `vite`, `rollup`, `postcss`, `picomatch`. |
+| Test/dev tooling deps | Remaining overrides: `flatted`, `undici`, `lodash`, `brace-expansion`, `yaml`. Retired overrides: `qs`, `minimatch`. |
+| AWS/protobuf transitive deps | Remaining overrides: `fast-xml-parser`, `protobufjs`. Retired override: `@protobufjs/utf8`. |
 
 Evidence:
 
 - `eval/results/dependency-audit-after.json`
+- `eval/results/dependency-override-retirement.md`
 - `package.json` `pnpm.overrides`
 - `pnpm-lock.yaml`
 
@@ -97,6 +99,6 @@ Phase 09 makes the zero-advisory baseline enforceable in both hosted remotes.
 
 ## Recommended Follow-Up
 
-1. Replace overrides with normal parent dependency updates once upstream dependency ranges carry patched versions.
+1. Continue replacing the remaining overrides with normal parent dependency updates once upstream dependency ranges carry patched versions.
 2. Keep `eval/results/dependency-audit-after.json` refreshed whenever dependency security work lands.
 3. Monitor the new GitHub/GitLab audit jobs after the next push to confirm both hosted environments have registry access.
