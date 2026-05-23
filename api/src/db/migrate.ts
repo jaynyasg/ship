@@ -39,6 +39,7 @@ async function migrate() {
     const schemaPath = join(__dirname, 'schema.sql');
     const schema = readFileSync(schemaPath, 'utf-8');
     await pool.query(schema);
+    await pool.query("ALTER TYPE relationship_type ADD VALUE IF NOT EXISTS 'depends_on'");
     console.log('✅ Schema applied');
 
     // Step 2: Create migrations tracking table

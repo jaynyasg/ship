@@ -200,7 +200,7 @@ EXECUTE FUNCTION prevent_circular_parent();
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'relationship_type') THEN
-    CREATE TYPE relationship_type AS ENUM ('parent', 'project', 'sprint', 'program');
+    CREATE TYPE relationship_type AS ENUM ('parent', 'project', 'sprint', 'program', 'depends_on');
   END IF;
 END
 $$;
