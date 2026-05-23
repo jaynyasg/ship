@@ -77,16 +77,19 @@ export async function runWebSocketProbes(
   const eventsOpen = await openWebSocket(config, '/events', client.cookieHeader);
   findings.push(classifyAuthenticatedOpen('ws-auth-events-open', 'Authenticated /events WebSocket opens', eventsOpen));
   if (eventsOpen.opened && eventsOpen.socket) {
-    const ping = await sendAndObserve(eventsOpen.socket, JSON.stringify({ type: 'ping' }), 800);
-    findings.push(classifyEventPing(ping));
+    try {
+      const ping = await sendAndObserve(eventsOpen.socket, JSON.stringify({ type: 'ping' }), 800);
+      findings.push(classifyEventPing(ping));
 
-    const malformed = await sendAndObserve(eventsOpen.socket, '{not-json', 300);
-    findings.push(classifySafeMessageHandling(
-      'ws-events-malformed-json',
-      'Events WebSocket malformed JSON handling',
-      malformed
-    ));
-    eventsOpen.socket.close();
+      const malformed = await sendAndObserve(eventsOpen.socket, '{not-json', 300);
+      findings.push(classifySafeMessageHandling(
+        'ws-events-malformed-json',
+        'Events WebSocket malformed JSON handling',
+        malformed
+      ));
+    } finally {
+      terminateSocket(eventsOpen.socket);
+    }
   }
 
   const docId = await createProbeDocument(client, config);
@@ -99,48 +102,53 @@ export async function runWebSocketProbes(
   const collabOpen = await openWebSocket(config, collaborationPath, client.cookieHeader);
   findings.push(classifyAuthenticatedOpen('ws-auth-collaboration-open', 'Authenticated collaboration WebSocket opens', collabOpen));
   if (collabOpen.opened && collabOpen.socket) {
-    const unexpectedType = await sendAndObserve(collabOpen.socket, Buffer.from([99]), 300);
-    findings.push(classifySafeMessageHandling(
-      'ws-collaboration-unexpected-type',
-      'Collaboration WebSocket unexpected message type handling',
-      unexpectedType
-    ));
+    try {
+      const unexpectedType = await sendAndObserve(collabOpen.socket, Buffer.from([99]), 300);
+      findings.push(classifySafeMessageHandling(
+        'ws-collaboration-unexpected-type',
+        'Collaboration WebSocket unexpected message type handling',
+        unexpectedType
+      ));
 
-    const malformedBinary = await sendAndObserve(collabOpen.socket, Buffer.from([0]), 300);
-    findings.push(classifySafeMessageHandling(
-      'ws-collaboration-malformed-binary',
-      'Collaboration WebSocket malformed binary handling',
-      malformedBinary
-    ));
+      const malformedBinary = await sendAndObserve(collabOpen.socket, Buffer.from([0]), 300);
+      findings.push(classifySafeMessageHandling(
+        'ws-collaboration-malformed-binary',
+        'Collaboration WebSocket malformed binary handling',
+        malformedBinary
+      ));
 
-    if (config.limits.allowOversizedWebSocketProbe) {
-      const oversizedOpen = await openWebSocket(config, collaborationPath, client.cookieHeader);
-      if (oversizedOpen.opened && oversizedOpen.socket) {
-        const oversized = await sendAndObserve(
-          oversizedOpen.socket,
-          Buffer.alloc(config.limits.maxWebSocketPayloadBytes, 0),
-          1_000
-        );
-        findings.push(classifyOversizedPayload(oversized));
-        oversizedOpen.socket.close();
+      if (config.limits.allowOversizedWebSocketProbe) {
+        const oversizedOpen = await openWebSocket(config, collaborationPath, client.cookieHeader);
+        if (oversizedOpen.opened && oversizedOpen.socket) {
+          try {
+            const oversized = await sendAndObserve(
+              oversizedOpen.socket,
+              Buffer.alloc(config.limits.maxWebSocketPayloadBytes, 0),
+              1_000
+            );
+            findings.push(classifyOversizedPayload(oversized));
+          } finally {
+            terminateSocket(oversizedOpen.socket);
+          }
+        } else {
+          findings.push(classifyOversizedProbeUnavailable(oversizedOpen));
+        }
       } else {
-        findings.push(classifyOversizedProbeUnavailable(oversizedOpen));
+        findings.push({
+          id: 'ws-collaboration-oversized-payload',
+          metric: 'websocket_validation_failures',
+          surface: 'websocket',
+          status: 'not_run_safety_limit',
+          severity: 'info',
+          title: 'Oversized WebSocket payload probe disabled',
+          description: 'The oversized payload check was disabled by configuration.',
+          reproduction: ['Run without --skip-oversized-websocket-probe.'],
+          evidence: { allowOversizedWebSocketProbe: false },
+        });
       }
-    } else {
-      findings.push({
-        id: 'ws-collaboration-oversized-payload',
-        metric: 'websocket_validation_failures',
-        surface: 'websocket',
-        status: 'not_run_safety_limit',
-        severity: 'info',
-        title: 'Oversized WebSocket payload probe disabled',
-        description: 'The oversized payload check was disabled by configuration.',
-        reproduction: ['Run without --skip-oversized-websocket-probe.'],
-        evidence: { allowOversizedWebSocketProbe: false },
-      });
+    } finally {
+      terminateSocket(collabOpen.socket);
     }
-
-    collabOpen.socket.close();
   }
 
   findings.push(await probePostWebSocketHealth(client));
@@ -444,6 +452,16 @@ async function openWebSocket(
       }
     });
   });
+}
+
+function terminateSocket(socket: WebSocket): void {
+  if (
+    socket.readyState === WebSocket.CONNECTING ||
+    socket.readyState === WebSocket.OPEN ||
+    socket.readyState === WebSocket.CLOSING
+  ) {
+    socket.terminate();
+  }
 }
 
 async function sendAndObserve(

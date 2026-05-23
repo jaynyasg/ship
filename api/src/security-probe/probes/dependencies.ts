@@ -5,10 +5,11 @@ interface CommandResult {
   status: number | null;
   stdout: string;
   stderr: string;
+  signal?: NodeJS.Signals | null;
   error?: string;
 }
 
-type CommandRunner = (command: string, args: string[], options: { cwd: string }) => CommandResult;
+type CommandRunner = (command: string, args: string[], options: { cwd: string; timeoutMs: number }) => CommandResult;
 
 interface DependencyAdvisory {
   packageName: string;
@@ -30,10 +31,11 @@ interface DependencyAuditSummary {
 }
 
 export async function runDependencyCveProbe(
-  _config: SecurityProbeConfig,
+  config: SecurityProbeConfig,
   runner: CommandRunner = defaultCommandRunner
 ): Promise<SecurityFinding[]> {
-  const result = runner('pnpm', ['audit', '--json'], { cwd: process.cwd() });
+  const timeoutMs = dependencyAuditTimeoutMs(config);
+  const result = runner('pnpm', ['audit', '--json'], { cwd: process.cwd(), timeoutMs });
   const parsed = parseDependencyAudit(result.stdout, result.status);
 
   if (!parsed) {
@@ -51,7 +53,9 @@ export async function runDependencyCveProbe(
           status: result.status,
           stderr: truncate(result.stderr),
           stdout: truncate(result.stdout),
+          signal: result.signal,
           error: result.error,
+          timeoutMs,
         },
         recommendation: 'Verify registry connectivity and rerun the dependency audit.',
       },
@@ -75,12 +79,17 @@ export async function runDependencyCveProbe(
         counts: parsed.counts,
         advisories: parsed.advisories,
         rawExitStatus: parsed.rawExitStatus,
+        timeoutMs,
       },
       recommendation: highCriticalCount > 0
         ? 'Upgrade, override, or remove vulnerable dependency paths and rerun the audit.'
         : undefined,
     },
   ];
+}
+
+function dependencyAuditTimeoutMs(config: SecurityProbeConfig): number {
+  return Math.max(30_000, Math.min(120_000, config.limits.requestTimeoutMs * 12));
 }
 
 export function parseDependencyAudit(rawOutput: string, rawExitStatus: number | null): DependencyAuditSummary | undefined {
@@ -167,22 +176,27 @@ function extractFindingPaths(value: unknown): string[] {
     });
 }
 
-function defaultCommandRunner(command: string, args: string[], options: { cwd: string }): CommandResult {
+function defaultCommandRunner(command: string, args: string[], options: { cwd: string; timeoutMs: number }): CommandResult {
   const result = process.platform === 'win32'
     ? spawnSync([command, ...args].map(quoteWindowsShellSegment).join(' '), {
         cwd: options.cwd,
         encoding: 'utf8',
         shell: true,
+        timeout: options.timeoutMs,
+        killSignal: 'SIGTERM',
       })
     : spawnSync(command, args, {
         cwd: options.cwd,
         encoding: 'utf8',
+        timeout: options.timeoutMs,
+        killSignal: 'SIGTERM',
       });
 
   return {
     status: result.status,
     stdout: result.stdout || '',
     stderr: result.stderr || '',
+    signal: result.signal,
     error: result.error?.message,
   };
 }

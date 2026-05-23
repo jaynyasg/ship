@@ -6,6 +6,27 @@ import { runInputSanitizationProbes } from './probes/input.js';
 import { runDependencyCveProbe } from './probes/dependencies.js';
 import { runManualReviewCollectors } from './probes/manual-review.js';
 
+async function runProbePhase(
+  name: string,
+  action: () => Promise<SecurityFinding[]>
+): Promise<SecurityFinding[]> {
+  const startedAt = Date.now();
+  console.log(`[security-probe] ${new Date().toISOString()} starting ${name}`);
+
+  try {
+    const findings = await action();
+    console.log(
+      `[security-probe] ${new Date().toISOString()} completed ${name} in ${Date.now() - startedAt}ms`
+    );
+    return findings;
+  } catch (error) {
+    console.error(
+      `[security-probe] ${new Date().toISOString()} failed ${name} after ${Date.now() - startedAt}ms`
+    );
+    throw error;
+  }
+}
+
 export async function runSecurityProbe(config: SecurityProbeConfig): Promise<SecurityProbeReport> {
   const findings: SecurityFinding[] = [
     {
@@ -29,11 +50,11 @@ export async function runSecurityProbe(config: SecurityProbeConfig): Promise<Sec
     },
   ];
 
-  findings.push(...await runAuthSessionProbes(config));
-  findings.push(...await runInputSanitizationProbes(config));
-  findings.push(...await runDependencyCveProbe(config));
-  findings.push(...await runManualReviewCollectors(config));
-  findings.push(...await runWebSocketProbes(config));
+  findings.push(...await runProbePhase('auth/session probes', () => runAuthSessionProbes(config)));
+  findings.push(...await runProbePhase('input sanitization probes', () => runInputSanitizationProbes(config)));
+  findings.push(...await runProbePhase('dependency CVE probe', () => runDependencyCveProbe(config)));
+  findings.push(...await runProbePhase('manual review collectors', () => runManualReviewCollectors(config)));
+  findings.push(...await runProbePhase('WebSocket probes', () => runWebSocketProbes(config)));
 
   return buildSecurityProbeReport(config, findings);
 }

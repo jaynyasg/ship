@@ -8,6 +8,7 @@ const webUrl = process.env.SHIP_SECURITY_WEB_URL || fallbackUrl;
 const apiUrl = process.env.SHIP_SECURITY_API_URL || webUrl;
 const reportName = process.env.SHIP_SECURITY_REPORT_NAME || 'security-audit-render';
 const outDir = process.env.SHIP_SECURITY_OUT_DIR || join(tmpdir(), 'ship-security-probe');
+const timeoutMs = positiveInteger(process.env.SHIP_SECURITY_TIMEOUT_MS, 7 * 60 * 1000);
 
 if (!webUrl || !apiUrl) {
   console.error(
@@ -18,6 +19,7 @@ if (!webUrl || !apiUrl) {
 
 console.log(`Running Ship security probe against ${webUrl}`);
 console.log('Set SHIP_SECURITY_EMAIL and SHIP_SECURITY_PASSWORD on this Render cron job for authenticated checks.');
+console.log(`Security probe hard timeout: ${timeoutMs}ms`);
 
 const args = [
   'api/dist/security-probe/cli.js',
@@ -38,10 +40,25 @@ const result = spawnSync(process.execPath, args, {
   cwd: process.cwd(),
   stdio: 'inherit',
   env: process.env,
+  timeout: timeoutMs,
+  killSignal: 'SIGTERM',
 });
 
 if (result.error) {
-  console.error(`Security probe failed to start: ${result.error.message}`);
+  console.error(`Security probe process error: ${result.error.message}`);
+}
+
+if (result.signal) {
+  console.error(`Security probe exited after signal: ${result.signal}`);
 }
 
 process.exitCode = result.status ?? 1;
+
+function positiveInteger(value, fallback) {
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
