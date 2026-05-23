@@ -39,6 +39,7 @@ run(process.execPath, [packageBin('typescript', 'tsc')]);
 run(process.execPath, [packageBin('vite', 'vite'), 'build'], {
   env: {
     ...process.env,
-    VITE_API_URL: '',
+    VITE_API_URL: process.env.VITE_API_URL ?? '',
+    VITE_WS_URL: process.env.VITE_WS_URL ?? '',
   },
 });

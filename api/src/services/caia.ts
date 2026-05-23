@@ -14,6 +14,18 @@ import {
   type CAIACredentials,
 } from './secrets-manager.js';
 
+function getEnvCredentials(): CAIACredentials | null {
+  const issuer_url = process.env.CAIA_ISSUER_URL;
+  const client_id = process.env.CAIA_CLIENT_ID;
+  const client_secret = process.env.CAIA_CLIENT_SECRET;
+
+  if (!issuer_url || !client_id || !client_secret) {
+    return null;
+  }
+
+  return { issuer_url, client_id, client_secret };
+}
+
 /**
  * User information extracted from CAIA ID token
  */
@@ -77,13 +89,13 @@ function getRedirectUri(): string {
  * Fetches from Secrets Manager on each call (no caching)
  */
 export async function isCAIAConfigured(): Promise<boolean> {
-  // In local dev without Secrets Manager, fall back to env vars
-  if (process.env.NODE_ENV !== 'production') {
-    return !!(
-      process.env.CAIA_ISSUER_URL &&
-      process.env.CAIA_CLIENT_ID &&
-      process.env.CAIA_CLIENT_SECRET
-    );
+  if (getEnvCredentials()) {
+    return true;
+  }
+
+  // Non-AWS production targets can run without optional CAIA/PIV setup.
+  if (process.env.NODE_ENV !== 'production' || process.env.RENDER === 'true') {
+    return false;
   }
 
   const result = await getCAIACredentials();
@@ -147,17 +159,13 @@ async function discoverIssuer(): Promise<client.Configuration> {
  * @throws Error if credentials not configured
  */
 async function fetchCredentials(): Promise<CAIACredentials> {
-  // In local dev, use env vars
-  if (process.env.NODE_ENV !== 'production') {
-    const issuer_url = process.env.CAIA_ISSUER_URL;
-    const client_id = process.env.CAIA_CLIENT_ID;
-    const client_secret = process.env.CAIA_CLIENT_SECRET;
+  const envCredentials = getEnvCredentials();
+  if (envCredentials) {
+    return envCredentials;
+  }
 
-    if (!issuer_url || !client_id || !client_secret) {
-      throw new Error('CAIA not configured: set CAIA_ISSUER_URL, CAIA_CLIENT_ID, CAIA_CLIENT_SECRET');
-    }
-
-    return { issuer_url, client_id, client_secret };
+  if (process.env.NODE_ENV !== 'production' || process.env.RENDER === 'true') {
+    throw new Error('CAIA not configured: set CAIA_ISSUER_URL, CAIA_CLIENT_ID, CAIA_CLIENT_SECRET');
   }
 
   // In production, fetch from Secrets Manager

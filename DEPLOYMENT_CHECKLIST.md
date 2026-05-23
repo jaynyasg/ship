@@ -2,6 +2,30 @@
 
 Quick reference for deploying Ship to AWS.
 
+## Render Public Submission Checklist
+
+Use this path for the public submission deployment.
+
+- [ ] Confirm `main` is pushed to the Git provider connected to Render.
+- [ ] Create a Render Blueprint from `render.yaml`.
+- [ ] Confirm the Blueprint will create:
+  - [ ] Web service: `ship`
+  - [ ] PostgreSQL database: `ship-db`
+- [ ] Deploy the Blueprint.
+- [ ] Verify Render generated `SESSION_SECRET`.
+- [ ] Verify Render injected `DATABASE_URL` from `ship-db`.
+- [ ] Confirm `/health` returns `{"status":"ok"}` at the Render URL.
+- [ ] Open the app in a browser and complete setup or login.
+- [ ] Create or open a document and confirm collaboration reconnect UI stays healthy.
+- [ ] Confirm `/events` and `/collaboration/*` use `wss` in the browser network panel.
+- [ ] Update `SUBMISSION.md` with the public Render URL and verification evidence.
+
+Notes:
+
+- The Vite frontend is built as static files and served by the Express web service on Render.
+- Same-origin serving is intentional so session cookies, API requests, and authenticated WebSockets work together.
+- File attachments still require `S3_UPLOADS_BUCKET`, `CDN_DOMAIN`, and AWS credentials if that workflow is included in the demo.
+
 ## Initial Setup (One-time)
 
 - [ ] Install tools: `terraform`, `awscli`, `awsebcli`, `postgresql@16`

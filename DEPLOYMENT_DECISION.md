@@ -96,6 +96,8 @@ Render is the better submission target because it lowers the fixed monthly cost 
 - Static React frontend
 - Public URL suitable for grader/demo access
 
+Implementation note: the Render submission deployment serves the static React build from the same Express web service. This keeps Ship's session cookies, REST API calls, `/events`, and `/collaboration/*` WebSockets on one origin while preserving the static Vite frontend build.
+
 The submission does not require proving the full government AWS architecture in a live account. It requires an improved fork running publicly. Render satisfies that requirement with lower operational overhead and a more appropriate cost profile for a demo deployment.
 
 ## AWS Revisit Criteria

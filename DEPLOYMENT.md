@@ -12,6 +12,49 @@ The main fixed-cost drivers were CloudFront real-time logging through a 4-shard 
 
 See `DEPLOYMENT_DECISION.md` for the full cost finding and rationale. This AWS guide remains a reference path for later government/compliance deployment work.
 
+## Render Deployment - Public Submission
+
+The public submission target is Render. The repo now includes `render.yaml`, which defines:
+
+- One Render web service named `ship`
+- One managed Render PostgreSQL database named `ship-db`
+- A build that installs workspace dependencies, builds `shared`, `api`, and `web`, then publishes the Vite static build through the Express service
+- A start command that runs database migrations before starting the API/WebSocket server
+
+Although the frontend is still a static React/Vite build, the Render deployment serves it from the same Express origin instead of a separate Static Site service. This keeps Ship's session cookies and authenticated WebSocket collaboration on the same origin as `/api`, `/events`, and `/collaboration/*`.
+
+### Render Setup
+
+1. In Render, create a new Blueprint from this repository and branch `main`.
+2. Review the generated resources from `render.yaml`:
+   - Web service: `ship`
+   - Database: `ship-db`
+3. Let Render create `SESSION_SECRET` and inject `DATABASE_URL` from the managed database.
+4. Deploy the Blueprint.
+
+The web service should use Render's default `PORT` environment variable. Render also provides `RENDER_EXTERNAL_URL`; the API uses that value for same-origin production defaults when AWS SSM parameters are not present.
+
+### Render Verification
+
+After the Render deploy completes:
+
+```bash
+curl https://<render-app-url>/health
+```
+
+Then verify in a browser:
+
+- The app loads at the Render URL.
+- First-time setup or login works.
+- API calls succeed from the app.
+- Creating/opening a document connects `/collaboration/*` over `wss`.
+- `/events` connects after login.
+- Render logs show migrations applied and no startup errors.
+
+### Optional Production Features
+
+The Render submission path does not configure AWS-backed file attachments. If file upload/download is part of the demo, configure `S3_UPLOADS_BUCKET`, `CDN_DOMAIN`, and AWS credentials, or add a Render-compatible persistent storage path before testing that workflow.
+
 ## Prerequisites
 
 Install required tools:

@@ -15,6 +15,21 @@ import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 // Lazy-initialized client to avoid keeping Node.js alive during import tests
 let _client: SSMClient | null = null;
 
+const REQUIRED_PRODUCTION_ENV = ['DATABASE_URL', 'SESSION_SECRET'] as const;
+
+function hasEnvValue(name: string): boolean {
+  return !!process.env[name]?.trim();
+}
+
+function applyRenderDefaults(): void {
+  if (process.env.RENDER !== 'true' || !process.env.RENDER_EXTERNAL_URL) {
+    return;
+  }
+
+  process.env.CORS_ORIGIN ||= process.env.RENDER_EXTERNAL_URL;
+  process.env.APP_BASE_URL ||= process.env.RENDER_EXTERNAL_URL;
+}
+
 function getClient(): SSMClient {
   if (!_client) {
     _client = new SSMClient({ region: process.env.AWS_REGION || 'us-east-1' });
@@ -38,6 +53,18 @@ export async function getSSMSecret(name: string): Promise<string> {
 export async function loadProductionSecrets(): Promise<void> {
   if (process.env.NODE_ENV !== 'production') {
     return; // Use .env files for local dev
+  }
+
+  applyRenderDefaults();
+
+  const missingEnvVars = REQUIRED_PRODUCTION_ENV.filter((name) => !hasEnvValue(name));
+  if (missingEnvVars.length === 0) {
+    console.log('Using production configuration from environment variables');
+    return;
+  }
+
+  if (process.env.RENDER === 'true') {
+    throw new Error(`Missing required Render environment variable(s): ${missingEnvVars.join(', ')}`);
   }
 
   const environment = process.env.ENVIRONMENT || 'prod';

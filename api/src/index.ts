@@ -28,7 +28,7 @@ async function main() {
   const { setupCollaboration } = await import('./collaboration/index.js');
 
   const PORT = process.env.PORT || 3000;
-  const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
+  const CORS_ORIGIN = process.env.CORS_ORIGIN || process.env.RENDER_EXTERNAL_URL || 'http://localhost:5173';
 
   const app = createApp(CORS_ORIGIN);
   const server = createServer(app);

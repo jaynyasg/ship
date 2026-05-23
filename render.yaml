@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: ship
+    runtime: node
+    plan: starter
+    buildCommand: corepack enable && corepack prepare pnpm@10.27.0 --activate && pnpm install --frozen-lockfile --prod=false && pnpm build
+    startCommand: node api/dist/db/migrate.js && node api/dist/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 20.19.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ship-db
+          property: connectionString
+      - key: SESSION_SECRET
+        generateValue: true
+
+databases:
+  - name: ship-db
+    databaseName: ship
+    user: ship

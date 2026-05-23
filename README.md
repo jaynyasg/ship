@@ -230,8 +230,11 @@ Ship supports multiple deployment patterns:
 | Environment | Recommended Approach |
 |-------------|---------------------|
 | **Development** | Local with Docker Compose |
-| **Staging** | AWS Elastic Beanstalk |
-| **Production** | AWS GovCloud with Terraform |
+| **Public submission** | Render Blueprint (`render.yaml`) |
+| **Staging / compliance reference** | AWS Elastic Beanstalk |
+| **Production government hosting** | AWS GovCloud with Terraform |
+
+The Render path builds the React app as static files and serves them from the Express web service so `/api`, `/events`, and `/collaboration/*` stay same-origin for session cookies and WebSockets. The AWS guides remain as the compliance-oriented reference architecture.
 
 ### Docker
 

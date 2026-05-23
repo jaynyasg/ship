@@ -3,6 +3,9 @@ import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import session from 'express-session';
+import { existsSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import { csrfSync } from 'csrf-sync';
 import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/auth.js';
@@ -36,6 +39,9 @@ import { documentCommentsRouter, commentsRouter } from './routes/comments.js';
 import { setupSwagger } from './swagger.js';
 import { initializeCAIA } from './services/caia.js';
 import { errorHandler } from './middleware/errorHandler.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Validate SESSION_SECRET in production
 if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
@@ -87,6 +93,9 @@ const apiLimiter = rateLimit({
   message: { error: 'Too many requests. Please slow down.' },
 });
 
+function getWebDistPath(): string {
+  return process.env.WEB_DIST_PATH || join(__dirname, '../../web/dist');
+}
 
 export function createApp(corsOrigin: string = 'http://localhost:5173'): express.Express {
   const app = express();
@@ -236,6 +245,25 @@ export function createApp(corsOrigin: string = 'http://localhost:5173'): express
   // Comments routes
   app.use('/api/documents', conditionalCsrf, documentCommentsRouter);
   app.use('/api/comments', conditionalCsrf, commentsRouter);
+
+  const webDistPath = getWebDistPath();
+  if (process.env.NODE_ENV === 'production' && existsSync(join(webDistPath, 'index.html'))) {
+    app.use(express.static(webDistPath, { index: false }));
+
+    app.get('*', (req, res, next) => {
+      if (
+        req.path === '/health' ||
+        req.path === '/events' ||
+        req.path.startsWith('/api/') ||
+        req.path.startsWith('/collaboration/')
+      ) {
+        next();
+        return;
+      }
+
+      res.sendFile(join(webDistPath, 'index.html'));
+    });
+  }
 
   // Initialize CAIA OAuth client at startup
   initializeCAIA().catch((err) => {
