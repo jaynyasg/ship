@@ -18,12 +18,19 @@ Use this path for the public submission deployment.
 - [ ] Open the app in a browser and complete setup or login.
 - [ ] Create or open a document and confirm collaboration reconnect UI stays healthy.
 - [ ] Confirm `/events` and `/collaboration/*` use `wss` in the browser network panel.
+- [ ] Configure the `ship-security-probe` cron job:
+  - [ ] Set `SHIP_SECURITY_WEB_URL` to the public Render app URL.
+  - [ ] Set `SHIP_SECURITY_API_URL` to the public Render app URL.
+  - [ ] Set `SHIP_SECURITY_EMAIL` and `SHIP_SECURITY_PASSWORD` for authenticated checks.
+- [ ] Open `ship-security-probe` in Render and use **Trigger Run**.
+- [ ] Confirm the generated markdown report appears in the Render job logs.
 - [ ] Update `SUBMISSION.md` with the public Render URL and verification evidence.
 
 Notes:
 
 - The Vite frontend is built as static files and served by the Express web service on Render.
 - Same-origin serving is intentional so session cookies, API requests, and authenticated WebSockets work together.
+- Render security-probe job results appear in Render logs; run `pnpm security:audit -- --mode remote ...` locally when report files need to land in `eval/results/` on this machine.
 - File attachments still require `S3_UPLOADS_BUCKET`, `CDN_DOMAIN`, and AWS credentials if that workflow is included in the demo.
 
 ## Initial Setup (One-time)

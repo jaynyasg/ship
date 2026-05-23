@@ -16,6 +16,24 @@ services:
       - key: SESSION_SECRET
         generateValue: true
 
+  - type: cron
+    name: ship-security-probe
+    runtime: node
+    plan: starter
+    schedule: '0 8 1 * *'
+    buildCommand: corepack enable && corepack prepare pnpm@10.27.0 --activate && pnpm install --frozen-lockfile --prod=false && pnpm build:api
+    startCommand: node scripts/render-security-probe.mjs
+    envVars:
+      - key: NODE_VERSION
+        value: 20.19.0
+      - key: SHIP_SECURITY_HOSTPORT
+        fromService:
+          name: ship
+          type: web
+          property: hostport
+      - key: SHIP_SECURITY_REPORT_NAME
+        value: security-audit-render
+
 databases:
   - name: ship-db
     databaseName: ship

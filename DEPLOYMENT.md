@@ -51,6 +51,35 @@ Then verify in a browser:
 - `/events` connects after login.
 - Render logs show migrations applied and no startup errors.
 
+### Render Security Probe Trigger
+
+The Blueprint also includes a cron job named `ship-security-probe`. Render cron jobs can be run manually from the Render dashboard by opening the cron job and selecting **Trigger Run**.
+
+The job runs:
+
+```bash
+node scripts/render-security-probe.mjs
+```
+
+The generated markdown report is printed into the Render job logs. Files created during the job are ephemeral on Render and are not copied back to this machine.
+
+For best public-surface coverage, set these environment variables on the `ship-security-probe` cron job after the Blueprint sync:
+
+| Variable | Value |
+|---|---|
+| `SHIP_SECURITY_WEB_URL` | The public Render app URL, for example `https://ship.onrender.com` |
+| `SHIP_SECURITY_API_URL` | The same public Render app URL |
+| `SHIP_SECURITY_EMAIL` | A deployed app user for authenticated checks |
+| `SHIP_SECURITY_PASSWORD` | That user's password |
+
+If `SHIP_SECURITY_WEB_URL` and `SHIP_SECURITY_API_URL` are not set, the job falls back to Render's private service address via `SHIP_SECURITY_HOSTPORT`. That is useful for a quick health-style run, but the public URL is the better audit target.
+
+To write the report onto this local checkout instead, run the probe from your machine:
+
+```powershell
+pnpm security:audit -- --mode remote --web-url https://<render-app-url> --api-url https://<render-app-url> --non-interactive --report-name security-audit-render
+```
+
 ### Optional Production Features
 
 The Render submission path does not configure AWS-backed file attachments. If file upload/download is part of the demo, configure `S3_UPLOADS_BUCKET`, `CDN_DOMAIN`, and AWS credentials, or add a Render-compatible persistent storage path before testing that workflow.
