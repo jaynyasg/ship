@@ -95,12 +95,19 @@ GitHub Actions and GitLab CI now enforce hosted quality checks for `pnpm lint`, 
 
 The full Playwright gate now passes through the compact runner on Windows. On 2026-05-22, `pnpm test:e2e -- --workers=2` completed with 869 passed, 0 failed, 0 skipped, and 0 pending tests.
 
+## Deployment Decision
+
+The full AWS Terraform application stack was reviewed but not applied for the submission environment. Earlier docs listed `~$80/month` and `~$113/month` AWS estimates, but those were out of date for the corrected full plan because they omitted Kinesis real-time CloudFront logs, 180-day retention, WAF Bot Control, public IPv4 charges, CloudWatch/VPC flow logs, and other always-on resources. The corrected plan would create 74 resources and was estimated at roughly `$220-$300/month` for low-traffic always-on hosting, with Kinesis real-time CloudFront logs, Aurora Serverless v2, NAT Gateway, ALB, Elastic Beanstalk EC2, WAF Bot Control, public IPv4 charges, and CloudWatch/VPC flow logs as the main cost drivers.
+
+Render is now the preferred public deployment target for the submission because it can host the long-running Express/WebSocket API, PostgreSQL database, and static React frontend with much lower fixed cost and less operational overhead. The AWS Terraform remains as a reference architecture for future government/compliance deployment work. Details: `DEPLOYMENT_DECISION.md`.
+
 ## Files To Read
 
 - `AUDIT.md` - full audit narrative with baseline, severity, and after status.
 - `ORIENTATION.md` - codebase orientation and architecture synthesis.
 - `DISCOVERY.md` - standalone discovery write-up with three lessons pulled from orientation findings.
 - `AI_COST_ANALYSIS.md` - AI spend template and reflection on AI effectiveness for codebase comprehension.
+- `DEPLOYMENT_DECISION.md` - AWS cost finding and rationale for choosing Render as the submission deployment target.
 - `THREAT_MODEL.md` - dependency security status, Phase 06 remediation, and residual risk.
 - `eval/results/phase2-implementation-notes.md` - concise implementation and measurement log.
 - `docs/brainstorms/2026-05-20-phase-04-ms-project-inspired-improvements.md` - Phase 04 implementation evidence for Microsoft Project-inspired timeline/dependency improvements.

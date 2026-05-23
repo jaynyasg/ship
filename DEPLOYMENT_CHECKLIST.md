@@ -129,12 +129,24 @@ aws ce get-cost-and-usage \
   --group-by Type=SERVICE
 ```
 
-Expected costs (dev environment):
-- Elastic Beanstalk (t3.small): ~$15/month
-- Aurora Serverless v2 (0.5 ACU): ~$43/month
-- ALB: ~$20/month
-- S3 + CloudFront: ~$2/month
-- **Total: ~$80/month**
+Older estimates, retained for audit trail:
+- `~$80/month` was the earlier dev-environment checklist estimate.
+- `~$113/month` was the earlier Terraform README estimate after adding NAT Gateway.
+
+Those estimates are out of date for the reviewed submission plan because they did not include the corrected full-plan cost drivers: Kinesis-backed CloudFront real-time logs, 180-day retention, WAF Bot Control, public IPv4 charges, CloudWatch/VPC flow logs, and other always-on resources.
+
+Current expected costs for the full Terraform plan:
+- Elastic Beanstalk (t3.small): ~$15-$17/month
+- Aurora Serverless v2 (0.5 ACU floor): ~$45-$55/month
+- Application Load Balancer: ~$17-$25/month at low traffic
+- NAT Gateway: ~$33/month plus data processing
+- Kinesis real-time CloudFront logs: ~$100+/month with 4 shards and 180-day retention
+- WAF + Bot Control: ~$22+/month plus request volume
+- Public IPv4 addresses: about ~$11/month
+- S3, CloudFront, and CloudWatch logs: variable
+- **Total: roughly ~$220-$300/month at low traffic**
+
+For the public submission deployment, this cost finding is why Ship is moving to Render instead of applying the AWS stack. See `DEPLOYMENT_DECISION.md`.
 
 ## Emergency Contacts
 

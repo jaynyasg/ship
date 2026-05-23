@@ -297,14 +297,26 @@ Use `terraform plan` with cost estimation tools:
 # Using Infracost (https://www.infracost.io/)
 infracost breakdown --path .
 
-# Estimated monthly costs (dev environment):
-# - Aurora Serverless v2 (0.5 ACU min): $43
-# - Elastic Beanstalk (t3.small): $15
-# - Application Load Balancer: $20
-# - NAT Gateway: $33
-# - S3 + CloudFront: $2
-# Total: ~$113/month
+# Older estimates, retained for audit trail:
+# - $80/month: older deployment checklist estimate for a narrower dev stack
+# - $113/month: older Terraform README estimate after adding NAT Gateway
+# These are out of date for the corrected full plan because they omitted
+# Kinesis real-time CloudFront logs, 180-day retention, WAF Bot Control,
+# public IPv4 charges, and CloudWatch/VPC flow-log costs.
+#
+# Current full-plan estimate, low traffic:
+# - Aurora Serverless v2 (0.5 ACU min): $45-$55
+# - Elastic Beanstalk (t3.small): $15-$17
+# - Application Load Balancer: $17-$25
+# - NAT Gateway: $33+ plus data processing
+# - Kinesis real-time CloudFront logs: $100+ with 4 shards and 180-day retention
+# - WAF + Bot Control: $22+ plus request volume
+# - Public IPv4 addresses: about $11
+# - S3, CloudFront, and CloudWatch logs: variable
+# Total: roughly $220-$300/month at low traffic
 ```
+
+For the public submission deployment, Ship is moving to Render instead of applying the full AWS plan. See `../DEPLOYMENT_DECISION.md` for the decision record and AWS revisit criteria.
 
 ## Maintenance
 

@@ -1,6 +1,16 @@
 # Ship - Deployment Guide
 
-**Government-compliant AWS deployment for Express API + React frontend**
+**AWS deployment reference for Express API + React frontend**
+
+## Current Submission Deployment Decision
+
+For the public submission deployment, Ship is moving to Render instead of applying the full AWS Terraform stack. The AWS plan was reviewed and estimated at roughly `$220-$300/month` for a low-traffic always-on deployment, with about `$250/month` as the working budget estimate.
+
+Earlier deployment notes listed lower AWS estimates of `~$80/month` and `~$113/month`. Those estimates are now out of date: they described narrower dev-style stacks and did not include the full corrected Terraform plan's Kinesis real-time logging, WAF Bot Control, public IPv4, and CloudWatch/VPC flow-log costs.
+
+The main fixed-cost drivers were CloudFront real-time logging through a 4-shard Kinesis stream with 180-day retention, Aurora Serverless v2, NAT Gateway, ALB, Elastic Beanstalk EC2, WAF Bot Control, public IPv4 charges, and CloudWatch/VPC flow logs.
+
+See `DEPLOYMENT_DECISION.md` for the full cost finding and rationale. This AWS guide remains a reference path for later government/compliance deployment work.
 
 ## Prerequisites
 
@@ -62,7 +72,7 @@ cd ..
 
 **Important:** Save the Terraform outputs - you'll need them for the next steps.
 
-**Cost:** ~$80/month for dev environment (t3.small + Aurora Serverless v2 0.5 ACU)
+**Cost note:** Older docs estimated `~$80/month` for a narrower dev deployment. That estimate is out of date for the current full Terraform plan, which is roughly `$220-$300/month` at low traffic because it includes NAT Gateway, ALB, Aurora Serverless v2, CloudFront, WAF/Bot Control, Kinesis real-time logs, public IPv4 charges, and CloudWatch/VPC flow logs. See `DEPLOYMENT_DECISION.md`.
 
 ### 2. Deploy API (Initial and Subsequent)
 
