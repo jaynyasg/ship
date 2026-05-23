@@ -74,6 +74,15 @@ export function clearCsrfToken(): void {
   csrfToken = null;
 }
 
+function isCsrfFailure<T>(status: number, data: ApiResponse<T>): boolean {
+  if (status !== 403) return false;
+
+  const code = data.error?.code?.toLowerCase() ?? '';
+  const message = data.error?.message?.toLowerCase() ?? '';
+
+  return code.includes('csrf') || message.includes('csrf');
+}
+
 // Simple helpers that return Response objects (for contexts that need res.ok checks)
 async function fetchWithCsrf(
   endpoint: string,
@@ -205,7 +214,7 @@ async function request<T>(
   }
 
   // If CSRF token is invalid, clear and retry once
-  if (response.status === 403 && data.error?.code === 'CSRF_ERROR') {
+  if (isCsrfFailure(response.status, data)) {
     clearCsrfToken();
     const newToken = await ensureCsrfToken();
     headers['X-CSRF-Token'] = newToken;
