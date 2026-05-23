@@ -29,6 +29,7 @@ export * from './weekly-plans.js';
 export * from './comments.js';
 export * from './ai.js';
 export * from './timeline.js';
+export * from './admin.js';
 
 // Re-export registry and generator for convenience
 export { registry, generateOpenAPIDocument } from '../registry.js';

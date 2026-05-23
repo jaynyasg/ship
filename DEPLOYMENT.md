@@ -55,6 +55,8 @@ Then verify in a browser:
 
 The Blueprint also includes a cron job named `ship-security-probe`. Render cron jobs can be run manually from the Render dashboard by opening the cron job and selecting **Trigger Run**.
 
+Ship super-admins can also trigger the same cron job from **Admin Dashboard -> Operations -> Security Probe -> Trigger Run**. That in-app button calls Render's cron run API from the backend so the Render API key is never exposed to the browser.
+
 The job runs:
 
 ```bash
@@ -62,6 +64,15 @@ node scripts/render-security-probe.mjs
 ```
 
 The generated markdown report is printed into the Render job logs. Files created during the job are ephemeral on Render and are not copied back to this machine.
+
+For the in-app Trigger Run button, set these environment variables on the `ship` web service:
+
+| Variable | Value |
+|---|---|
+| `RENDER_API_KEY` | Render API key from Account Settings |
+| `RENDER_SECURITY_PROBE_CRON_JOB_ID` | The `ship-security-probe` cron job ID, starting with `crn-` |
+
+The Blueprint declares those web-service variables with `sync: false` for new Blueprint installs. For an already-deployed Blueprint, add them manually in the Render dashboard because Render ignores newly-added `sync: false` values on existing Blueprint syncs.
 
 For best public-surface coverage, set these environment variables on the `ship-security-probe` cron job after the Blueprint sync:
 

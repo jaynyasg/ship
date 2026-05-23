@@ -15,6 +15,10 @@ services:
           property: connectionString
       - key: SESSION_SECRET
         generateValue: true
+      - key: RENDER_API_KEY
+        sync: false
+      - key: RENDER_SECURITY_PROBE_CRON_JOB_ID
+        sync: false
 
   - type: cron
     name: ship-security-probe

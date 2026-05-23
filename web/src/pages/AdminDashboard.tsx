@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { api, Workspace, AuditLog, UserInfo } from '@/lib/api';
+import { api, Workspace, AuditLog, UserInfo, SecurityProbeStatus } from '@/lib/api';
 import { cn } from '@/lib/cn';
 
-type Tab = 'workspaces' | 'users' | 'audit';
+type Tab = 'workspaces' | 'users' | 'audit' | 'operations';
 
-const VALID_TABS: Tab[] = ['workspaces', 'users', 'audit'];
+const VALID_TABS: Tab[] = ['workspaces', 'users', 'audit', 'operations'];
 
 interface WorkspaceWithCount extends Workspace {
   memberCount: number;
@@ -35,6 +35,11 @@ export function AdminDashboardPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [securityProbeStatus, setSecurityProbeStatus] = useState<SecurityProbeStatus | null>(null);
+  const [triggeringProbe, setTriggeringProbe] = useState(false);
+  const [probeMessage, setProbeMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const [seedingTimelineDemo, setSeedingTimelineDemo] = useState(false);
+  const [demoMessage, setDemoMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     if (!isSuperAdmin) {
@@ -46,11 +51,13 @@ export function AdminDashboardPage() {
       api.admin.listWorkspaces(showArchived),
       api.admin.listUsers(),
       api.admin.getAuditLogs({ limit: 50 }),
-    ]).then(([wsRes, usersRes, logsRes]) => {
+      api.admin.getSecurityProbeStatus(),
+    ]).then(([wsRes, usersRes, logsRes, probeRes]) => {
       if (cancelled) return;
       if (wsRes.success && wsRes.data) setWorkspaces(wsRes.data.workspaces);
       if (usersRes.success && usersRes.data) setUsers(usersRes.data.users);
       if (logsRes.success && logsRes.data) setAuditLogs(logsRes.data.logs);
+      if (probeRes.success && probeRes.data) setSecurityProbeStatus(probeRes.data);
       setLoading(false);
     });
 
@@ -101,6 +108,64 @@ export function AdminDashboardPage() {
     window.open(api.admin.exportAuditLogs(), '_blank');
   }
 
+  async function handleTriggerSecurityProbe() {
+    setTriggeringProbe(true);
+    setProbeMessage(null);
+
+    try {
+      const res = await api.admin.triggerSecurityProbe();
+      if (res.success && res.data) {
+        setProbeMessage({
+          tone: 'success',
+          text: `${res.data.cronJobName} accepted the manual run.`,
+        });
+      } else {
+        setProbeMessage({
+          tone: 'error',
+          text: res.error?.message || 'Security probe trigger failed.',
+        });
+      }
+
+      const status = await api.admin.getSecurityProbeStatus();
+      if (status.success && status.data) setSecurityProbeStatus(status.data);
+    } catch (error) {
+      setProbeMessage({
+        tone: 'error',
+        text: error instanceof Error ? error.message : 'Security probe trigger failed.',
+      });
+    } finally {
+      setTriggeringProbe(false);
+    }
+  }
+
+  async function handleSeedTimelineDemo() {
+    setSeedingTimelineDemo(true);
+    setDemoMessage(null);
+
+    try {
+      const res = await api.admin.seedTimelineDemo();
+      if (res.success && res.data) {
+        setDemoMessage({
+          tone: 'success',
+          text: res.data.created ? 'Timeline demo data created.' : 'Timeline demo data already exists.',
+        });
+        navigate(res.data.timelineUrl);
+      } else {
+        setDemoMessage({
+          tone: 'error',
+          text: res.error?.message || 'Timeline demo seed failed.',
+        });
+      }
+    } catch (error) {
+      setDemoMessage({
+        tone: 'error',
+        text: error instanceof Error ? error.message : 'Timeline demo seed failed.',
+      });
+    } finally {
+      setSeedingTimelineDemo(false);
+    }
+  }
+
   return (
     <div className="flex h-screen flex-col bg-background">
       {/* Impersonation banner */}
@@ -144,6 +209,9 @@ export function AdminDashboardPage() {
           <TabButton active={activeTab === 'audit'} onClick={() => handleTabChange('audit')}>
             Audit Logs
           </TabButton>
+          <TabButton active={activeTab === 'operations'} onClick={() => handleTabChange('operations')}>
+            Operations
+          </TabButton>
         </nav>
       </div>
 
@@ -179,6 +247,17 @@ export function AdminDashboardPage() {
               <AuditLogsTab
                 auditLogs={auditLogs}
                 onExport={handleExportAuditLogs}
+              />
+            )}
+            {activeTab === 'operations' && (
+              <OperationsTab
+                securityProbeStatus={securityProbeStatus}
+                triggeringProbe={triggeringProbe}
+                probeMessage={probeMessage}
+                onTriggerSecurityProbe={handleTriggerSecurityProbe}
+                seedingTimelineDemo={seedingTimelineDemo}
+                demoMessage={demoMessage}
+                onSeedTimelineDemo={handleSeedTimelineDemo}
               />
             )}
           </>
@@ -455,6 +534,138 @@ function AuditLogsTab({
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function OperationsTab({
+  securityProbeStatus,
+  triggeringProbe,
+  probeMessage,
+  onTriggerSecurityProbe,
+  seedingTimelineDemo,
+  demoMessage,
+  onSeedTimelineDemo,
+}: {
+  securityProbeStatus: SecurityProbeStatus | null;
+  triggeringProbe: boolean;
+  probeMessage: { tone: 'success' | 'error'; text: string } | null;
+  onTriggerSecurityProbe: () => void;
+  seedingTimelineDemo: boolean;
+  demoMessage: { tone: 'success' | 'error'; text: string } | null;
+  onSeedTimelineDemo: () => void;
+}) {
+  return (
+    <div className="grid gap-4 xl:grid-cols-2">
+      <section className="rounded-lg border border-border bg-surface">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Security Probe</h2>
+            <div className="mt-1 text-xs text-muted">{securityProbeStatus?.cronJobName || 'ship-security-probe'}</div>
+          </div>
+          <StatusPill ready={Boolean(securityProbeStatus?.configured)} />
+        </div>
+
+        <div className="space-y-4 px-4 py-4">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <ConfigRow label="Render API key" ready={Boolean(securityProbeStatus?.renderApiKeyConfigured)} />
+            <ConfigRow label="Cron job ID" ready={Boolean(securityProbeStatus?.cronJobIdConfigured)} />
+          </div>
+
+          {securityProbeStatus && !securityProbeStatus.configured && (
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+              Missing {securityProbeStatus.missingEnvVars.join(', ')}
+            </div>
+          )}
+
+          {probeMessage && <OperationMessage tone={probeMessage.tone} text={probeMessage.text} />}
+
+          <button
+            type="button"
+            onClick={onTriggerSecurityProbe}
+            disabled={triggeringProbe || !securityProbeStatus?.configured}
+            className="rounded-md border border-accent/50 bg-accent/10 px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {triggeringProbe ? 'Triggering...' : 'Trigger Run'}
+          </button>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-border bg-surface">
+        <div className="border-b border-border px-4 py-3">
+          <h2 className="text-sm font-semibold text-foreground">Timeline Demo</h2>
+          <div className="mt-1 text-xs text-muted">Current workspace</div>
+        </div>
+
+        <div className="space-y-4 px-4 py-4">
+          <div className="grid gap-2 sm:grid-cols-3">
+            <DemoMetric label="Weeks" value="3" />
+            <DemoMetric label="Issues" value="7" />
+            <DemoMetric label="Links" value="4" />
+          </div>
+
+          {demoMessage && <OperationMessage tone={demoMessage.tone} text={demoMessage.text} />}
+
+          <button
+            type="button"
+            onClick={onSeedTimelineDemo}
+            disabled={seedingTimelineDemo}
+            className="rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {seedingTimelineDemo ? 'Seeding...' : 'Seed Timeline Demo'}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function StatusPill({ ready }: { ready: boolean }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1',
+        ready
+          ? 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30'
+          : 'bg-amber-500/15 text-amber-200 ring-amber-500/30'
+      )}
+    >
+      {ready ? 'Configured' : 'Setup needed'}
+    </span>
+  );
+}
+
+function ConfigRow({ label, ready }: { label: string; ready: boolean }) {
+  return (
+    <div className="rounded-md border border-border px-3 py-2">
+      <div className="text-xs text-muted">{label}</div>
+      <div className={cn('mt-1 text-sm font-medium', ready ? 'text-emerald-300' : 'text-amber-200')}>
+        {ready ? 'Set' : 'Missing'}
+      </div>
+    </div>
+  );
+}
+
+function DemoMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-border px-3 py-2">
+      <div className="text-xs text-muted">{label}</div>
+      <div className="mt-1 text-lg font-semibold text-foreground">{value}</div>
+    </div>
+  );
+}
+
+function OperationMessage({ tone, text }: { tone: 'success' | 'error'; text: string }) {
+  return (
+    <div
+      className={cn(
+        'rounded-md border px-3 py-2 text-sm',
+        tone === 'success'
+          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+          : 'border-red-500/30 bg-red-500/10 text-red-300'
+      )}
+    >
+      {text}
     </div>
   );
 }

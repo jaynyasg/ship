@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import type { Router as RouterType } from 'express';
+import type { PoolClient } from 'pg';
 import { pool } from '../db/client.js';
 import { authMiddleware, superAdminMiddleware } from '../middleware/auth.js';
 import { ERROR_CODES, HTTP_STATUS } from '@ship/shared';
@@ -7,8 +8,685 @@ import { logAuditEvent } from '../services/audit.js';
 
 const router: RouterType = Router();
 
+const SECURITY_PROBE_CRON_JOB_NAME = 'ship-security-probe';
+const DEMO_PROGRAM_TITLE = 'Treasury Modernization Demo';
+const DEMO_PROJECT_TITLE = 'Public Submission Launch Demo';
+
+type DemoDocumentType = 'program' | 'project' | 'sprint' | 'issue';
+
+interface DemoDocumentSeed {
+  key: string;
+  type: DemoDocumentType;
+  title: string;
+  properties: Record<string, unknown>;
+  baseline: {
+    plannedStart: string | null;
+    plannedEnd: string | null;
+    status: string | null;
+  };
+  startedAt?: string | null;
+  completedAt?: string | null;
+  ticketNumber?: number | null;
+}
+
+interface DemoDocumentRecord extends DemoDocumentSeed {
+  id: string;
+}
+
+function getSecurityProbeRenderConfig() {
+  const apiKey = process.env.RENDER_API_KEY ?? process.env.RENDER_API_TOKEN;
+  const cronJobId = process.env.RENDER_SECURITY_PROBE_CRON_JOB_ID ?? process.env.RENDER_SECURITY_PROBE_SERVICE_ID;
+
+  return {
+    apiKey,
+    cronJobId,
+    configured: Boolean(apiKey && cronJobId),
+    apiKeyConfigured: Boolean(apiKey),
+    cronJobIdConfigured: Boolean(cronJobId),
+    missingEnvVars: [
+      !apiKey ? 'RENDER_API_KEY' : null,
+      !cronJobId ? 'RENDER_SECURITY_PROBE_CRON_JOB_ID' : null,
+    ].filter((value): value is string => value !== null),
+  };
+}
+
+function securityProbeStatusPayload() {
+  const config = getSecurityProbeRenderConfig();
+
+  return {
+    cronJobName: SECURITY_PROBE_CRON_JOB_NAME,
+    configured: config.configured,
+    renderApiKeyConfigured: config.apiKeyConfigured,
+    cronJobIdConfigured: config.cronJobIdConfigured,
+    missingEnvVars: config.missingEnvVars,
+  };
+}
+
+async function readRenderResponse(response: globalThis.Response): Promise<unknown> {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text.slice(0, 500);
+  }
+}
+
+function dateOnlyFromOffset(days: number): string {
+  const date = new Date();
+  date.setUTCHours(0, 0, 0, 0);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function dateTimeFromOffset(days: number): string {
+  const date = new Date();
+  date.setUTCHours(12, 0, 0, 0);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString();
+}
+
+function shiftDateOnly(value: string | null, days: number): string | null {
+  if (!value) return null;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return value;
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function demoContent(title: string, summary: string) {
+  return {
+    type: 'doc',
+    content: [
+      {
+        type: 'heading',
+        attrs: { level: 2 },
+        content: [{ type: 'text', text: title }],
+      },
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: summary }],
+      },
+    ],
+  };
+}
+
+function createDemoSeeds(nextTicketNumber: number): DemoDocumentSeed[] {
+  const programStart = dateOnlyFromOffset(-12);
+  const programEnd = dateOnlyFromOffset(24);
+  const projectStart = dateOnlyFromOffset(-10);
+  const projectEnd = dateOnlyFromOffset(21);
+
+  const seeds: DemoDocumentSeed[] = [
+    {
+      key: 'program',
+      type: 'program',
+      title: DEMO_PROGRAM_TITLE,
+      properties: {
+        status: 'active',
+        color: '#2563eb',
+        planned_start_date: programStart,
+        planned_end_date: programEnd,
+        plan: 'Demonstration program for timeline planning, dependency health, and baseline variance.',
+      },
+      baseline: {
+        plannedStart: shiftDateOnly(programStart, -2),
+        plannedEnd: shiftDateOnly(programEnd, -3),
+        status: 'active',
+      },
+    },
+    {
+      key: 'project',
+      type: 'project',
+      title: DEMO_PROJECT_TITLE,
+      properties: {
+        status: 'active',
+        color: '#0ea5e9',
+        impact: 5,
+        confidence: 4,
+        ease: 3,
+        planned_start_date: projectStart,
+        planned_end_date: projectEnd,
+        plan: 'Launch the public submission target with deployment evidence, probe coverage, and reviewer-ready demo data.',
+      },
+      baseline: {
+        plannedStart: shiftDateOnly(projectStart, -2),
+        plannedEnd: shiftDateOnly(projectEnd, -4),
+        status: 'planned',
+      },
+    },
+    {
+      key: 'week-foundations',
+      type: 'sprint',
+      title: 'Launch Week 1 - Foundations',
+      properties: {
+        sprint_number: 1,
+        status: 'completed',
+        planned_start_date: dateOnlyFromOffset(-10),
+        planned_end_date: dateOnlyFromOffset(-4),
+        plan: 'Render deployment, shared schema fixes, and baseline documentation.',
+      },
+      baseline: {
+        plannedStart: dateOnlyFromOffset(-12),
+        plannedEnd: dateOnlyFromOffset(-6),
+        status: 'active',
+      },
+    },
+    {
+      key: 'week-risk',
+      type: 'sprint',
+      title: 'Launch Week 2 - Risk Burn-down',
+      properties: {
+        sprint_number: 2,
+        status: 'active',
+        planned_start_date: dateOnlyFromOffset(-3),
+        planned_end_date: dateOnlyFromOffset(3),
+        plan: 'Security probe evidence, timeline demo data, and public URL verification.',
+      },
+      baseline: {
+        plannedStart: dateOnlyFromOffset(-5),
+        plannedEnd: dateOnlyFromOffset(1),
+        status: 'upcoming',
+      },
+    },
+    {
+      key: 'week-review',
+      type: 'sprint',
+      title: 'Launch Week 3 - Reviewer Readiness',
+      properties: {
+        sprint_number: 3,
+        status: 'upcoming',
+        planned_start_date: dateOnlyFromOffset(4),
+        planned_end_date: dateOnlyFromOffset(10),
+        plan: 'Submission packet, walkthrough, and final review loop.',
+      },
+      baseline: {
+        plannedStart: dateOnlyFromOffset(2),
+        plannedEnd: dateOnlyFromOffset(8),
+        status: 'upcoming',
+      },
+    },
+    {
+      key: 'issue-render',
+      type: 'issue',
+      title: 'Prepare Render deployment blueprint',
+      ticketNumber: nextTicketNumber,
+      startedAt: dateTimeFromOffset(-10),
+      completedAt: dateTimeFromOffset(-7),
+      properties: {
+        state: 'done',
+        priority: 'high',
+        planned_start_date: dateOnlyFromOffset(-10),
+        planned_end_date: dateOnlyFromOffset(-7),
+        completed_at: dateTimeFromOffset(-7),
+      },
+      baseline: {
+        plannedStart: dateOnlyFromOffset(-11),
+        plannedEnd: dateOnlyFromOffset(-8),
+        status: 'in_progress',
+      },
+    },
+    {
+      key: 'issue-timeline-fix',
+      type: 'issue',
+      title: 'Fix timeline dependency migration',
+      ticketNumber: nextTicketNumber + 1,
+      startedAt: dateTimeFromOffset(-6),
+      completedAt: dateTimeFromOffset(-4),
+      properties: {
+        state: 'done',
+        priority: 'high',
+        planned_start_date: dateOnlyFromOffset(-6),
+        planned_end_date: dateOnlyFromOffset(-4),
+        completed_at: dateTimeFromOffset(-4),
+      },
+      baseline: {
+        plannedStart: dateOnlyFromOffset(-6),
+        plannedEnd: dateOnlyFromOffset(-5),
+        status: 'todo',
+      },
+    },
+    {
+      key: 'issue-render-api-key',
+      type: 'issue',
+      title: 'Configure Render security probe credentials',
+      ticketNumber: nextTicketNumber + 2,
+      startedAt: dateTimeFromOffset(-2),
+      properties: {
+        state: 'in_progress',
+        priority: 'critical',
+        planned_start_date: dateOnlyFromOffset(-2),
+        planned_end_date: dateOnlyFromOffset(-1),
+      },
+      baseline: {
+        plannedStart: dateOnlyFromOffset(-3),
+        plannedEnd: dateOnlyFromOffset(-2),
+        status: 'todo',
+      },
+    },
+    {
+      key: 'issue-probe-evidence',
+      type: 'issue',
+      title: 'Run security probe evidence review',
+      ticketNumber: nextTicketNumber + 3,
+      properties: {
+        state: 'todo',
+        priority: 'critical',
+        planned_start_date: dateOnlyFromOffset(0),
+        planned_end_date: dateOnlyFromOffset(1),
+      },
+      baseline: {
+        plannedStart: dateOnlyFromOffset(-1),
+        plannedEnd: dateOnlyFromOffset(0),
+        status: 'backlog',
+      },
+    },
+    {
+      key: 'issue-demo-data',
+      type: 'issue',
+      title: 'Seed reviewer timeline demo data',
+      ticketNumber: nextTicketNumber + 4,
+      startedAt: dateTimeFromOffset(-1),
+      completedAt: dateTimeFromOffset(0),
+      properties: {
+        state: 'done',
+        priority: 'medium',
+        planned_start_date: dateOnlyFromOffset(-1),
+        planned_end_date: dateOnlyFromOffset(1),
+        completed_at: dateTimeFromOffset(0),
+      },
+      baseline: {
+        plannedStart: dateOnlyFromOffset(0),
+        plannedEnd: dateOnlyFromOffset(2),
+        status: 'todo',
+      },
+    },
+    {
+      key: 'issue-submission',
+      type: 'issue',
+      title: 'Finalize submission packet',
+      ticketNumber: nextTicketNumber + 5,
+      properties: {
+        state: 'todo',
+        priority: 'high',
+        planned_start_date: dateOnlyFromOffset(4),
+        planned_end_date: dateOnlyFromOffset(7),
+      },
+      baseline: {
+        plannedStart: dateOnlyFromOffset(2),
+        plannedEnd: dateOnlyFromOffset(5),
+        status: 'backlog',
+      },
+    },
+    {
+      key: 'issue-walkthrough',
+      type: 'issue',
+      title: 'Reviewer walkthrough rehearsal',
+      ticketNumber: nextTicketNumber + 6,
+      properties: {
+        state: 'todo',
+        priority: 'medium',
+        planned_start_date: dateOnlyFromOffset(8),
+        planned_end_date: dateOnlyFromOffset(10),
+      },
+      baseline: {
+        plannedStart: dateOnlyFromOffset(6),
+        plannedEnd: dateOnlyFromOffset(8),
+        status: 'backlog',
+      },
+    },
+  ];
+
+  return seeds;
+}
+
+function buildDemoBaseline(
+  scope: { id: string; type: 'project' | 'program'; title: string },
+  records: DemoDocumentRecord[],
+  capturedBy: string
+) {
+  const rows = records
+    .filter(record => scope.type === 'program' || record.type !== 'program')
+    .map(record => ({
+      id: record.id,
+      title: record.title,
+      document_type: record.type,
+      planned_start: record.baseline.plannedStart,
+      planned_end: record.baseline.plannedEnd,
+      status: record.baseline.status,
+    }));
+
+  const plannedStarts = rows.map(row => row.planned_start).filter((value): value is string => Boolean(value)).sort();
+  const plannedEnds = rows.map(row => row.planned_end).filter((value): value is string => Boolean(value)).sort();
+
+  return {
+    captured_at: dateTimeFromOffset(-1),
+    captured_by: capturedBy,
+    scope,
+    rows,
+    summary: {
+      total_rows: rows.length,
+      dependency_count: 4,
+      blocked_count: 0,
+      overdue_count: 0,
+      at_risk_count: 0,
+      critical_path_count: 0,
+      planned_start: plannedStarts[0] ?? null,
+      planned_end: plannedEnds[plannedEnds.length - 1] ?? null,
+    },
+  };
+}
+
+async function createDemoDocument(
+  client: PoolClient,
+  workspaceId: string,
+  userId: string,
+  seed: DemoDocumentSeed
+): Promise<DemoDocumentRecord> {
+  const result = await client.query(
+    `INSERT INTO documents (
+       workspace_id,
+       document_type,
+       title,
+       properties,
+       created_by,
+       content,
+       started_at,
+       completed_at,
+       ticket_number
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     RETURNING id`,
+    [
+      workspaceId,
+      seed.type,
+      seed.title,
+      JSON.stringify(seed.properties),
+      userId,
+      JSON.stringify(demoContent(seed.title, 'Demo data for the Ship timeline view.')),
+      seed.startedAt ?? null,
+      seed.completedAt ?? null,
+      seed.ticketNumber ?? null,
+    ]
+  );
+
+  return { ...seed, id: result.rows[0].id };
+}
+
+async function addDemoAssociation(
+  client: PoolClient,
+  documentId: string,
+  relatedId: string,
+  relationshipType: 'program' | 'project' | 'sprint' | 'depends_on',
+  metadata: Record<string, unknown> = {}
+): Promise<void> {
+  await client.query(
+    `INSERT INTO document_associations (document_id, related_id, relationship_type, metadata)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (document_id, related_id, relationship_type) DO NOTHING`,
+    [documentId, relatedId, relationshipType, JSON.stringify(metadata)]
+  );
+}
+
+async function seedTimelineDemo(workspaceId: string, userId: string) {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const existing = await client.query(
+      `SELECT d.id as project_id, da.related_id as program_id
+       FROM documents d
+       LEFT JOIN document_associations da
+         ON da.document_id = d.id
+        AND da.relationship_type = 'program'
+       WHERE d.workspace_id = $1
+         AND d.document_type = 'project'
+         AND d.title = $2
+         AND d.deleted_at IS NULL
+       ORDER BY d.created_at DESC
+       LIMIT 1`,
+      [workspaceId, DEMO_PROJECT_TITLE]
+    );
+
+    if (existing.rows[0]) {
+      await client.query('COMMIT');
+      return {
+        created: false,
+        projectId: existing.rows[0].project_id as string,
+        programId: existing.rows[0].program_id as string | null,
+        timelineUrl: `/documents/${existing.rows[0].project_id}/timeline`,
+      };
+    }
+
+    const ticketResult = await client.query(
+      `SELECT COALESCE(MAX(ticket_number), 0) + 1 as next_ticket_number
+       FROM documents
+       WHERE workspace_id = $1
+         AND document_type = 'issue'`,
+      [workspaceId]
+    );
+    const nextTicketNumber = Number(ticketResult.rows[0]?.next_ticket_number ?? 1);
+    const records = new Map<string, DemoDocumentRecord>();
+
+    for (const seed of createDemoSeeds(nextTicketNumber)) {
+      const record = await createDemoDocument(client, workspaceId, userId, seed);
+      records.set(seed.key, record);
+    }
+
+    const program = records.get('program')!;
+    const project = records.get('project')!;
+    const weeks = ['week-foundations', 'week-risk', 'week-review'].map(key => records.get(key)!);
+    const issues = [
+      'issue-render',
+      'issue-timeline-fix',
+      'issue-render-api-key',
+      'issue-probe-evidence',
+      'issue-demo-data',
+      'issue-submission',
+      'issue-walkthrough',
+    ].map(key => records.get(key)!);
+
+    await addDemoAssociation(client, project.id, program.id, 'program', { created_via: 'demo_timeline_seed' });
+    for (const week of weeks) {
+      await addDemoAssociation(client, week.id, project.id, 'project', { created_via: 'demo_timeline_seed' });
+      await addDemoAssociation(client, week.id, program.id, 'program', { created_via: 'demo_timeline_seed' });
+    }
+
+    const weekByIssue = new Map<string, DemoDocumentRecord>([
+      ['issue-render', weeks[0]!],
+      ['issue-timeline-fix', weeks[0]!],
+      ['issue-render-api-key', weeks[1]!],
+      ['issue-probe-evidence', weeks[1]!],
+      ['issue-demo-data', weeks[1]!],
+      ['issue-submission', weeks[2]!],
+      ['issue-walkthrough', weeks[2]!],
+    ]);
+
+    for (const issue of issues) {
+      await addDemoAssociation(client, issue.id, project.id, 'project', { created_via: 'demo_timeline_seed' });
+      await addDemoAssociation(client, issue.id, program.id, 'program', { created_via: 'demo_timeline_seed' });
+      await addDemoAssociation(client, issue.id, weekByIssue.get(issue.key)!.id, 'sprint', { created_via: 'demo_timeline_seed' });
+    }
+
+    await addDemoAssociation(client, records.get('issue-probe-evidence')!.id, records.get('issue-render-api-key')!.id, 'depends_on');
+    await addDemoAssociation(client, records.get('issue-submission')!.id, records.get('issue-probe-evidence')!.id, 'depends_on');
+    await addDemoAssociation(client, records.get('issue-walkthrough')!.id, records.get('issue-submission')!.id, 'depends_on');
+    await addDemoAssociation(client, records.get('issue-demo-data')!.id, records.get('issue-timeline-fix')!.id, 'depends_on');
+
+    const allRecords = Array.from(records.values());
+    const projectBaseline = buildDemoBaseline(
+      { id: project.id, type: 'project', title: project.title },
+      allRecords,
+      userId
+    );
+    const programBaseline = buildDemoBaseline(
+      { id: program.id, type: 'program', title: program.title },
+      allRecords,
+      userId
+    );
+
+    await client.query(
+      `UPDATE documents
+       SET properties = jsonb_set(properties, '{timeline_baseline}', $1::jsonb, true),
+           updated_at = NOW()
+       WHERE id = $2`,
+      [JSON.stringify(projectBaseline), project.id]
+    );
+    await client.query(
+      `UPDATE documents
+       SET properties = jsonb_set(properties, '{timeline_baseline}', $1::jsonb, true),
+           updated_at = NOW()
+       WHERE id = $2`,
+      [JSON.stringify(programBaseline), program.id]
+    );
+
+    await client.query('COMMIT');
+
+    return {
+      created: true,
+      projectId: project.id,
+      programId: program.id,
+      timelineUrl: `/documents/${project.id}/timeline`,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 // All admin routes require super-admin
 router.use(authMiddleware, superAdminMiddleware);
+
+// GET /api/admin/security-probe - Render security probe trigger configuration
+router.get('/security-probe', async (_req: Request, res: Response): Promise<void> => {
+  res.json({
+    success: true,
+    data: securityProbeStatusPayload(),
+  });
+});
+
+// POST /api/admin/security-probe/trigger - Trigger the Render cron job from inside Ship
+router.post('/security-probe/trigger', async (req: Request, res: Response): Promise<void> => {
+  const config = getSecurityProbeRenderConfig();
+
+  if (!config.configured || !config.apiKey || !config.cronJobId) {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      error: {
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: `Security probe trigger is not configured. Missing: ${config.missingEnvVars.join(', ')}`,
+      },
+    });
+    return;
+  }
+
+  try {
+    const response = await fetch(`https://api.render.com/v1/cron-jobs/${encodeURIComponent(config.cronJobId)}/runs`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+    });
+    const responseBody = await readRenderResponse(response);
+
+    if (!response.ok) {
+      console.error('Render security probe trigger failed:', {
+        status: response.status,
+        body: responseBody,
+      });
+      res.status(502).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.INTERNAL_ERROR,
+          message: 'Render did not accept the security probe trigger request',
+        },
+      });
+      return;
+    }
+
+    await logAuditEvent({
+      workspaceId: req.workspaceId,
+      actorUserId: req.userId!,
+      action: 'security_probe.trigger',
+      resourceType: 'render_cron_job',
+      details: {
+        cronJobName: SECURITY_PROBE_CRON_JOB_NAME,
+        cronJobId: config.cronJobId,
+      },
+      req,
+    });
+
+    res.status(202).json({
+      success: true,
+      data: {
+        triggered: true,
+        cronJobName: SECURITY_PROBE_CRON_JOB_NAME,
+        cronJobId: config.cronJobId,
+        renderResponse: responseBody,
+      },
+    });
+  } catch (error) {
+    console.error('Trigger security probe error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      error: {
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Failed to trigger security probe',
+      },
+    });
+  }
+});
+
+// POST /api/admin/demo/timeline - Seed a reviewer-friendly timeline demo in the current workspace
+router.post('/demo/timeline', async (req: Request, res: Response): Promise<void> => {
+  const workspaceId = req.workspaceId;
+
+  if (!workspaceId) {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      error: {
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: 'Select a workspace before seeding timeline demo data',
+      },
+    });
+    return;
+  }
+
+  try {
+    const demo = await seedTimelineDemo(workspaceId, req.userId!);
+
+    await logAuditEvent({
+      workspaceId,
+      actorUserId: req.userId!,
+      action: 'demo.timeline_seed',
+      resourceType: 'project',
+      resourceId: demo.projectId,
+      details: {
+        created: demo.created,
+        programId: demo.programId,
+      },
+      req,
+    });
+
+    res.status(demo.created ? HTTP_STATUS.CREATED : HTTP_STATUS.OK).json({
+      success: true,
+      data: demo,
+    });
+  } catch (error) {
+    console.error('Seed timeline demo error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      error: {
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Failed to seed timeline demo data',
+      },
+    });
+  }
+});
 
 // GET /api/admin/workspaces - List all workspaces (including archived)
 router.get('/workspaces', async (req: Request, res: Response): Promise<void> => {

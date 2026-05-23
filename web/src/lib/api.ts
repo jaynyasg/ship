@@ -302,6 +302,28 @@ export interface UserInfo {
   isSuperAdmin: boolean;
 }
 
+export interface SecurityProbeStatus {
+  cronJobName: string;
+  configured: boolean;
+  renderApiKeyConfigured: boolean;
+  cronJobIdConfigured: boolean;
+  missingEnvVars: string[];
+}
+
+export interface SecurityProbeTriggerResponse {
+  triggered: boolean;
+  cronJobName: string;
+  cronJobId: string;
+  renderResponse: unknown;
+}
+
+export interface TimelineDemoSeedResponse {
+  created: boolean;
+  projectId: string;
+  programId: string | null;
+  timelineUrl: string;
+}
+
 // Accountability item returned by auth endpoints
 export interface AccountabilityItem {
   id: string;
@@ -493,6 +515,19 @@ export const api = {
 
     exportAuditLogs: (params?: { workspaceId?: string; userId?: string; action?: string; from?: string; to?: string }) =>
       `${API_URL}/api/admin/audit-logs/export${params ? `?${new URLSearchParams(params as Record<string, string>)}` : ''}`,
+
+    getSecurityProbeStatus: () =>
+      request<SecurityProbeStatus>('/api/admin/security-probe'),
+
+    triggerSecurityProbe: () =>
+      request<SecurityProbeTriggerResponse>('/api/admin/security-probe/trigger', {
+        method: 'POST',
+      }),
+
+    seedTimelineDemo: () =>
+      request<TimelineDemoSeedResponse>('/api/admin/demo/timeline', {
+        method: 'POST',
+      }),
 
     // Impersonation
     startImpersonation: (userId: string) =>
