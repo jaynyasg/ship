@@ -72,10 +72,15 @@ function reportFiles(directory) {
 const markdownPathFromOutput = `${result.stdout ?? ''}\n${result.stderr ?? ''}`
   .match(/^Markdown report:\s*(.+)$/m)?.[1]
   ?.trim();
+const childPrintedMarkdown = `${result.stdout ?? ''}\n${result.stderr ?? ''}`.includes(
+  '--- Ship Security Probe Markdown Report ---'
+);
 const markdownCandidates = [markdownPathFromOutput, join(outDir, `${reportName}.md`)].filter(Boolean);
 const markdownPath = markdownCandidates.find((candidate) => existsSync(candidate));
 
-if (markdownPath) {
+if (childPrintedMarkdown) {
+  console.log('\nSecurity probe markdown report was printed by the probe CLI.');
+} else if (markdownPath) {
   console.log('\n--- Ship Security Probe Markdown Report ---\n');
   process.stdout.write(readFileSync(markdownPath, 'utf8'));
   console.log('\n--- End Ship Security Probe Markdown Report ---');
