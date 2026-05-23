@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -37,15 +37,52 @@ const args = [
 
 const result = spawnSync(process.execPath, args, {
   cwd: process.cwd(),
-  stdio: 'inherit',
+  stdio: ['inherit', 'pipe', 'pipe'],
   env: process.env,
+  encoding: 'utf8',
+  maxBuffer: 10 * 1024 * 1024,
 });
 
-const markdownPath = join(outDir, `${reportName}.md`);
-if (existsSync(markdownPath)) {
+if (result.stdout) {
+  process.stdout.write(result.stdout);
+}
+
+if (result.stderr) {
+  process.stderr.write(result.stderr);
+}
+
+if (result.error) {
+  console.error(`Security probe failed to start: ${result.error.message}`);
+}
+
+function reportFiles(directory) {
+  try {
+    return readdirSync(directory)
+      .map((name) => {
+        const path = join(directory, name);
+        const stats = statSync(path);
+        return `${path} (${stats.size} bytes)`;
+      })
+      .join('\n');
+  } catch (error) {
+    return `Unable to read output directory ${directory}: ${error.message}`;
+  }
+}
+
+const markdownPathFromOutput = `${result.stdout ?? ''}\n${result.stderr ?? ''}`
+  .match(/^Markdown report:\s*(.+)$/m)?.[1]
+  ?.trim();
+const markdownCandidates = [markdownPathFromOutput, join(outDir, `${reportName}.md`)].filter(Boolean);
+const markdownPath = markdownCandidates.find((candidate) => existsSync(candidate));
+
+if (markdownPath) {
   console.log('\n--- Ship Security Probe Markdown Report ---\n');
-  console.log(readFileSync(markdownPath, 'utf8'));
-  console.log('--- End Ship Security Probe Markdown Report ---');
+  process.stdout.write(readFileSync(markdownPath, 'utf8'));
+  console.log('\n--- End Ship Security Probe Markdown Report ---');
+} else {
+  console.error('\nSecurity probe markdown report was not found after the run.');
+  console.error(`Checked:\n${markdownCandidates.join('\n')}`);
+  console.error(`Output directory contents:\n${reportFiles(outDir)}`);
 }
 
 process.exit(result.status ?? 1);
