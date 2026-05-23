@@ -33,6 +33,15 @@ Notes:
 - Render security-probe job results appear in Render logs; run `pnpm security:audit -- --mode remote ...` locally when report files need to land in `eval/results/` on this machine.
 - File attachments still require `S3_UPLOADS_BUCKET`, `CDN_DOMAIN`, and AWS credentials if that workflow is included in the demo.
 
+Current public submission evidence, captured 2026-05-23:
+
+- Public app URL: `https://ship-wf2i.onrender.com`
+- Render services: `ship`, `ship-db`, and `ship-security-probe`
+- Security probe trigger: deployed admin Operations dashboard
+- Security probe report: printed in Render cron logs and ended with `--- End Ship Security Probe Markdown Report ---`
+- Authenticated coverage: the cron job used `SHIP_SECURITY_EMAIL` and `SHIP_SECURITY_PASSWORD`; authenticated `/events` and `/collaboration/*` WebSocket checks passed
+- Security summary: `0` high/critical dependency CVEs, untrusted CORS origin rejected, CSP present, no secret-like values found on common accidental exposure paths, rate-limit coverage present by code review, malformed JSON did not leak internals, unauthenticated WebSockets rejected, oversized collaboration payload rejected, and `/health` remained `200` after WebSocket probes
+
 ## Initial Setup (One-time)
 
 - [ ] Install tools: `terraform`, `awscli`, `awsebcli`, `postgresql@16`

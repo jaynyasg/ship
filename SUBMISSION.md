@@ -1,6 +1,6 @@
 # ShipShape Submission Summary
 
-**Date:** 2026-05-21
+**Date:** 2026-05-23
 **Repo:** `jaynyasg/ship`  
 **Latest verified main before Phase 07:** `bd83a30 Remediate critical dependency CVEs`
 
@@ -101,6 +101,24 @@ The full AWS Terraform application stack was reviewed but not applied for the su
 
 Render is now the preferred public deployment target for the submission because it can host the long-running Express/WebSocket API, PostgreSQL database, and static React frontend with much lower fixed cost and less operational overhead. The AWS Terraform remains as a reference architecture for future government/compliance deployment work. Details: `DEPLOYMENT_DECISION.md`.
 
+## Public Render Deployment Evidence
+
+The public submission deployment is live at `https://ship-wf2i.onrender.com`. The Render Blueprint created the `ship` web service, `ship-db` PostgreSQL database, and `ship-security-probe` cron job. The web service serves the React build and Express API from one origin so session cookies, `/api`, `/events`, and `/collaboration/*` WebSockets share the same public host.
+
+On 2026-05-23, the `ship-security-probe` Render cron job was triggered from the deployed admin Operations dashboard and printed its markdown report in the Render job logs. The final authenticated run completed with these public-surface results:
+
+- Dependency audit parsed successfully with `critical: 0` and `high: 0`.
+- CORS did not allow the untrusted credentialed origin `https://ship-security-probe.invalid`.
+- API and web responses included Content Security Policy headers.
+- Common accidental exposure paths did not reveal secret-like values.
+- Manual rate-limit review confirmed global API, login, WebSocket connection, and WebSocket message limiters.
+- Malformed JSON returned `{"error":{"code":"REQUEST_ERROR","message":"Invalid JSON body"}}` without stack traces, SQL, internal paths, or secret names.
+- Unauthenticated `/events` and `/collaboration/*` WebSocket upgrades were rejected with `401`.
+- Authenticated `/events` opened, responded to ping with pong, and handled malformed JSON safely.
+- Authenticated `/collaboration/*` opened, handled unexpected/malformed binary messages safely, rejected a `10,485,761` byte oversized payload with close code `1009`, and left `/health` returning `200`.
+
+This Render run also satisfies the manual review requirements for CORS/CSP configuration, environment/secret exposure, rate limiting, and error verbosity. The report ends in the Render logs with `--- End Ship Security Probe Markdown Report ---`.
+
 ## Files To Read
 
 - `AUDIT.md` - full audit narrative with baseline, severity, and after status.
@@ -108,6 +126,8 @@ Render is now the preferred public deployment target for the submission because 
 - `DISCOVERY.md` - standalone discovery write-up with three lessons pulled from orientation findings.
 - `AI_COST_ANALYSIS.md` - AI spend template and reflection on AI effectiveness for codebase comprehension.
 - `DEPLOYMENT_DECISION.md` - AWS cost finding and rationale for choosing Render as the submission deployment target.
+- `DEPLOYMENT.md` - Render deployment, security probe trigger, and public verification evidence.
+- `DEPLOYMENT_CHECKLIST.md` - Render submission checklist with captured public security-probe evidence.
 - `THREAT_MODEL.md` - dependency security status, Phase 06 remediation, and residual risk.
 - `eval/results/phase2-implementation-notes.md` - concise implementation and measurement log.
 - `docs/brainstorms/2026-05-20-phase-04-ms-project-inspired-improvements.md` - Phase 04 implementation evidence for Microsoft Project-inspired timeline/dependency improvements.

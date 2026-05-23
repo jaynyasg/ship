@@ -65,6 +65,20 @@ node scripts/render-security-probe.mjs
 
 The generated markdown report is printed into the Render job logs. Files created during the job are ephemeral on Render and are not copied back to this machine.
 
+Observed public submission evidence from 2026-05-23:
+
+- Public app URL: `https://ship-wf2i.onrender.com`
+- Cron job: `ship-security-probe`
+- Trigger path: **Admin Dashboard -> Operations -> Security Probe -> Trigger Run**
+- Report destination: Render cron job logs
+- Dependency audit result: `0` high and `0` critical CVEs
+- CORS/CSP: untrusted credentialed origin rejected; API and web CSP headers present
+- Secret handling: common accidental exposure paths did not reveal secret-like values
+- Rate limiting: global API, login, WebSocket connection, and WebSocket message limiters were confirmed by code review evidence in the report
+- Error verbosity: malformed JSON returned a controlled `REQUEST_ERROR` response without stack traces, SQL, internal paths, or secret names
+- WebSockets: unauthenticated `/events` and `/collaboration/*` upgrades returned `401`; authenticated event and collaboration sockets opened and handled ping, malformed payloads, and an oversized collaboration payload safely
+- Post-probe health: `/health` returned `200` with `{"status":"ok"}`
+
 For the in-app Trigger Run button, set these environment variables on the `ship` web service:
 
 | Variable | Value |
