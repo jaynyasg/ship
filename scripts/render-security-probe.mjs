@@ -85,4 +85,4 @@ if (markdownPath) {
   console.error(`Output directory contents:\n${reportFiles(outDir)}`);
 }
 
-process.exit(result.status ?? 1);
+process.exitCode = result.status ?? 1;
