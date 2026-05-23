@@ -77,6 +77,7 @@ Observed public submission evidence from 2026-05-23:
 - Rate limiting: global API, login, WebSocket connection, and WebSocket message limiters were confirmed by code review evidence in the report
 - Error verbosity: malformed JSON returned a controlled `REQUEST_ERROR` response without stack traces, SQL, internal paths, or secret names
 - WebSockets: unauthenticated `/events` and `/collaboration/*` upgrades returned `401`; authenticated event and collaboration sockets opened and handled ping, malformed payloads, and an oversized collaboration payload safely
+- Browser WebSocket verification: Chrome DevTools Network `ws` filter showed `/collaboration/wiki:<document-id>` and `/events` requests to `ship-wf2i.onrender.com` with status `101` and the browser lock indicator, confirming `wss` transport on both deployed channels
 - Post-probe health: `/health` returned `200` with `{"status":"ok"}`
 
 For the in-app Trigger Run button, set these environment variables on the `ship` web service:

@@ -117,6 +117,11 @@ On 2026-05-23, the `ship-security-probe` Render cron job was triggered from the 
 - Authenticated `/events` opened, responded to ping with pong, and handled malformed JSON safely.
 - Authenticated `/collaboration/*` opened, handled unexpected/malformed binary messages safely, rejected a `10,485,761` byte oversized payload with close code `1009`, and left `/health` returning `200`.
 
+Manual browser verification on 2026-05-23 confirmed the deployed app uses secure WebSocket transport:
+
+- Chrome DevTools Network `ws` filter showed `/collaboration/wiki:<document-id>` connections to `ship-wf2i.onrender.com` with status `101` and the browser lock indicator.
+- Chrome DevTools Network `ws` filter showed `/events` connections to `ship-wf2i.onrender.com` with status `101` and the browser lock indicator.
+
 This Render run also satisfies the manual review requirements for CORS/CSP configuration, environment/secret exposure, rate limiting, and error verbosity. The report ends in the Render logs with `--- End Ship Security Probe Markdown Report ---`.
 
 ## Files To Read

@@ -40,6 +40,7 @@ Current public submission evidence, captured 2026-05-23:
 - Security probe trigger: deployed admin Operations dashboard
 - Security probe report: printed in Render cron logs and ended with `--- End Ship Security Probe Markdown Report ---`
 - Authenticated coverage: the cron job used `SHIP_SECURITY_EMAIL` and `SHIP_SECURITY_PASSWORD`; authenticated `/events` and `/collaboration/*` WebSocket checks passed
+- Browser WebSocket evidence: Chrome DevTools Network `ws` filter confirmed `/events` and `/collaboration/wiki:<document-id>` connections to `ship-wf2i.onrender.com` with status `101` and the browser lock indicator
 - Security summary: `0` high/critical dependency CVEs, untrusted CORS origin rejected, CSP present, no secret-like values found on common accidental exposure paths, rate-limit coverage present by code review, malformed JSON did not leak internals, unauthenticated WebSockets rejected, oversized collaboration payload rejected, and `/health` remained `200` after WebSocket probes
 
 ## Initial Setup (One-time)
