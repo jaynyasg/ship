@@ -1,5 +1,7 @@
 import { ChangeEvent, useRef, useState } from 'react';
 import type { AssistantIndexingStatus } from '@ship/shared';
+import { useQueryClient } from '@tanstack/react-query';
+import { documentKeys } from '@/hooks/useDocumentsQuery';
 import { uploadFile } from '@/services/upload';
 import { cn } from '@/lib/cn';
 
@@ -22,6 +24,7 @@ const ACCEPTED_ASSISTANT_FILES = [
 ].join(',');
 
 export function AssistantUpload({ documentId, disabled = false }: AssistantUploadProps) {
+  const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [filename, setFilename] = useState<string | null>(null);
   const [status, setStatus] = useState<AssistantIndexingStatus | 'uploading' | null>(null);
@@ -37,8 +40,14 @@ export function AssistantUpload({ documentId, disabled = false }: AssistantUploa
     setError(null);
 
     try {
-      const result = await uploadFile(file, undefined, undefined, { documentId });
+      const result = await uploadFile(file, undefined, undefined, {
+        documentId,
+        createDocument: !documentId,
+      });
       setStatus(result.assistantIndexingStatus ?? 'indexed');
+      if (result.documentId && !documentId) {
+        await queryClient.invalidateQueries({ queryKey: documentKeys.wikiList() });
+      }
     } catch (uploadError) {
       setStatus('failed');
       setError(uploadError instanceof Error ? uploadError.message : 'Upload failed');

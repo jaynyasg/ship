@@ -15,6 +15,7 @@ export interface UploadResult {
   fileId: string;
   cdnUrl: string;
   assistantIndexingStatus?: 'not_indexed' | 'indexing' | 'indexed' | 'unsupported' | 'failed';
+  documentId?: string | null;
 }
 
 interface UploadProgress {
@@ -28,6 +29,7 @@ type ProgressCallback = (progress: UploadProgress) => void;
 
 interface UploadOptions {
   documentId?: string;
+  createDocument?: boolean;
 }
 
 /**
@@ -119,7 +121,8 @@ export async function uploadFile(
 
     // Check if this is a local upload URL or S3 presigned URL
     const isLocalUpload = uploadUrl.startsWith('/api/files/');
-    const fullUploadUrl = isLocalUpload ? `${API_BASE}${uploadUrl}` : uploadUrl;
+    const localUploadUrl = options?.createDocument ? `${uploadUrl}?createDocument=1` : uploadUrl;
+    const fullUploadUrl = isLocalUpload ? `${API_BASE}${localUploadUrl}` : uploadUrl;
 
     const fileBuffer = await file.arrayBuffer();
 
@@ -160,6 +163,7 @@ export async function uploadFile(
         fileId,
         cdnUrl: fileData.cdn_url,
         assistantIndexingStatus: fileData.assistant_indexing_status,
+        documentId: fileData.document_id,
       };
     } else {
       // Production: upload directly to S3
@@ -182,9 +186,11 @@ export async function uploadFile(
       const confirmRes = await fetch(`${API_BASE}/api/files/${fileId}/confirm`, {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'x-csrf-token': csrfToken,
         },
         credentials: 'include',
+        body: JSON.stringify({ createDocument: options?.createDocument === true }),
         signal,
       });
 
@@ -192,10 +198,10 @@ export async function uploadFile(
         throw new Error(await errorMessageFromResponse(confirmRes, 'Failed to confirm upload'));
       }
 
-      const { cdnUrl, assistantIndexingStatus } = await confirmRes.json();
+      const { cdnUrl, assistantIndexingStatus, documentId } = await confirmRes.json();
       updateProgress({ status: 'complete', progress: 100 });
 
-      return { fileId, cdnUrl, assistantIndexingStatus };
+      return { fileId, cdnUrl, assistantIndexingStatus, documentId };
     }
   } catch (error) {
     updateProgress({

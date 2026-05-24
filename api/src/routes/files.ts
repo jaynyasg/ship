@@ -64,6 +64,10 @@ const uploadRequestSchema = z.object({
   documentId: z.string().uuid().nullable().optional(),
 });
 
+const confirmUploadSchema = z.object({
+  createDocument: z.boolean().optional(),
+});
+
 /**
  * Blocked file extensions for security (executables and scripts)
  * We allow ANY file type EXCEPT these dangerous extensions.
@@ -239,12 +243,19 @@ filesRouter.post('/:id/local-upload', rawBodyParser, authMiddleware, async (req:
       [cdnUrl, fileId]
     );
 
-    await indexUploadedFileWithoutFailingUpload(file, workspaceId!, buffer);
+    const fileForIndexing = await ensureDocumentForUploadedFile(
+      file,
+      workspaceId!,
+      req.userId!,
+      req.query.createDocument === '1',
+    );
+    await indexUploadedFileWithoutFailingUpload(fileForIndexing, workspaceId!, buffer);
     const indexStatus = await getFileAssistantIndexStatus(fileId, workspaceId!);
 
     res.json({
       success: true,
       assistantIndexingStatus: indexStatus?.assistant_indexing_status ?? file.assistant_indexing_status,
+      documentId: indexStatus?.document_id ?? fileForIndexing.document_id ?? null,
     });
   } catch (error) {
     console.error('Error uploading file locally:', error);
@@ -300,7 +311,14 @@ filesRouter.post('/:id/confirm', authMiddleware, async (req: Request, res: Respo
       [cdnUrl, fileId]
     );
 
-    await indexUploadedFileWithoutFailingUpload(file, workspaceId!);
+    const confirmOptions = confirmUploadSchema.safeParse(req.body);
+    const fileForIndexing = await ensureDocumentForUploadedFile(
+      file,
+      workspaceId!,
+      req.userId!,
+      confirmOptions.success ? confirmOptions.data.createDocument === true : false,
+    );
+    await indexUploadedFileWithoutFailingUpload(fileForIndexing, workspaceId!);
     const indexStatus = await getFileAssistantIndexStatus(fileId, workspaceId!);
 
     res.json({
@@ -308,6 +326,7 @@ filesRouter.post('/:id/confirm', authMiddleware, async (req: Request, res: Respo
       cdnUrl,
       status: 'uploaded',
       assistantIndexingStatus: indexStatus?.assistant_indexing_status ?? file.assistant_indexing_status,
+      documentId: indexStatus?.document_id ?? fileForIndexing.document_id ?? null,
     });
   } catch (error) {
     console.error('Error confirming upload:', error);
@@ -571,8 +590,87 @@ async function loadUploadedFileBuffer(file: { s3_key: string }): Promise<Buffer>
   return s3BodyToBuffer(response.Body);
 }
 
+interface UploadedFileRow {
+  id: string;
+  filename: string;
+  mime_type: string;
+  s3_key: string;
+  document_id?: string | null;
+  size_bytes?: string | number;
+}
+
+async function ensureDocumentForUploadedFile(
+  file: UploadedFileRow,
+  workspaceId: string,
+  userId: string,
+  createDocument: boolean,
+): Promise<UploadedFileRow> {
+  if (!createDocument || file.document_id || !isSupportedAssistantFile(file.filename, file.mime_type)) {
+    return file;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const lockedFileResult = await client.query<UploadedFileRow>(
+      `SELECT id, filename, mime_type, s3_key, document_id, size_bytes
+       FROM files
+       WHERE id = $1 AND workspace_id = $2
+       FOR UPDATE`,
+      [file.id, workspaceId],
+    );
+    const lockedFile = lockedFileResult.rows[0];
+    if (!lockedFile) {
+      await client.query('COMMIT');
+      return file;
+    }
+
+    if (lockedFile.document_id) {
+      await client.query('COMMIT');
+      return { ...file, document_id: lockedFile.document_id };
+    }
+
+    const documentResult = await client.query(
+      `INSERT INTO documents (workspace_id, document_type, title, content, properties, created_by, visibility)
+       VALUES ($1, 'wiki', $2, $3, $4, $5, 'workspace')
+       RETURNING id`,
+      [
+        workspaceId,
+        lockedFile.filename,
+        JSON.stringify({ type: 'doc', content: [{ type: 'paragraph' }] }),
+        JSON.stringify({
+          source: 'assistant_upload',
+          file_id: lockedFile.id,
+          filename: lockedFile.filename,
+          mime_type: lockedFile.mime_type,
+          size_bytes: lockedFile.size_bytes,
+        }),
+        userId,
+      ],
+    );
+    const documentId = documentResult.rows[0].id as string;
+
+    await client.query(
+      `UPDATE files
+       SET document_id = $1,
+           updated_at = NOW()
+       WHERE id = $2 AND workspace_id = $3`,
+      [documentId, lockedFile.id, workspaceId],
+    );
+
+    await client.query('COMMIT');
+    return { ...file, document_id: documentId };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function indexUploadedFileWithoutFailingUpload(
-  file: { id: string; filename: string; mime_type: string; s3_key: string },
+  file: UploadedFileRow,
   workspaceId: string,
   buffer?: Buffer,
 ): Promise<void> {

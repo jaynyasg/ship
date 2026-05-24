@@ -197,6 +197,7 @@ describe('Files API', () => {
 
     expect(localUploadRes.status).toBe(200);
     expect(localUploadRes.body.assistantIndexingStatus).toBe('indexed');
+    expect(localUploadRes.body.documentId).toBe(testDocumentId);
 
     const statusRes = await request(app)
       .get(`/api/files/${fileId}/assistant-index`)
@@ -214,6 +215,62 @@ describe('Files API', () => {
     );
     expect(chunks.rows.length).toBeGreaterThan(0);
     expect(chunks.rows[0].text).toContain('Project Calypso');
+  });
+
+  it('creates a Docs wiki document for standalone Ask Ship documentation uploads', async () => {
+    const body = Buffer.from('Workspace source notes should appear under Docs.');
+    const uploadRes = await request(app)
+      .post('/api/files/upload')
+      .set('Cookie', sessionCookie)
+      .set('x-csrf-token', csrfToken)
+      .send({
+        filename: 'workspace-source.md',
+        mimeType: 'text/markdown',
+        sizeBytes: body.byteLength,
+      });
+
+    expect(uploadRes.status).toBe(200);
+    const fileId = uploadRes.body.fileId;
+
+    const localUploadRes = await request(app)
+      .post(`/api/files/${fileId}/local-upload?createDocument=1`)
+      .set('Cookie', sessionCookie)
+      .set('x-csrf-token', csrfToken)
+      .set('Content-Type', 'text/markdown')
+      .send(body);
+
+    expect(localUploadRes.status).toBe(200);
+    expect(localUploadRes.body.assistantIndexingStatus).toBe('indexed');
+    expect(typeof localUploadRes.body.documentId).toBe('string');
+
+    const fileResult = await pool.query(
+      'SELECT document_id FROM files WHERE id = $1 AND workspace_id = $2',
+      [fileId, testWorkspaceId],
+    );
+    expect(fileResult.rows[0].document_id).toBe(localUploadRes.body.documentId);
+
+    const documentResult = await pool.query(
+      `SELECT title, document_type, visibility, properties
+       FROM documents
+       WHERE id = $1 AND workspace_id = $2`,
+      [localUploadRes.body.documentId, testWorkspaceId],
+    );
+    expect(documentResult.rows.length).toBe(1);
+    expect(documentResult.rows[0].title).toBe('workspace-source.md');
+    expect(documentResult.rows[0].document_type).toBe('wiki');
+    expect(documentResult.rows[0].visibility).toBe('workspace');
+    expect(documentResult.rows[0].properties.source).toBe('assistant_upload');
+    expect(documentResult.rows[0].properties.file_id).toBe(fileId);
+
+    const chunks = await pool.query(
+      `SELECT document_id, text
+       FROM assistant_search_chunks
+       WHERE workspace_id = $1 AND source_type = 'file' AND source_id = $2`,
+      [testWorkspaceId, fileId],
+    );
+    expect(chunks.rows.length).toBeGreaterThan(0);
+    expect(chunks.rows[0].document_id).toBe(localUploadRes.body.documentId);
+    expect(chunks.rows[0].text).toContain('Workspace source notes');
   });
 
   it('indexes uploaded PDF documentation attached to a document for Ask Ship', async () => {
