@@ -19,6 +19,7 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:orphan-check": "tsx src/db/scripts/orphan-diagnostic.ts",
+    "assistant:eval": "tsx src/services/assistant/eval-cli.ts",
     "security:audit": "tsx src/security-probe/cli.ts",
     "openapi:generate": "tsx src/scripts/generate-openapi.ts",
     "mcp": "tsx src/mcp/server.ts"

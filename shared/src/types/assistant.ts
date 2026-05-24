@@ -125,3 +125,45 @@ export interface AssistantChatResponse {
   traceId?: string;
   error?: AssistantError;
 }
+
+export type AssistantTraceEventType =
+  | 'retrieval'
+  | 'rerank'
+  | 'tool'
+  | 'model'
+  | 'extraction'
+  | 'embedding'
+  | 'eval';
+
+export interface AssistantTraceRun {
+  traceId: string;
+  status: AssistantChatStatus | 'started';
+  provider: AssistantProvider | string | null;
+  model: string | null;
+  totalSources: number;
+  citationsCount: number;
+  durationMs: number | null;
+  metadata: Record<string, unknown>;
+  error: string | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export interface AssistantTraceEvent {
+  id: string;
+  eventType: AssistantTraceEventType | string;
+  eventName: string;
+  sourceType: string | null;
+  sourceId: string | null;
+  documentId: string | null;
+  fileId: string | null;
+  durationMs: number | null;
+  metadata: Record<string, unknown>;
+  error: string | null;
+  createdAt: string;
+}
+
+export interface AssistantTraceResponse {
+  run: AssistantTraceRun;
+  events: AssistantTraceEvent[];
+}

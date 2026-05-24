@@ -3,6 +3,15 @@ import { z, registry } from '../registry.js';
 const AssistantProviderSchema = z.enum(['openai', 'bedrock', 'mock', 'unconfigured']).openapi('AssistantProvider');
 const AssistantSourceTypeSchema = z.enum(['document', 'project', 'program', 'issue', 'week', 'timeline', 'file']).openapi('AssistantSourceType');
 const AssistantChatStatusSchema = z.enum(['answered', 'no_context', 'unavailable', 'rate_limited', 'error']).openapi('AssistantChatStatus');
+const AssistantTraceEventTypeSchema = z.enum([
+  'retrieval',
+  'rerank',
+  'tool',
+  'model',
+  'extraction',
+  'embedding',
+  'eval',
+]).openapi('AssistantTraceEventType');
 const AssistantErrorCodeSchema = z.enum([
   'ASSISTANT_UNAVAILABLE',
   'MESSAGE_REQUIRED',
@@ -93,9 +102,39 @@ const AssistantChatResponseSchema = z.object({
   }).optional(),
 }).openapi('AssistantChatResponse');
 
+const AssistantTraceResponseSchema = z.object({
+  run: z.object({
+    traceId: z.string(),
+    status: z.union([AssistantChatStatusSchema, z.literal('started')]),
+    provider: z.union([AssistantProviderSchema, z.string()]).nullable(),
+    model: z.string().nullable(),
+    totalSources: z.number(),
+    citationsCount: z.number(),
+    durationMs: z.number().nullable(),
+    metadata: z.record(z.unknown()),
+    error: z.string().nullable(),
+    createdAt: z.string(),
+    completedAt: z.string().nullable(),
+  }),
+  events: z.array(z.object({
+    id: z.string().uuid(),
+    eventType: z.union([AssistantTraceEventTypeSchema, z.string()]),
+    eventName: z.string(),
+    sourceType: z.string().nullable(),
+    sourceId: z.string().nullable(),
+    documentId: z.string().nullable(),
+    fileId: z.string().nullable(),
+    durationMs: z.number().nullable(),
+    metadata: z.record(z.unknown()),
+    error: z.string().nullable(),
+    createdAt: z.string(),
+  })),
+}).openapi('AssistantTraceResponse');
+
 registry.register('AssistantStatus', AssistantStatusSchema);
 registry.register('AssistantChatRequest', AssistantChatRequestSchema);
 registry.register('AssistantChatResponse', AssistantChatResponseSchema);
+registry.register('AssistantTraceResponse', AssistantTraceResponseSchema);
 
 registry.registerPath({
   method: 'get',
@@ -147,6 +186,31 @@ registry.registerPath({
     503: {
       description: 'Assistant model provider is not configured or unavailable',
       content: { 'application/json': { schema: AssistantChatResponseSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/assistant/traces/{traceId}',
+  tags: ['Assistant'],
+  summary: 'Inspect an Ask Ship trace',
+  description: 'Returns trace events for a completed Ask Ship request. Members can inspect their own traces; workspace admins can inspect workspace traces.',
+  request: {
+    params: z.object({
+      traceId: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Assistant run and trace events',
+      content: { 'application/json': { schema: AssistantTraceResponseSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+    },
+    404: {
+      description: 'Trace not found or not visible to the caller',
     },
   },
 });

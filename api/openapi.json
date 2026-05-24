@@ -343,6 +343,17 @@
             "minimum": 0,
             "description": "Number of matching documents skipped"
           },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Current 1-based page when page-style pagination is used"
+          },
+          "per_page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "description": "Requested page size when page-style pagination is used"
+          },
           "returned": {
             "type": "integer",
             "minimum": 0,
@@ -356,6 +367,11 @@
             "type": "integer",
             "minimum": 0,
             "description": "Total matching documents when include_total=true"
+          },
+          "total_count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Total matching documents when page-style pagination includes count metadata"
           }
         },
         "required": [
@@ -3245,6 +3261,13 @@
             "maximum": 1073741824,
             "description": "File size in bytes (max 1GB)",
             "example": 1024000
+          },
+          "documentId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid",
+            "description": "Document to associate with the uploaded file for Ask Ship indexing",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
           }
         },
         "required": [
@@ -3253,13 +3276,22 @@
           "sizeBytes"
         ]
       },
+      "AssistantIndexingStatus": {
+        "type": "string",
+        "enum": [
+          "not_indexed",
+          "indexing",
+          "indexed",
+          "unsupported",
+          "failed"
+        ]
+      },
       "UploadResponse": {
         "type": "object",
         "properties": {
           "uploadUrl": {
             "type": "string",
-            "format": "uri",
-            "description": "Presigned URL to PUT the file (expires in 15 minutes)"
+            "description": "Presigned URL or local upload endpoint for the file"
           },
           "fileId": {
             "type": "string",
@@ -3267,16 +3299,25 @@
             "description": "File ID to use when referencing this file",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
-          "publicUrl": {
+          "s3Key": {
             "type": "string",
-            "format": "uri",
-            "description": "URL where the file will be accessible after upload"
+            "description": "Storage key for the uploaded file"
+          },
+          "assistantIndexingStatus": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AssistantIndexingStatus"
+              },
+              {
+                "description": "Ask Ship indexing status for supported documentation files"
+              }
+            ]
           }
         },
         "required": [
           "uploadUrl",
           "fileId",
-          "publicUrl"
+          "s3Key"
         ]
       },
       "FileMetadata": {
@@ -3291,30 +3332,46 @@
           "filename": {
             "type": "string"
           },
-          "mimeType": {
+          "mime_type": {
             "type": "string"
           },
-          "sizeBytes": {
+          "size_bytes": {
             "type": "integer"
           },
-          "uploadedBy": {
-            "type": "string",
-            "format": "uuid",
-            "description": "UUID identifier",
-            "example": "550e8400-e29b-41d4-a716-446655440000"
-          },
-          "documentId": {
+          "document_id": {
             "type": "string",
             "nullable": true,
             "format": "uuid",
             "description": "Document this file is attached to",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
-          "publicUrl": {
+          "cdn_url": {
             "type": "string",
-            "format": "uri"
+            "nullable": true
           },
-          "createdAt": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "uploaded",
+              "failed"
+            ]
+          },
+          "assistant_indexing_status": {
+            "$ref": "#/components/schemas/AssistantIndexingStatus"
+          },
+          "assistant_indexed_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "ISO 8601 datetime string",
+            "example": "2025-01-30T14:30:00.000Z"
+          },
+          "assistant_index_error": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
             "type": "string",
             "format": "date-time",
             "description": "ISO 8601 datetime string",
@@ -3324,12 +3381,54 @@
         "required": [
           "id",
           "filename",
-          "mimeType",
-          "sizeBytes",
-          "uploadedBy",
-          "documentId",
-          "publicUrl",
-          "createdAt"
+          "mime_type",
+          "size_bytes",
+          "document_id",
+          "cdn_url",
+          "status",
+          "assistant_indexing_status",
+          "assistant_indexed_at",
+          "assistant_index_error",
+          "created_at"
+        ]
+      },
+      "FileAssistantIndexStatus": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID identifier",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "assistant_indexing_status": {
+            "$ref": "#/components/schemas/AssistantIndexingStatus"
+          },
+          "assistant_indexed_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "ISO 8601 datetime string",
+            "example": "2025-01-30T14:30:00.000Z"
+          },
+          "assistant_index_error": {
+            "type": "string",
+            "nullable": true
+          },
+          "document_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid",
+            "description": "UUID identifier",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          }
+        },
+        "required": [
+          "id",
+          "assistant_indexing_status",
+          "assistant_indexed_at",
+          "assistant_index_error",
+          "document_id"
         ]
       },
       "ActivityDay": {
@@ -3661,9 +3760,10 @@
               "program",
               "project",
               "sprint",
-              "parent"
+              "parent",
+              "depends_on"
             ],
-            "description": "Type of document association"
+            "description": "Type of document association. Dependency edges use depends_on as the canonical stored direction."
           },
           "created_at": {
             "type": "string",
@@ -5529,6 +5629,1418 @@
         "required": [
           "available"
         ]
+      },
+      "AssistantProvider": {
+        "type": "string",
+        "enum": [
+          "openai",
+          "bedrock",
+          "mock",
+          "unconfigured"
+        ]
+      },
+      "AssistantStatus": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/AssistantProvider"
+          },
+          "model": {
+            "type": "string",
+            "nullable": true
+          },
+          "missingConfiguration": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "embeddings": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "openai",
+                  "mock",
+                  "disabled"
+                ]
+              },
+              "model": {
+                "type": "string",
+                "nullable": true
+              },
+              "dimensions": {
+                "type": "number"
+              },
+              "missingConfiguration": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "enabled",
+              "provider",
+              "model",
+              "dimensions",
+              "missingConfiguration"
+            ]
+          },
+          "observability": {
+            "type": "object",
+            "properties": {
+              "tracesEnabled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "tracesEnabled"
+            ]
+          },
+          "uploadIndexing": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "supportedMimeTypes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "maxExtractionBytes": {
+                "type": "number"
+              },
+              "statuses": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "not_indexed",
+                    "indexing",
+                    "indexed",
+                    "unsupported",
+                    "failed"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "enabled",
+              "supportedMimeTypes",
+              "maxExtractionBytes",
+              "statuses"
+            ]
+          },
+          "limits": {
+            "type": "object",
+            "properties": {
+              "maxMessageChars": {
+                "type": "number"
+              },
+              "maxHistoryMessages": {
+                "type": "number"
+              },
+              "maxContextChunks": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "maxMessageChars",
+              "maxHistoryMessages",
+              "maxContextChunks"
+            ]
+          }
+        },
+        "required": [
+          "enabled",
+          "available",
+          "provider",
+          "model",
+          "missingConfiguration",
+          "uploadIndexing",
+          "limits"
+        ]
+      },
+      "AssistantSourceType": {
+        "type": "string",
+        "enum": [
+          "document",
+          "project",
+          "program",
+          "issue",
+          "week",
+          "timeline",
+          "file"
+        ]
+      },
+      "AssistantChatRequest": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "user",
+                    "assistant"
+                  ]
+                },
+                "content": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "role",
+                "content"
+              ]
+            }
+          },
+          "context": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "documentId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "documentType": {
+                "type": "string"
+              },
+              "projectId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          "filters": {
+            "type": "object",
+            "properties": {
+              "sourceTypes": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AssistantSourceType"
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "AssistantChatStatus": {
+        "type": "string",
+        "enum": [
+          "answered",
+          "no_context",
+          "unavailable",
+          "rate_limited",
+          "error"
+        ]
+      },
+      "AssistantCitation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sourceType": {
+            "$ref": "#/components/schemas/AssistantSourceType"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "excerpt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "sourceType",
+          "sourceId",
+          "title",
+          "url",
+          "excerpt"
+        ]
+      },
+      "AssistantErrorCode": {
+        "type": "string",
+        "enum": [
+          "ASSISTANT_UNAVAILABLE",
+          "MESSAGE_REQUIRED",
+          "MESSAGE_TOO_LONG",
+          "RATE_LIMITED",
+          "MODEL_ERROR",
+          "RETRIEVAL_ERROR"
+        ]
+      },
+      "AssistantChatResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/AssistantChatStatus"
+          },
+          "message": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string",
+                "enum": [
+                  "assistant"
+                ]
+              },
+              "content": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "role",
+              "content",
+              "createdAt"
+            ]
+          },
+          "citations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssistantCitation"
+            }
+          },
+          "sourceCounts": {
+            "type": "object",
+            "properties": {
+              "documents": {
+                "type": "number"
+              },
+              "projects": {
+                "type": "number"
+              },
+              "programs": {
+                "type": "number"
+              },
+              "issues": {
+                "type": "number"
+              },
+              "weeks": {
+                "type": "number"
+              },
+              "timeline": {
+                "type": "number"
+              },
+              "files": {
+                "type": "number"
+              },
+              "total": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "documents",
+              "projects",
+              "programs",
+              "issues",
+              "weeks",
+              "timeline",
+              "files",
+              "total"
+            ]
+          },
+          "traceId": {
+            "type": "string"
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "$ref": "#/components/schemas/AssistantErrorCode"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "message",
+          "citations",
+          "sourceCounts"
+        ]
+      },
+      "AssistantTraceEventType": {
+        "type": "string",
+        "enum": [
+          "retrieval",
+          "rerank",
+          "tool",
+          "model",
+          "extraction",
+          "embedding",
+          "eval"
+        ]
+      },
+      "AssistantTraceResponse": {
+        "type": "object",
+        "properties": {
+          "run": {
+            "type": "object",
+            "properties": {
+              "traceId": {
+                "type": "string"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AssistantChatStatus"
+                  },
+                  {
+                    "type": "string",
+                    "enum": [
+                      "started"
+                    ]
+                  }
+                ]
+              },
+              "provider": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AssistantProvider"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "nullable": true
+                  }
+                ]
+              },
+              "model": {
+                "type": "string",
+                "nullable": true
+              },
+              "totalSources": {
+                "type": "number"
+              },
+              "citationsCount": {
+                "type": "number"
+              },
+              "durationMs": {
+                "type": "number",
+                "nullable": true
+              },
+              "metadata": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                }
+              },
+              "error": {
+                "type": "string",
+                "nullable": true
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "completedAt": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "traceId",
+              "status",
+              "provider",
+              "model",
+              "totalSources",
+              "citationsCount",
+              "durationMs",
+              "metadata",
+              "error",
+              "createdAt",
+              "completedAt"
+            ]
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "eventType": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/AssistantTraceEventType"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "eventName": {
+                  "type": "string"
+                },
+                "sourceType": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "sourceId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "documentId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "fileId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "durationMs": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "metadata": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                },
+                "error": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "createdAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "eventType",
+                "eventName",
+                "sourceType",
+                "sourceId",
+                "documentId",
+                "fileId",
+                "durationMs",
+                "metadata",
+                "error",
+                "createdAt"
+              ]
+            }
+          }
+        },
+        "required": [
+          "run",
+          "events"
+        ]
+      },
+      "TimelineDependencyEdge": {
+        "type": "object",
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID identifier",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "target_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID identifier",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "relationship_type": {
+            "type": "string",
+            "enum": [
+              "depends_on"
+            ]
+          },
+          "source_in_scope": {
+            "type": "boolean"
+          },
+          "target_in_scope": {
+            "type": "boolean"
+          },
+          "source_title": {
+            "type": "string"
+          },
+          "target_title": {
+            "type": "string"
+          },
+          "source_document_type": {
+            "type": "string",
+            "enum": [
+              "program",
+              "project",
+              "sprint",
+              "issue"
+            ],
+            "description": "Document types that can appear as timeline rows"
+          },
+          "target_document_type": {
+            "type": "string",
+            "enum": [
+              "program",
+              "project",
+              "sprint",
+              "issue"
+            ],
+            "description": "Document types that can appear as timeline rows"
+          },
+          "target_status": {
+            "type": "string",
+            "nullable": true
+          },
+          "is_blocking": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "source_id",
+          "target_id",
+          "relationship_type",
+          "source_in_scope",
+          "target_in_scope",
+          "is_blocking"
+        ]
+      },
+      "TimelineRow": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID identifier",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "title": {
+            "type": "string"
+          },
+          "document_type": {
+            "type": "string",
+            "enum": [
+              "program",
+              "project",
+              "sprint",
+              "issue"
+            ],
+            "description": "Document types that can appear as timeline rows"
+          },
+          "status": {
+            "type": "string",
+            "nullable": true
+          },
+          "planned_start": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "ISO 8601 date string (YYYY-MM-DD)",
+            "example": "2025-01-30"
+          },
+          "planned_end": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "ISO 8601 date string (YYYY-MM-DD)",
+            "example": "2025-01-30"
+          },
+          "actual_start": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "ISO 8601 date string (YYYY-MM-DD)",
+            "example": "2025-01-30"
+          },
+          "actual_end": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "ISO 8601 date string (YYYY-MM-DD)",
+            "example": "2025-01-30"
+          },
+          "program_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUID identifier",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          },
+          "project_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUID identifier",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          },
+          "sprint_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUID identifier",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          },
+          "dependency_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUID identifier",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          },
+          "blocker_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUID identifier",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          },
+          "blocks_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUID identifier",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          },
+          "blocked": {
+            "type": "boolean"
+          },
+          "overdue": {
+            "type": "boolean"
+          },
+          "at_risk": {
+            "type": "boolean"
+          },
+          "critical_path": {
+            "type": "boolean"
+          },
+          "critical_path_order": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "sprint_number": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "exclusiveMinimum": true
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "document_type",
+          "status",
+          "planned_start",
+          "planned_end",
+          "actual_start",
+          "actual_end",
+          "program_ids",
+          "project_ids",
+          "sprint_ids",
+          "dependency_ids",
+          "blocker_ids",
+          "blocks_ids",
+          "blocked",
+          "overdue",
+          "at_risk",
+          "critical_path",
+          "critical_path_order"
+        ]
+      },
+      "TimelineResponse": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUID identifier",
+                "example": "550e8400-e29b-41d4-a716-446655440000"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "project",
+                  "program"
+                ],
+                "description": "Timeline scope type"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "type",
+              "title"
+            ]
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 datetime string",
+            "example": "2025-01-30T14:30:00.000Z"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimelineRow"
+            }
+          },
+          "dependencies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimelineDependencyEdge"
+            }
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "total_rows": {
+                "type": "integer"
+              },
+              "dependency_count": {
+                "type": "integer"
+              },
+              "blocked_count": {
+                "type": "integer"
+              },
+              "overdue_count": {
+                "type": "integer"
+              },
+              "at_risk_count": {
+                "type": "integer"
+              },
+              "critical_path_count": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total_rows",
+              "dependency_count",
+              "blocked_count",
+              "overdue_count",
+              "at_risk_count",
+              "critical_path_count"
+            ]
+          }
+        },
+        "required": [
+          "scope",
+          "generated_at",
+          "rows",
+          "dependencies",
+          "summary"
+        ]
+      },
+      "TimelineBaselineRow": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID identifier",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "title": {
+            "type": "string"
+          },
+          "document_type": {
+            "type": "string",
+            "enum": [
+              "program",
+              "project",
+              "sprint",
+              "issue"
+            ],
+            "description": "Document types that can appear as timeline rows"
+          },
+          "planned_start": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "ISO 8601 date string (YYYY-MM-DD)",
+            "example": "2025-01-30"
+          },
+          "planned_end": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "ISO 8601 date string (YYYY-MM-DD)",
+            "example": "2025-01-30"
+          },
+          "status": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "document_type",
+          "planned_start",
+          "planned_end",
+          "status"
+        ]
+      },
+      "TimelineBaselineSnapshot": {
+        "type": "object",
+        "properties": {
+          "captured_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 datetime string",
+            "example": "2025-01-30T14:30:00.000Z"
+          },
+          "captured_by": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID identifier",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "scope": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUID identifier",
+                "example": "550e8400-e29b-41d4-a716-446655440000"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "project",
+                  "program"
+                ],
+                "description": "Timeline scope type"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "type",
+              "title"
+            ]
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimelineBaselineRow"
+            }
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "total_rows": {
+                "type": "integer"
+              },
+              "dependency_count": {
+                "type": "integer"
+              },
+              "blocked_count": {
+                "type": "integer"
+              },
+              "overdue_count": {
+                "type": "integer"
+              },
+              "at_risk_count": {
+                "type": "integer"
+              },
+              "critical_path_count": {
+                "type": "integer"
+              },
+              "planned_start": {
+                "type": "string",
+                "nullable": true,
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                "description": "ISO 8601 date string (YYYY-MM-DD)",
+                "example": "2025-01-30"
+              },
+              "planned_end": {
+                "type": "string",
+                "nullable": true,
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                "description": "ISO 8601 date string (YYYY-MM-DD)",
+                "example": "2025-01-30"
+              }
+            },
+            "required": [
+              "total_rows",
+              "dependency_count",
+              "blocked_count",
+              "overdue_count",
+              "at_risk_count",
+              "critical_path_count",
+              "planned_start",
+              "planned_end"
+            ]
+          }
+        },
+        "required": [
+          "captured_at",
+          "captured_by",
+          "scope",
+          "rows",
+          "summary"
+        ]
+      },
+      "TimelineVarianceRow": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID identifier",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "title": {
+            "type": "string"
+          },
+          "document_type": {
+            "type": "string",
+            "enum": [
+              "program",
+              "project",
+              "sprint",
+              "issue"
+            ],
+            "description": "Document types that can appear as timeline rows"
+          },
+          "current_planned_start": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "ISO 8601 date string (YYYY-MM-DD)",
+            "example": "2025-01-30"
+          },
+          "current_planned_end": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "ISO 8601 date string (YYYY-MM-DD)",
+            "example": "2025-01-30"
+          },
+          "current_status": {
+            "type": "string",
+            "nullable": true
+          },
+          "baseline_planned_start": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "ISO 8601 date string (YYYY-MM-DD)",
+            "example": "2025-01-30"
+          },
+          "baseline_planned_end": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "ISO 8601 date string (YYYY-MM-DD)",
+            "example": "2025-01-30"
+          },
+          "baseline_status": {
+            "type": "string",
+            "nullable": true
+          },
+          "start_variance_days": {
+            "type": "integer",
+            "nullable": true
+          },
+          "end_variance_days": {
+            "type": "integer",
+            "nullable": true
+          },
+          "status_changed": {
+            "type": "boolean"
+          },
+          "missing_from_baseline": {
+            "type": "boolean"
+          },
+          "missing_from_current": {
+            "type": "boolean"
+          },
+          "blocked": {
+            "type": "boolean"
+          },
+          "overdue": {
+            "type": "boolean"
+          },
+          "at_risk": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "document_type",
+          "current_planned_start",
+          "current_planned_end",
+          "current_status",
+          "baseline_planned_start",
+          "baseline_planned_end",
+          "baseline_status",
+          "start_variance_days",
+          "end_variance_days",
+          "status_changed",
+          "missing_from_baseline",
+          "missing_from_current",
+          "blocked",
+          "overdue",
+          "at_risk"
+        ]
+      },
+      "TimelineVarianceResponse": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUID identifier",
+                "example": "550e8400-e29b-41d4-a716-446655440000"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "project",
+                  "program"
+                ],
+                "description": "Timeline scope type"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "type",
+              "title"
+            ]
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 datetime string",
+            "example": "2025-01-30T14:30:00.000Z"
+          },
+          "baseline": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TimelineBaselineSnapshot"
+              },
+              {
+                "nullable": true
+              }
+            ]
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimelineVarianceRow"
+            }
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "total_rows": {
+                "type": "integer"
+              },
+              "current_rows": {
+                "type": "integer"
+              },
+              "baseline_rows": {
+                "type": "integer"
+              },
+              "missing_from_baseline_count": {
+                "type": "integer"
+              },
+              "missing_from_current_count": {
+                "type": "integer"
+              },
+              "start_variance_count": {
+                "type": "integer"
+              },
+              "end_variance_count": {
+                "type": "integer"
+              },
+              "status_changed_count": {
+                "type": "integer"
+              },
+              "delayed_count": {
+                "type": "integer"
+              },
+              "improved_count": {
+                "type": "integer"
+              },
+              "total_end_variance_days": {
+                "type": "integer"
+              },
+              "average_end_variance_days": {
+                "type": "number",
+                "nullable": true
+              }
+            },
+            "required": [
+              "total_rows",
+              "current_rows",
+              "baseline_rows",
+              "missing_from_baseline_count",
+              "missing_from_current_count",
+              "start_variance_count",
+              "end_variance_count",
+              "status_changed_count",
+              "delayed_count",
+              "improved_count",
+              "total_end_variance_days",
+              "average_end_variance_days"
+            ]
+          }
+        },
+        "required": [
+          "scope",
+          "generated_at",
+          "baseline",
+          "rows",
+          "summary"
+        ]
+      },
+      "AdminApiError": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "success",
+          "error"
+        ]
+      },
+      "SecurityProbeStatus": {
+        "type": "object",
+        "properties": {
+          "cronJobName": {
+            "type": "string"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "renderApiKeyConfigured": {
+            "type": "boolean"
+          },
+          "cronJobIdConfigured": {
+            "type": "boolean"
+          },
+          "missingEnvVars": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "cronJobName",
+          "configured",
+          "renderApiKeyConfigured",
+          "cronJobIdConfigured",
+          "missingEnvVars"
+        ]
+      },
+      "SecurityProbeStatusResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/SecurityProbeStatus"
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ]
+      },
+      "SecurityProbeTriggerResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "triggered": {
+                "type": "boolean"
+              },
+              "cronJobName": {
+                "type": "string"
+              },
+              "cronJobId": {
+                "type": "string"
+              },
+              "renderResponse": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "nullable": true
+                  },
+                  {
+                    "nullable": true
+                  }
+                ]
+              }
+            },
+            "required": [
+              "triggered",
+              "cronJobName",
+              "cronJobId",
+              "renderResponse"
+            ]
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ]
+      },
+      "TimelineDemoSeedResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "boolean"
+              },
+              "projectId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUID identifier",
+                "example": "550e8400-e29b-41d4-a716-446655440000"
+              },
+              "programId": {
+                "type": "string",
+                "nullable": true,
+                "format": "uuid",
+                "description": "UUID identifier",
+                "example": "550e8400-e29b-41d4-a716-446655440000"
+              },
+              "timelineUrl": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "created",
+              "projectId",
+              "programId",
+              "timelineUrl"
+            ]
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ]
       }
     },
     "parameters": {}
@@ -5540,7 +7052,7 @@
           "Documents"
         ],
         "summary": "List documents",
-        "description": "List documents with optional filtering by type and parent. Supplying limit enables paginated response metadata.",
+        "description": "List documents with optional filtering by type and parent. Supplying limit enables offset pagination; supplying page or per_page enables page-style pagination with total_count by default.",
         "parameters": [
           {
             "schema": {
@@ -5579,7 +7091,7 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 500,
-              "description": "Maximum number of documents to return. Enables the paginated response shape."
+              "description": "Maximum number of documents to return. Enables the paginated response shape, or acts as page size when page is supplied."
             },
             "required": false,
             "name": "limit",
@@ -5598,12 +7110,33 @@
           },
           {
             "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "1-based page number. Enables page-style pagination and defaults per_page to 50."
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "description": "Page size for page-style pagination. Enables page-style pagination and defaults page to 1."
+            },
+            "required": false,
+            "name": "per_page",
+            "in": "query"
+          },
+          {
+            "schema": {
               "type": "string",
               "enum": [
                 "true",
                 "false"
               ],
-              "description": "Include total matching count in pagination metadata. Requires limit."
+              "description": "Include total matching count in pagination metadata. Requires limit unless page or per_page is supplied."
             },
             "required": false,
             "name": "include_total",
@@ -5612,7 +7145,7 @@
         ],
         "responses": {
           "200": {
-            "description": "List of documents. Returns an array by default, or a paginated object when limit is supplied.",
+            "description": "List of documents. Returns an array by default, or a paginated object when limit, page, or per_page is supplied.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9876,6 +11409,78 @@
         }
       }
     },
+    "/files/{fileId}/assistant-index": {
+      "get": {
+        "tags": [
+          "Files"
+        ],
+        "summary": "Get Ask Ship indexing status",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUID identifier",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            },
+            "required": true,
+            "name": "fileId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File indexing status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileAssistantIndexStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "File not found"
+          }
+        }
+      }
+    },
+    "/files/{fileId}/reindex": {
+      "post": {
+        "tags": [
+          "Files"
+        ],
+        "summary": "Rebuild Ask Ship file index",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUID identifier",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            },
+            "required": true,
+            "name": "fileId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File indexing status after reindex",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileAssistantIndexStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "File not found"
+          }
+        }
+      }
+    },
     "/files/{fileId}/attach": {
       "post": {
         "tags": [
@@ -10402,7 +12007,7 @@
           "Documents"
         ],
         "summary": "Add document association",
-        "description": "Add an association to a program, project, sprint, or parent document.",
+        "description": "Add an association to a program, project, sprint, parent document, or dependency predecessor.",
         "parameters": [
           {
             "schema": {
@@ -10434,9 +12039,10 @@
                       "program",
                       "project",
                       "sprint",
-                      "parent"
+                      "parent",
+                      "depends_on"
                     ],
-                    "description": "Type of document association"
+                    "description": "Type of document association. Dependency edges use depends_on as the canonical stored direction."
                   }
                 },
                 "required": [
@@ -11395,6 +13001,434 @@
           },
           "429": {
             "description": "Rate limit exceeded (max 10 per hour)"
+          }
+        }
+      }
+    },
+    "/assistant/status": {
+      "get": {
+        "tags": [
+          "Assistant"
+        ],
+        "summary": "Check Ask Ship assistant availability",
+        "description": "Returns whether Ask Ship is enabled and has server-side model configuration.",
+        "responses": {
+          "200": {
+            "description": "Ask Ship availability and indexing status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          }
+        }
+      }
+    },
+    "/assistant/chat": {
+      "post": {
+        "tags": [
+          "Assistant"
+        ],
+        "summary": "Ask Ship a workspace-scoped question",
+        "description": "Submits a non-streaming assistant question. Responses include citations when retrieved Ship context is used.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantChatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Assistant response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantChatResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid assistant request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantChatResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "429": {
+            "description": "Assistant rate limit exceeded"
+          },
+          "503": {
+            "description": "Assistant model provider is not configured or unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantChatResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistant/traces/{traceId}": {
+      "get": {
+        "tags": [
+          "Assistant"
+        ],
+        "summary": "Inspect an Ask Ship trace",
+        "description": "Returns trace events for a completed Ask Ship request. Members can inspect their own traces; workspace admins can inspect workspace traces.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "traceId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Assistant run and trace events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantTraceResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Trace not found or not visible to the caller"
+          }
+        }
+      }
+    },
+    "/projects/{id}/timeline": {
+      "get": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Get project timeline",
+        "description": "Returns a bounded timeline read model for a project, including related weeks, issues, dependency edges, and blocked/at-risk flags.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUID identifier",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project timeline",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimelineResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found"
+          }
+        }
+      }
+    },
+    "/projects/{id}/timeline/baseline": {
+      "get": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Get project timeline baseline variance",
+        "description": "Returns the current project timeline compared against the captured baseline stored on the project document.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUID identifier",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project timeline baseline variance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimelineVarianceResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Capture project timeline baseline",
+        "description": "Stores the current project timeline rows as the project baseline and returns variance against the captured snapshot.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUID identifier",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Captured project timeline baseline",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimelineVarianceResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found"
+          }
+        }
+      }
+    },
+    "/programs/{id}/timeline": {
+      "get": {
+        "tags": [
+          "Programs"
+        ],
+        "summary": "Get program timeline",
+        "description": "Returns a bounded timeline read model for a program, including related projects, weeks, issues, dependency edges, and blocked/at-risk flags.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUID identifier",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Program timeline",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimelineResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Program not found"
+          }
+        }
+      }
+    },
+    "/programs/{id}/timeline/baseline": {
+      "get": {
+        "tags": [
+          "Programs"
+        ],
+        "summary": "Get program timeline baseline variance",
+        "description": "Returns the current program timeline compared against the captured baseline stored on the program document.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUID identifier",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Program timeline baseline variance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimelineVarianceResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Program not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Programs"
+        ],
+        "summary": "Capture program timeline baseline",
+        "description": "Stores the current program timeline rows as the program baseline and returns variance against the captured snapshot.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUID identifier",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Captured program timeline baseline",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimelineVarianceResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Program not found"
+          }
+        }
+      }
+    },
+    "/admin/security-probe": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get security probe trigger status",
+        "description": "Returns whether the Render cron job trigger is configured for the in-app super-admin operation.",
+        "responses": {
+          "200": {
+            "description": "Security probe trigger configuration status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityProbeStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/security-probe/trigger": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Trigger security probe",
+        "description": "Triggers the Render security probe cron job. Requires super-admin session authentication.",
+        "responses": {
+          "202": {
+            "description": "Render accepted the cron job run request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityProbeTriggerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Render trigger environment variables are missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Render did not accept the trigger request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/demo/timeline": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Seed timeline demo data",
+        "description": "Creates an idempotent program, project, weeks, issues, dependencies, and baselines in the current workspace for timeline demonstrations.",
+        "responses": {
+          "200": {
+            "description": "Timeline demo data already existed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimelineDemoSeedResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Timeline demo data created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimelineDemoSeedResponse"
+                }
+              }
+            }
           }
         }
       }

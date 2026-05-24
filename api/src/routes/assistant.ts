@@ -4,6 +4,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { ensureAssistantUploadSchema } from '../db/assistant-upload-schema.js';
 import { getAssistantStatus, ASSISTANT_LIMITS } from '../services/assistant/config.js';
 import { answerAssistantQuestion } from '../services/assistant/chat.js';
+import { getAssistantTrace } from '../services/assistant/tracing.js';
 import type {
   AssistantChatRequest,
   AssistantChatResponse,
@@ -49,6 +50,39 @@ function assistantResponse(
 router.get('/status', authMiddleware, async (_req: Request, res: Response) => {
   await ensureAssistantUploadSchema();
   res.json(getAssistantStatus());
+});
+
+router.get('/traces/:traceId', authMiddleware, async (req: Request, res: Response) => {
+  await ensureAssistantUploadSchema();
+  const traceId = req.params.traceId;
+  if (typeof traceId !== 'string') {
+    res.status(404).json({
+      error: {
+        code: 'TRACE_NOT_FOUND',
+        message: 'Assistant trace not found',
+      },
+    });
+    return;
+  }
+
+  const trace = await getAssistantTrace({
+    traceId,
+    workspaceId: req.workspaceId!,
+    userId: req.userId!,
+    canInspectWorkspaceTraces: req.isSuperAdmin || req.workspaceRole === 'admin',
+  });
+
+  if (!trace) {
+    res.status(404).json({
+      error: {
+        code: 'TRACE_NOT_FOUND',
+        message: 'Assistant trace not found',
+      },
+    });
+    return;
+  }
+
+  res.json(trace);
 });
 
 router.post('/chat', authMiddleware, async (req: Request, res: Response) => {

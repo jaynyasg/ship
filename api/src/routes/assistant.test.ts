@@ -226,6 +226,65 @@ describe('Assistant API', () => {
         excerptChars: expect.any(Number),
       }),
     ]));
+
+    const traceRes = await request(app)
+      .get(`/api/assistant/traces/${res.body.traceId}`)
+      .set('Cookie', sessionCookie);
+    expect(traceRes.status).toBe(200);
+    expect(traceRes.body.run).toMatchObject({
+      traceId: res.body.traceId,
+      status: 'answered',
+      provider: 'mock',
+      citationsCount: 1,
+    });
+    expect(traceRes.body.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        eventType: 'rerank',
+        eventName: 'score_blend_rerank',
+      }),
+    ]));
+    expect(traceRes.body.events.find((event: { eventName: string }) => event.eventName === 'score_blend_rerank')?.metadata.selectedSources)
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          title: 'Launch Risk Brief',
+          excerptChars: expect.any(Number),
+        }),
+      ]));
+  });
+
+  it('GET /api/assistant/traces/:traceId does not expose another member trace', async () => {
+    const otherUserResult = await pool.query<{ id: string }>(
+      `INSERT INTO users (email, password_hash, name)
+       VALUES ($1, 'test-hash', 'Other Assistant User')
+       RETURNING id`,
+      [`assistant-other-${testRunId}@ship.local`],
+    );
+    const otherUserId = otherUserResult.rows[0]!.id;
+    const traceId = `other-trace-${testRunId}`;
+
+    try {
+      await pool.query(
+        `INSERT INTO workspace_memberships (workspace_id, user_id, role)
+         VALUES ($1, $2, 'member')`,
+        [testWorkspaceId, otherUserId],
+      );
+      await pool.query(
+        `INSERT INTO assistant_runs
+          (workspace_id, user_id, request_id, message_hash, status, provider, model)
+         VALUES ($1, $2, $3, 'hash', 'answered', 'mock', 'mock-assistant')`,
+        [testWorkspaceId, otherUserId, traceId],
+      );
+
+      const res = await request(app)
+        .get(`/api/assistant/traces/${traceId}`)
+        .set('Cookie', sessionCookie);
+
+      expect(res.status).toBe(404);
+    } finally {
+      await pool.query('DELETE FROM assistant_runs WHERE request_id = $1', [traceId]);
+      await pool.query('DELETE FROM workspace_memberships WHERE user_id = $1', [otherUserId]);
+      await pool.query('DELETE FROM users WHERE id = $1', [otherUserId]);
+    }
   });
 
   it('POST /api/assistant/chat honors disabled tracing without losing request correlation', async () => {
@@ -257,6 +316,7 @@ describe('Assistant API', () => {
     expect(res.status).toBe(200);
     expect(res.body.paths['/assistant/status']).toBeDefined();
     expect(res.body.paths['/assistant/chat']).toBeDefined();
+    expect(res.body.paths['/assistant/traces/{traceId}']).toBeDefined();
   });
 });
 

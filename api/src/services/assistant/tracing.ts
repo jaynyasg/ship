@@ -23,6 +23,35 @@ export interface AssistantTraceEventInput {
   error?: string | null;
 }
 
+interface AssistantTraceResponseBody {
+  run: {
+    traceId: string;
+    status: string;
+    provider: string | null;
+    model: string | null;
+    totalSources: number;
+    citationsCount: number;
+    durationMs: number | null;
+    metadata: Record<string, unknown>;
+    error: string | null;
+    createdAt: string;
+    completedAt: string | null;
+  };
+  events: Array<{
+    id: string;
+    eventType: string;
+    eventName: string;
+    sourceType: string | null;
+    sourceId: string | null;
+    documentId: string | null;
+    fileId: string | null;
+    durationMs: number | null;
+    metadata: Record<string, unknown>;
+    error: string | null;
+    createdAt: string;
+  }>;
+}
+
 export async function startAssistantRun(input: {
   workspaceId: string;
   userId: string;
@@ -126,10 +155,123 @@ export async function safeRecordAssistantTraceEvent(input: AssistantTraceEventIn
   }
 }
 
+export async function getAssistantTrace(input: {
+  traceId: string;
+  workspaceId: string;
+  userId: string;
+  canInspectWorkspaceTraces?: boolean;
+}): Promise<AssistantTraceResponseBody | null> {
+  const runResult = await pool.query<{
+    id: string;
+    request_id: string;
+    status: string;
+    provider: string | null;
+    model: string | null;
+    total_sources: number;
+    citations_count: number;
+    duration_ms: number | null;
+    metadata: Record<string, unknown>;
+    error: string | null;
+    created_at: Date | string;
+    completed_at: Date | string | null;
+  }>(
+    `SELECT id,
+            request_id,
+            status,
+            provider,
+            model,
+            total_sources,
+            citations_count,
+            duration_ms,
+            metadata,
+            error,
+            created_at,
+            completed_at
+     FROM assistant_runs
+     WHERE request_id = $1
+       AND workspace_id = $2
+       AND ($3::boolean OR user_id = $4)
+     LIMIT 1`,
+    [
+      input.traceId,
+      input.workspaceId,
+      Boolean(input.canInspectWorkspaceTraces),
+      input.userId,
+    ],
+  );
+
+  const runRow = runResult.rows[0];
+  if (!runRow) return null;
+
+  const eventResult = await pool.query<{
+    id: string;
+    event_type: string;
+    event_name: string;
+    source_type: string | null;
+    source_id: string | null;
+    document_id: string | null;
+    file_id: string | null;
+    duration_ms: number | null;
+    metadata: Record<string, unknown>;
+    error: string | null;
+    created_at: Date | string;
+  }>(
+    `SELECT id,
+            event_type,
+            event_name,
+            source_type,
+            source_id,
+            document_id,
+            file_id,
+            duration_ms,
+            metadata,
+            error,
+            created_at
+     FROM assistant_trace_events
+     WHERE run_id = $1
+       AND workspace_id = $2
+     ORDER BY created_at ASC, id ASC`,
+    [runRow.id, input.workspaceId],
+  );
+
+  return {
+    run: {
+      traceId: runRow.request_id,
+      status: runRow.status,
+      provider: runRow.provider,
+      model: runRow.model,
+      totalSources: Number(runRow.total_sources),
+      citationsCount: Number(runRow.citations_count),
+      durationMs: runRow.duration_ms === null ? null : Number(runRow.duration_ms),
+      metadata: runRow.metadata ?? {},
+      error: runRow.error,
+      createdAt: toIsoString(runRow.created_at),
+      completedAt: runRow.completed_at ? toIsoString(runRow.completed_at) : null,
+    },
+    events: eventResult.rows.map((event) => ({
+      id: event.id,
+      eventType: event.event_type,
+      eventName: event.event_name,
+      sourceType: event.source_type,
+      sourceId: event.source_id,
+      documentId: event.document_id,
+      fileId: event.file_id,
+      durationMs: event.duration_ms === null ? null : Number(event.duration_ms),
+      metadata: event.metadata ?? {},
+      error: event.error,
+      createdAt: toIsoString(event.created_at),
+    })),
+  };
+}
+
 export function isAssistantTracingEnabled(): boolean {
   return process.env.SHIP_ASSISTANT_TRACING_ENABLED !== 'false';
 }
 
 function hashMessage(message: string): string {
   return createHash('sha256').update(message).digest('hex');
+}
+
+function toIsoString(value: Date | string): string {
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
