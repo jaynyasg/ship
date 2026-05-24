@@ -12,6 +12,7 @@ describe('retrieveAssistantSources', () => {
   let workspaceId: string;
   let userOneId: string;
   let userTwoId: string;
+  let projectId: string;
 
   beforeAll(async () => {
     const workspaceResult = await pool.query(
@@ -57,6 +58,92 @@ describe('retrieveAssistantSources', () => {
         userTwoId,
       ],
     );
+
+    const projectResult = await pool.query(
+      `INSERT INTO documents (workspace_id, document_type, title, properties, created_by, visibility)
+       VALUES ($1, 'project', $2, $3, $4, 'workspace')
+       RETURNING id`,
+      [
+        workspaceId,
+        `Assistant Launch ${uniqueTerm}`,
+        JSON.stringify({ status: 'active', target_date: '2026-06-15' }),
+        userOneId,
+      ],
+    );
+    projectId = projectResult.rows[0].id;
+
+    const sprintResult = await pool.query(
+      `INSERT INTO documents (workspace_id, document_type, title, properties, created_by, visibility)
+       VALUES ($1, 'sprint', $2, $3, $4, 'workspace')
+       RETURNING id`,
+      [
+        workspaceId,
+        `Week 22 ${uniqueTerm}`,
+        JSON.stringify({ sprint_number: 22, start_date: '2026-05-25', end_date: '2026-05-31' }),
+        userOneId,
+      ],
+    );
+
+    const blockerResult = await pool.query(
+      `INSERT INTO documents (workspace_id, document_type, title, content, properties, created_by, visibility)
+       VALUES ($1, 'issue', $2, $3, $4, $5, 'workspace')
+       RETURNING id`,
+      [
+        workspaceId,
+        `Complete security review ${uniqueTerm}`,
+        JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Security review must finish before launch.' }] }] }),
+        JSON.stringify({ state: 'todo', priority: 'high' }),
+        userOneId,
+      ],
+    );
+
+    const blockedResult = await pool.query(
+      `INSERT INTO documents (workspace_id, document_type, title, content, properties, created_by, visibility)
+       VALUES ($1, 'issue', $2, $3, $4, $5, 'workspace')
+       RETURNING id`,
+      [
+        workspaceId,
+        `Launch feature rollout ${uniqueTerm}`,
+        JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Rollout is waiting on security review approval.' }] }] }),
+        JSON.stringify({ state: 'todo', priority: 'high' }),
+        userOneId,
+      ],
+    );
+
+    const weeklyPlanResult = await pool.query(
+      `INSERT INTO documents (workspace_id, document_type, title, content, properties, created_by, visibility)
+       VALUES ($1, 'weekly_plan', 'Week 22 Plan', $2, $3, $4, 'workspace')
+       RETURNING id`,
+      [
+        workspaceId,
+        JSON.stringify({
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: `This week focuses on assistant rollout and citation verification ${uniqueTerm}.` }] }],
+        }),
+        JSON.stringify({ week_number: 22, project_id: projectId }),
+        userOneId,
+      ],
+    );
+
+    await pool.query(
+      `INSERT INTO document_associations (document_id, related_id, relationship_type)
+       VALUES
+         ($1, $2, 'project'),
+         ($3, $2, 'project'),
+         ($4, $2, 'project'),
+         ($3, $5, 'sprint'),
+         ($4, $5, 'sprint'),
+         ($4, $3, 'depends_on'),
+         ($6, $2, 'project')`,
+      [
+        sprintResult.rows[0].id,
+        projectId,
+        blockerResult.rows[0].id,
+        blockedResult.rows[0].id,
+        sprintResult.rows[0].id,
+        weeklyPlanResult.rows[0].id,
+      ],
+    );
   });
 
   afterAll(async () => {
@@ -77,5 +164,45 @@ describe('retrieveAssistantSources', () => {
 
     expect(sources.map((source) => source.title)).toContain(`Workspace visible ${uniqueTerm}`);
     expect(sources.map((source) => source.title)).not.toContain(`Private hidden ${uniqueTerm}`);
+  });
+
+  it('adds structured project context with issue counts and blocking dependencies', async () => {
+    const sources = await retrieveAssistantSources({
+      userId: userOneId,
+      workspaceId,
+      workspaceRole: 'member',
+      message: 'What is blocked for this project?',
+      routeContext: {
+        documentId: projectId,
+        documentType: 'project',
+      },
+      maxSources: 8,
+    });
+
+    const projectSource = sources.find((source) => source.title === `Assistant Launch ${uniqueTerm} work summary`);
+    expect(projectSource).toBeDefined();
+    expect(projectSource?.sourceType).toBe('project');
+    expect(projectSource?.excerpt).toContain(`Launch feature rollout ${uniqueTerm}`);
+    expect(projectSource?.excerpt).toContain(`Complete security review ${uniqueTerm}`);
+    expect(projectSource?.excerpt).toContain('Issue states: todo: 2');
+    expect(projectSource?.excerpt).toContain('Blocking dependencies:');
+  });
+
+  it('adds associated weekly plan and retro content as week sources', async () => {
+    const sources = await retrieveAssistantSources({
+      userId: userOneId,
+      workspaceId,
+      workspaceRole: 'member',
+      message: 'What does the weekly plan say about assistant rollout?',
+      routeContext: {
+        documentId: projectId,
+        documentType: 'project',
+      },
+      maxSources: 10,
+    });
+
+    const weekSource = sources.find((source) => source.sourceType === 'week' && source.title.includes('Week 22 plan'));
+    expect(weekSource).toBeDefined();
+    expect(weekSource?.excerpt).toContain(`assistant rollout and citation verification ${uniqueTerm}`);
   });
 });

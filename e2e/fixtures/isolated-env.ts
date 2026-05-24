@@ -191,6 +191,8 @@ export const test = base.extend<
           DATABASE_URL: dbUrl,
           CORS_ORIGIN: '*', // Allow any origin during tests
           NODE_ENV: 'test',
+          SHIP_ASSISTANT_ENABLED: process.env.SHIP_ASSISTANT_ENABLED ?? 'true',
+          SHIP_ASSISTANT_PROVIDER: process.env.SHIP_ASSISTANT_PROVIDER ?? 'mock',
           // Prevent dotenv from overriding our DATABASE_URL
           DOTENV_CONFIG_PATH: '/dev/null',
         },

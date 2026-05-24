@@ -305,8 +305,33 @@ CREATE TABLE IF NOT EXISTS files (
   s3_key TEXT NOT NULL,        -- S3 object key (or local path for dev)
   cdn_url TEXT,                -- CloudFront URL after processing
   status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'uploaded', 'failed')),
+  document_id UUID REFERENCES documents(id) ON DELETE SET NULL,
+  assistant_indexing_status TEXT NOT NULL DEFAULT 'not_indexed'
+    CHECK (assistant_indexing_status IN ('not_indexed', 'indexing', 'indexed', 'unsupported', 'failed')),
+  assistant_indexed_at TIMESTAMPTZ,
+  assistant_index_error TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Derived search chunks for Ask Ship.
+CREATE TABLE IF NOT EXISTS assistant_search_chunks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  source_type TEXT NOT NULL CHECK (source_type IN ('document', 'project', 'program', 'issue', 'week', 'timeline', 'file')),
+  source_id UUID NOT NULL,
+  document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
+  file_id UUID REFERENCES files(id) ON DELETE CASCADE,
+  chunk_index INTEGER NOT NULL CHECK (chunk_index >= 0),
+  title TEXT NOT NULL,
+  text TEXT NOT NULL,
+  metadata JSONB NOT NULL DEFAULT '{}',
+  search_vector TSVECTOR GENERATED ALWAYS AS (
+    to_tsvector('simple', COALESCE(title, '') || ' ' || COALESCE(text, ''))
+  ) STORED,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (workspace_id, source_type, source_id, chunk_index)
 );
 
 -- Document links (for backlinks feature)
@@ -422,6 +447,17 @@ CREATE INDEX IF NOT EXISTS idx_issue_iterations_issue_workspace ON issue_iterati
 -- File indexes
 CREATE INDEX IF NOT EXISTS idx_files_workspace ON files(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_files_status ON files(status);
+CREATE INDEX IF NOT EXISTS idx_files_document_id ON files(document_id)
+  WHERE document_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_files_assistant_indexing_status ON files(workspace_id, assistant_indexing_status);
+
+-- Assistant search indexes
+CREATE INDEX IF NOT EXISTS idx_assistant_search_chunks_workspace ON assistant_search_chunks(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_assistant_search_chunks_document ON assistant_search_chunks(document_id)
+  WHERE document_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_assistant_search_chunks_file ON assistant_search_chunks(file_id)
+  WHERE file_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_assistant_search_chunks_vector ON assistant_search_chunks USING GIN(search_vector);
 
 -- Document links indexes
 CREATE INDEX IF NOT EXISTS idx_document_links_target ON document_links(target_id);

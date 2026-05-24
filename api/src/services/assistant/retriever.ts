@@ -3,6 +3,7 @@ import { getVisibilityContext, VISIBILITY_FILTER_SQL } from '../../middleware/vi
 import { extractText } from '../../utils/document-content.js';
 import { getProjectTimeline } from '../timeline.js';
 import { ASSISTANT_LIMITS } from './config.js';
+import { retrieveStructuredWorkSources } from './work-context.js';
 import type { AssistantRetrievedSource, AssistantRetrievalInput } from './types.js';
 import type { AssistantSourceType } from '@ship/shared';
 
@@ -51,6 +52,8 @@ export async function retrieveAssistantSources(input: AssistantRetrievalInput): 
     });
     if (timelineSource) sources.push(timelineSource);
   }
+
+  sources.push(...await retrieveStructuredWorkSources(input, isAdmin, contextProjectId));
 
   if (WORK_INTENT_PATTERN.test(input.message)) {
     const projectIds = await getVisibleProjectIds(input.workspaceId, input.userId, isAdmin, contextProjectId);
