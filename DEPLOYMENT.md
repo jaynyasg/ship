@@ -66,6 +66,7 @@ Then verify in a browser:
 - Render logs show migrations applied and no startup errors.
 - `GET /api/assistant/status` returns `available: true` after login when `OPENAI_API_KEY` is set.
 - The Ask Ship rail button opens the assistant panel below Teams.
+- A known Ask Ship question returns an answer with `traceId`, and `GET /api/assistant/traces/<traceId>` returns the ordered retrieval, rerank, and model events.
 - Uploading a supported `.txt`, `.md`, `.csv`, `.pdf`, or `.docx` file from a document page reaches `indexed` status and can be cited by Ask Ship.
 
 ### Render Security Probe Trigger
@@ -125,7 +126,7 @@ pnpm security:audit -- --mode remote --web-url https://<render-app-url> --api-ur
 
 ### Ask Ship Assistant
 
-Ask Ship configuration, supported indexed file types, storage notes, and the demo flow are documented in `docs/assistant.md`.
+Ask Ship configuration, supported indexed file types, trace inspection, evals, storage notes, and the demo flow are documented in `docs/assistant.md`.
 
 ### Optional Production Features
 
