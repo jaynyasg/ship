@@ -447,9 +447,27 @@ CREATE INDEX IF NOT EXISTS idx_issue_iterations_issue_workspace ON issue_iterati
 -- File indexes
 CREATE INDEX IF NOT EXISTS idx_files_workspace ON files(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_files_status ON files(status);
-CREATE INDEX IF NOT EXISTS idx_files_document_id ON files(document_id)
-  WHERE document_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_files_assistant_indexing_status ON files(workspace_id, assistant_indexing_status);
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_name = 'files'
+      AND column_name = 'document_id'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS idx_files_document_id ON files(document_id)
+      WHERE document_id IS NOT NULL;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_name = 'files'
+      AND column_name = 'assistant_indexing_status'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS idx_files_assistant_indexing_status ON files(workspace_id, assistant_indexing_status);
+  END IF;
+END $$;
 
 -- Assistant search indexes
 CREATE INDEX IF NOT EXISTS idx_assistant_search_chunks_workspace ON assistant_search_chunks(workspace_id);
