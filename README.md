@@ -51,7 +51,19 @@ Everyone on the team can edit documents at the same time. You'll see other peopl
 
 Ask Ship is the in-app assistant in the left icon rail below Teams. With server-side model configuration, it can answer workspace-scoped questions from documents, projects, issues, weeks, timelines, and uploaded documentation, then cite the records it used.
 
-For setup details, supported upload formats, traces/evals, and Render notes, see [`docs/assistant.md`](docs/assistant.md).
+For setup details, supported upload formats, traces/evals, and Render notes, see [`docs/assistant.md`](docs/assistant.md). The deterministic eval fixture can be run with:
+
+```powershell
+pnpm assistant:eval
+```
+
+The deployed demo flow asks Ask Ship:
+
+```text
+According to Shipshape - Security Audit.pdf, what four attack surfaces must the security probe actively test?
+```
+
+The expected answer cites `Shipshape - Security Audit.pdf` and includes authentication/session handling, WebSocket validation, input sanitization, and dependency vulnerabilities.
 
 ---
 
@@ -144,11 +156,25 @@ pnpm dev:sh        # Legacy bash dev wrapper
 pnpm dev:web       # Start just the web app
 pnpm dev:api       # Start just the API
 pnpm build:shared  # Build shared types when running package servers manually
+pnpm type-check     # Type-check all workspaces
+pnpm lint           # Lint all workspaces
+pnpm build:api      # Build shared + API
+pnpm build:web      # Build shared + web
 pnpm db:migrate    # Run database migrations
 pnpm db:seed       # Reset database with sample data
 pnpm test          # Run API unit tests
 pnpm test:e2e      # Run Playwright through the compact progress runner
+pnpm assistant:eval # Run deterministic Ask Ship eval fixture
+pnpm security:audit # Run the Category 8 security probe locally
 ```
+
+---
+
+## Final Submission Packet
+
+For ShipShape grading, start with [`SUBMISSION.md`](./SUBMISSION.md). It maps each audit category to the source changes and evidence artifacts. The full audit narrative is in [`AUDIT.md`](./AUDIT.md), raw before/after measurements are in [`eval/results/`](./eval/results/), orientation notes are in [`ORIENTATION.md`](./ORIENTATION.md), the three-discovery write-up is in [`DISCOVERY.md`](./DISCOVERY.md), and the explicit rubric check is in [`SUBMISSION_RUBRIC.md`](./SUBMISSION_RUBRIC.md).
+
+AI spend and reflection are documented in [`AI_COST_ANALYSIS.md`](./AI_COST_ANALYSIS.md).
 
 ---
 
@@ -270,6 +296,29 @@ docker-compose -f docker-compose.prod.yml up
 - **Session timeout** — 15-minute idle timeout (government standard)
 - **Audit logging** — Track all document operations
 
+### Security Probe
+
+The Category 8 security probe is committed in the repo and runnable from a fresh local app instance. Start the app locally first, then run:
+
+```powershell
+pnpm security:audit -- --mode local --non-interactive --report-name security-audit-after
+```
+
+Local probe output is shown in the terminal and written under `eval/results/` by default:
+
+- `eval/results/security-audit-after.json`
+- `eval/results/security-audit-after.md`
+
+Use `--out-dir <path>` to write reports somewhere else. The CLI also prints the Markdown report between `--- Ship Security Probe Markdown Report ---` and `--- End Ship Security Probe Markdown Report ---`.
+
+For a deployed target:
+
+```powershell
+pnpm security:audit -- --mode remote --web-url https://<render-app-url> --api-url https://<render-app-url> --non-interactive --report-name security-audit-render
+```
+
+In the deployed GUI, a super-admin can trigger the Render cron job from **Admin Dashboard -> Operations -> Security Probe -> Trigger Run**. That calls Ship's backend, which calls Render's cron-run API using server-side credentials. The resulting Markdown report is shown in the Render `ship-security-probe` cron job logs. The cron job writes JSON/Markdown files to a temp directory inside the Render job container, but those files are ephemeral and are not copied back into the repository or stored in the app database.
+
 > **Reporting Vulnerabilities:** See [SECURITY.md](./SECURITY.md) for our vulnerability disclosure policy.
 
 ---
@@ -296,9 +345,13 @@ We welcome contributions. See [CONTRIBUTING.md](./CONTRIBUTING.md) for guideline
 - [Application Architecture](./docs/application-architecture.md) — Tech stack and design decisions
 - [Unified Document Model](./docs/unified-document-model.md) — Data model and sync architecture
 - [Document Model Conventions](./docs/document-model-conventions.md) — Terminology and patterns
+- [Ask Ship Assistant](./docs/assistant.md) — Assistant setup, uploads, traces, evals, and Render notes
 - [Week Documentation Philosophy](./docs/week-documentation-philosophy.md) — Why weekly plans and retros work the way they do
 - [Accountability Philosophy](./docs/accountability-philosophy.md) — How Ship enforces accountability
 - [Accountability Manager Guide](./docs/accountability-manager-guide.md) — Using approval workflows
+- [Submission Summary](./SUBMISSION.md) — Reviewer-facing map of audit evidence and final deliverables
+- [Submission Rubric](./SUBMISSION_RUBRIC.md) — Pass matrix and external deliverable callouts
+- [AI Cost Analysis](./AI_COST_ANALYSIS.md) — AI usage estimate and reflection
 - [Contributing Guidelines](./CONTRIBUTING.md) — How to contribute
 - [Security Policy](./SECURITY.md) — Vulnerability reporting
 

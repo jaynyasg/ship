@@ -1,8 +1,8 @@
 # ShipShape Submission Summary
 
-**Date:** 2026-05-23
+**Date:** 2026-05-24
 **Repo:** `jaynyasg/ship`  
-**Latest verified main before Phase 07:** `bd83a30 Remediate critical dependency CVEs`
+**Latest checked main before final rubric sweep:** `029a43a docs(assistant): add trace runbook`
 
 This file is the reviewer-facing map for the ShipShape audit work. The detailed report remains `AUDIT.md`; the raw before/after evidence lives in `eval/results/`.
 
@@ -133,6 +133,7 @@ Render configuration now declares non-secret assistant defaults and expects `OPE
 ## Files To Read
 
 - `AUDIT.md` - full audit narrative with baseline, severity, and after status.
+- `SUBMISSION_RUBRIC.md` - final rubric pass matrix and external deliverable callouts.
 - `ORIENTATION.md` - codebase orientation and architecture synthesis.
 - `DISCOVERY.md` - standalone discovery write-up with three lessons pulled from orientation findings.
 - `AI_COST_ANALYSIS.md` - AI spend template and reflection on AI effectiveness for codebase comprehension.
