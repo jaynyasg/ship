@@ -195,4 +195,74 @@ async function repairAssistantUploadSchema(): Promise<void> {
       ON assistant_trace_events(file_id, created_at DESC)
       WHERE file_id IS NOT NULL;
   `);
+
+  await backfillBlankAssistantUploadDocumentBodies();
+}
+
+async function backfillBlankAssistantUploadDocumentBodies(): Promise<void> {
+  await pool.query(`
+    WITH blank_uploaded_docs AS (
+      SELECT d.id AS document_id,
+             d.workspace_id,
+             NULLIF(d.properties->>'file_id', '') AS file_id
+      FROM documents d
+      WHERE d.document_type = 'wiki'
+        AND d.properties->>'source' = 'assistant_upload'
+        AND (
+          d.content IS NULL
+          OR d.content = '{"type":"doc","content":[{"type":"paragraph"}]}'::jsonb
+          OR d.content = '{"type":"doc","content":[{"type":"paragraph","content":[]}]}'::jsonb
+          OR d.content = '{"type":"doc","content":[]}'::jsonb
+        )
+    ),
+    uploaded_doc_chunks AS (
+      SELECT b.document_id,
+             string_agg(c.text, E'\n\n' ORDER BY c.chunk_index) AS extracted_text
+      FROM blank_uploaded_docs b
+      JOIN assistant_search_chunks c
+        ON c.workspace_id = b.workspace_id
+       AND c.source_type = 'file'
+       AND (
+         c.document_id = b.document_id
+         OR (
+           b.file_id IS NOT NULL
+           AND (
+             c.file_id::text = b.file_id
+             OR c.source_id::text = b.file_id
+           )
+         )
+       )
+      WHERE btrim(c.text) <> ''
+      GROUP BY b.document_id
+    ),
+    paragraphs AS (
+      SELECT document_id,
+             ordinality,
+             btrim(paragraph_text) AS paragraph_text
+      FROM uploaded_doc_chunks,
+           regexp_split_to_table(extracted_text, E'\n\\s*\n') WITH ORDINALITY AS split(paragraph_text, ordinality)
+      WHERE btrim(paragraph_text) <> ''
+    ),
+    document_content AS (
+      SELECT document_id,
+             jsonb_build_object(
+               'type', 'doc',
+               'content', jsonb_agg(
+                 jsonb_build_object(
+                   'type', 'paragraph',
+                   'content', jsonb_build_array(jsonb_build_object('type', 'text', 'text', paragraph_text))
+                 )
+                 ORDER BY ordinality
+               )
+             ) AS content
+      FROM paragraphs
+      GROUP BY document_id
+    )
+    UPDATE documents d
+    SET content = dc.content,
+        yjs_state = NULL,
+        updated_at = now()
+    FROM document_content dc
+    WHERE d.id = dc.document_id;
+  `);
 }
