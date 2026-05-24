@@ -1,4 +1,5 @@
 import type { AssistantProvider, AssistantStatusResponse } from '@ship/shared';
+import { getAssistantEmbeddingConfig } from './embeddings.js';
 
 export const SUPPORTED_INDEX_MIME_TYPES = [
   'text/plain',
@@ -60,6 +61,10 @@ export function getAssistantStatus(): AssistantStatusResponse {
     provider,
     model: getAssistantModel(),
     missingConfiguration,
+    embeddings: getAssistantEmbeddingConfig(),
+    observability: {
+      tracesEnabled: process.env.SHIP_ASSISTANT_TRACING_ENABLED !== 'false',
+    },
     uploadIndexing: {
       enabled: process.env.SHIP_ASSISTANT_UPLOAD_INDEXING !== 'false',
       supportedMimeTypes: SUPPORTED_INDEX_MIME_TYPES,

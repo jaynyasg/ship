@@ -2,12 +2,15 @@ import { createHash } from 'crypto';
 import { pool } from '../../db/client.js';
 import { invalidateDocumentCache } from '../../collaboration/index.js';
 import { ASSISTANT_LIMITS } from './config.js';
+import { AssistantEmbeddingError, generateAssistantEmbedding } from './embeddings.js';
 import { extractTextFromFile, isSupportedAssistantFile } from './extractors.js';
+import { safeRecordAssistantTraceEvent } from './tracing.js';
 
 interface FileRow {
   id: string;
   workspace_id: string;
   document_id: string | null;
+  uploaded_by: string | null;
   filename: string;
   mime_type: string;
   size_bytes: string | number;
@@ -35,10 +38,26 @@ export async function indexUploadedFileForAssistant(input: {
     }
 
     await updateIndexStatus(file.id, file.workspace_id, 'indexing', null);
+    const extractionStartedAt = Date.now();
     const extracted = await extractTextFromFile({
       buffer: input.buffer,
       mimeType: file.mime_type,
       filename: file.filename,
+    });
+    await safeRecordAssistantTraceEvent({
+      workspaceId: file.workspace_id,
+      userId: file.uploaded_by,
+      eventType: 'extraction',
+      eventName: 'file_text_extracted',
+      fileId: file.id,
+      documentId: file.document_id,
+      durationMs: Date.now() - extractionStartedAt,
+      metadata: {
+        filename: file.filename,
+        mimeType: file.mime_type,
+        supported: extracted.supported,
+        extractedChars: extracted.text.length,
+      },
     });
 
     if (!extracted.supported) {
@@ -53,12 +72,15 @@ export async function indexUploadedFileForAssistant(input: {
     }
 
     const chunks = chunkText(text);
+    const chunkEmbeddings = await embedChunks(file, chunks);
     const contentHash = createHash('sha256').update(text).digest('hex');
     for (const [index, chunk] of chunks.entries()) {
+      const embedding = chunkEmbeddings[index] ?? null;
       await pool.query(
         `INSERT INTO assistant_search_chunks
-          (workspace_id, source_type, source_id, document_id, file_id, chunk_index, title, text, metadata)
-         VALUES ($1, 'file', $2, $3, $2, $4, $5, $6, $7)
+          (workspace_id, source_type, source_id, document_id, file_id, chunk_index, title, text, metadata,
+           embedding, embedding_model, embedding_dimensions, embedding_created_at)
+         VALUES ($1, 'file', $2, $3, $2, $4, $5, $6, $7, $8, $9, $10, CASE WHEN $8::double precision[] IS NULL THEN NULL ELSE now() END)
          ON CONFLICT (workspace_id, source_type, source_id, chunk_index)
          DO UPDATE SET
            document_id = EXCLUDED.document_id,
@@ -66,6 +88,10 @@ export async function indexUploadedFileForAssistant(input: {
            title = EXCLUDED.title,
            text = EXCLUDED.text,
            metadata = EXCLUDED.metadata,
+           embedding = EXCLUDED.embedding,
+           embedding_model = EXCLUDED.embedding_model,
+           embedding_dimensions = EXCLUDED.embedding_dimensions,
+           embedding_created_at = EXCLUDED.embedding_created_at,
            updated_at = now()`,
         [
           file.workspace_id,
@@ -79,6 +105,9 @@ export async function indexUploadedFileForAssistant(input: {
             filename: file.filename,
             content_hash: contentHash,
           }),
+          embedding?.embedding ?? null,
+          embedding?.model ?? null,
+          embedding?.dimensions ?? null,
         ],
       );
     }
@@ -165,13 +194,66 @@ export async function getFileAssistantIndexStatus(fileId: string, workspaceId: s
 
 async function getFile(fileId: string, workspaceId: string): Promise<FileRow | null> {
   const result = await pool.query<FileRow>(
-    `SELECT id, workspace_id, document_id, filename, mime_type, size_bytes
+    `SELECT id, workspace_id, document_id, uploaded_by, filename, mime_type, size_bytes
      FROM files
      WHERE id = $1 AND workspace_id = $2`,
     [fileId, workspaceId],
   );
 
   return result.rows[0] ?? null;
+}
+
+async function embedChunks(file: FileRow, chunks: string[]) {
+  const results: Array<Awaited<ReturnType<typeof generateAssistantEmbedding>> | null> = [];
+  const startedAt = Date.now();
+  let embeddedCount = 0;
+
+  for (const chunk of chunks) {
+    try {
+      const embedding = await generateAssistantEmbedding(`${file.filename}\n\n${chunk}`);
+      results.push(embedding);
+      if (embedding) embeddedCount++;
+    } catch (error) {
+      await safeRecordAssistantTraceEvent({
+        workspaceId: file.workspace_id,
+        userId: file.uploaded_by,
+        eventType: 'embedding',
+        eventName: 'file_chunk_embedding_failed',
+        fileId: file.id,
+        documentId: file.document_id,
+        durationMs: Date.now() - startedAt,
+        metadata: {
+          filename: file.filename,
+          providerError: error instanceof AssistantEmbeddingError,
+          completedChunks: embeddedCount,
+          totalChunks: chunks.length,
+        },
+        error: error instanceof Error ? error.message.slice(0, 500) : 'File chunk embedding failed',
+      });
+      return results;
+    }
+  }
+
+  if (embeddedCount > 0) {
+    await safeRecordAssistantTraceEvent({
+      workspaceId: file.workspace_id,
+      userId: file.uploaded_by,
+      eventType: 'embedding',
+      eventName: 'file_chunks_embedded',
+      fileId: file.id,
+      documentId: file.document_id,
+      durationMs: Date.now() - startedAt,
+      metadata: {
+        filename: file.filename,
+        chunkCount: chunks.length,
+        embeddedCount,
+        model: results.find(Boolean)?.model,
+        dimensions: results.find(Boolean)?.dimensions,
+      },
+    });
+  }
+
+  return results;
 }
 
 async function deleteFileChunks(fileId: string, workspaceId: string): Promise<void> {

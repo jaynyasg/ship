@@ -20,6 +20,7 @@ describe('Assistant API', () => {
     SHIP_ASSISTANT_ENABLED: process.env.SHIP_ASSISTANT_ENABLED,
     SHIP_ASSISTANT_PROVIDER: process.env.SHIP_ASSISTANT_PROVIDER,
     SHIP_ASSISTANT_MODEL: process.env.SHIP_ASSISTANT_MODEL,
+    SHIP_ASSISTANT_TRACING_ENABLED: process.env.SHIP_ASSISTANT_TRACING_ENABLED,
     SHIP_ASSISTANT_UPLOAD_INDEXING: process.env.SHIP_ASSISTANT_UPLOAD_INDEXING,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
   };
@@ -86,6 +87,7 @@ describe('Assistant API', () => {
     process.env.SHIP_ASSISTANT_ENABLED = 'true';
     process.env.SHIP_ASSISTANT_PROVIDER = 'openai';
     delete process.env.SHIP_ASSISTANT_MODEL;
+    delete process.env.SHIP_ASSISTANT_TRACING_ENABLED;
     delete process.env.SHIP_ASSISTANT_UPLOAD_INDEXING;
     delete process.env.OPENAI_API_KEY;
   });
@@ -94,6 +96,7 @@ describe('Assistant API', () => {
     restoreEnv('SHIP_ASSISTANT_ENABLED', originalEnv.SHIP_ASSISTANT_ENABLED);
     restoreEnv('SHIP_ASSISTANT_PROVIDER', originalEnv.SHIP_ASSISTANT_PROVIDER);
     restoreEnv('SHIP_ASSISTANT_MODEL', originalEnv.SHIP_ASSISTANT_MODEL);
+    restoreEnv('SHIP_ASSISTANT_TRACING_ENABLED', originalEnv.SHIP_ASSISTANT_TRACING_ENABLED);
     restoreEnv('SHIP_ASSISTANT_UPLOAD_INDEXING', originalEnv.SHIP_ASSISTANT_UPLOAD_INDEXING);
     restoreEnv('OPENAI_API_KEY', originalEnv.OPENAI_API_KEY);
 
@@ -180,6 +183,7 @@ describe('Assistant API', () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('answered');
     expect(res.body.message.content).toContain('[S1]');
+    expect(res.body.traceId).toEqual(expect.any(String));
     expect(res.body.citations).toEqual(expect.arrayContaining([
       expect.objectContaining({
         title: 'Launch Risk Brief',
@@ -187,6 +191,54 @@ describe('Assistant API', () => {
       }),
     ]));
     expect(res.body.sourceCounts.total).toBeGreaterThan(0);
+
+    const runResult = await pool.query(
+      `SELECT status, total_sources, citations_count
+       FROM assistant_runs
+       WHERE request_id = $1`,
+      [res.body.traceId],
+    );
+    expect(runResult.rows[0]).toMatchObject({
+      status: 'answered',
+      citations_count: 1,
+    });
+    expect(Number(runResult.rows[0].total_sources)).toBeGreaterThan(0);
+
+    const traceResult = await pool.query(
+      `SELECT event_type, event_name
+       FROM assistant_trace_events
+       WHERE run_id = (SELECT id FROM assistant_runs WHERE request_id = $1)
+       ORDER BY created_at`,
+      [res.body.traceId],
+    );
+    expect(traceResult.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ event_type: 'tool', event_name: 'search_ship_context' }),
+      expect.objectContaining({ event_type: 'rerank', event_name: 'score_blend_rerank' }),
+      expect.objectContaining({ event_type: 'model', event_name: 'answer_generated' }),
+    ]));
+  });
+
+  it('POST /api/assistant/chat honors disabled tracing without losing request correlation', async () => {
+    process.env.SHIP_ASSISTANT_PROVIDER = 'mock';
+    process.env.SHIP_ASSISTANT_TRACING_ENABLED = 'false';
+
+    const res = await request(app)
+      .post('/api/assistant/chat')
+      .set('Cookie', sessionCookie)
+      .set('x-csrf-token', csrfToken)
+      .send({ message: 'What is the launch risk?' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('answered');
+    expect(res.body.traceId).toEqual(expect.any(String));
+
+    const runResult = await pool.query(
+      `SELECT id
+       FROM assistant_runs
+       WHERE request_id = $1`,
+      [res.body.traceId],
+    );
+    expect(runResult.rows).toHaveLength(0);
   });
 
   it('OpenAPI JSON includes assistant paths', async () => {

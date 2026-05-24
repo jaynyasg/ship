@@ -25,6 +25,14 @@ services:
         value: openai
       - key: SHIP_ASSISTANT_MODEL
         value: gpt-4o-mini
+      - key: SHIP_ASSISTANT_EMBEDDINGS_ENABLED
+        value: "true"
+      - key: SHIP_ASSISTANT_EMBEDDING_MODEL
+        value: text-embedding-3-small
+      - key: SHIP_ASSISTANT_EMBEDDING_DIMENSIONS
+        value: "1536"
+      - key: SHIP_ASSISTANT_TRACING_ENABLED
+        value: "true"
       - key: SHIP_ASSISTANT_UPLOAD_INDEXING
         value: "true"
       - key: SHIP_UPLOAD_STORAGE

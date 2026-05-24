@@ -3,6 +3,8 @@ import { getVisibilityContext, VISIBILITY_FILTER_SQL } from '../../middleware/vi
 import { extractText } from '../../utils/document-content.js';
 import { getProjectTimeline } from '../timeline.js';
 import { ASSISTANT_LIMITS } from './config.js';
+import { AssistantEmbeddingError, generateAssistantEmbedding } from './embeddings.js';
+import { safeRecordAssistantTraceEvent } from './tracing.js';
 import { retrieveStructuredWorkSources } from './work-context.js';
 import type { AssistantRetrievedSource, AssistantRetrievalInput } from './types.js';
 import type { AssistantSourceType } from '@ship/shared';
@@ -25,6 +27,7 @@ interface FileChunkSearchRow {
   text: string;
   updated_at: Date | string | null;
   rank: number | null;
+  semantic_score?: number | null;
   context_boost: number;
 }
 
@@ -71,6 +74,7 @@ export async function retrieveAssistantSources(input: AssistantRetrievalInput): 
   }
 
   sources.push(...await searchFileChunks(input, isAdmin, contextProjectId));
+  sources.push(...await searchSemanticFileChunks(input, isAdmin, contextProjectId));
   sources.push(...await searchDocuments(input, isAdmin, contextProjectId));
 
   return dedupeSources(sources)
@@ -140,7 +144,118 @@ async function searchFileChunks(
     url: row.document_id ? `/documents/${row.document_id}` : `/api/files/${row.source_id}/serve`,
     excerpt: clampText(row.text, 900),
     score: (row.context_boost ?? 0) + Number(row.rank ?? 0) * 100 + recencyScore(row.updated_at),
+    retrievalStrategy: 'lexical',
+    retrievalSignals: {
+      lexicalScore: Number(row.rank ?? 0),
+      contextBoost: row.context_boost ?? 0,
+      recencyScore: recencyScore(row.updated_at),
+    },
   }));
+}
+
+async function searchSemanticFileChunks(
+  input: AssistantRetrievalInput,
+  isAdmin: boolean,
+  contextProjectId: string | null,
+): Promise<AssistantRetrievedSource[]> {
+  const startedAt = Date.now();
+  let embedding;
+  try {
+    embedding = await generateAssistantEmbedding(input.message);
+  } catch (error) {
+    await safeRecordAssistantTraceEvent({
+      runId: input.runId,
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      eventType: 'embedding',
+      eventName: 'query_embedding_failed',
+      durationMs: Date.now() - startedAt,
+      metadata: {
+        providerError: error instanceof AssistantEmbeddingError,
+      },
+      error: error instanceof Error ? error.message.slice(0, 500) : 'Query embedding failed',
+    });
+    return [];
+  }
+
+  if (!embedding) return [];
+
+  const contextIds = [
+    input.routeContext?.documentId,
+    input.routeContext?.projectId,
+    contextProjectId,
+  ].filter((id): id is string => typeof id === 'string' && id.length > 0);
+
+  const result = await pool.query<FileChunkSearchRow>(
+    `SELECT c.source_id,
+            c.document_id,
+            c.title,
+            c.text,
+            c.updated_at,
+            NULL::real AS rank,
+            assistant_cosine_similarity(c.embedding, $4::double precision[]) AS semantic_score,
+            CASE WHEN c.document_id = ANY($5::uuid[]) THEN 90 ELSE 0 END AS context_boost
+     FROM assistant_search_chunks c
+     JOIN files f ON f.id = c.file_id AND f.workspace_id = c.workspace_id
+     LEFT JOIN documents d ON d.id = c.document_id
+     WHERE c.workspace_id = $1
+       AND c.source_type = 'file'
+       AND c.embedding IS NOT NULL
+       AND f.status = 'uploaded'
+       AND (
+         c.document_id IS NULL
+         OR (
+           d.workspace_id = $1
+           AND d.archived_at IS NULL
+           AND d.deleted_at IS NULL
+           AND ${VISIBILITY_FILTER_SQL('d', '$2', '$3')}
+         )
+       )
+     ORDER BY context_boost DESC, semantic_score DESC NULLS LAST, c.updated_at DESC
+     LIMIT 8`,
+    [
+      input.workspaceId,
+      input.userId,
+      isAdmin,
+      embedding.embedding,
+      contextIds,
+    ],
+  );
+
+  await safeRecordAssistantTraceEvent({
+    runId: input.runId,
+    workspaceId: input.workspaceId,
+    userId: input.userId,
+    eventType: 'retrieval',
+    eventName: 'semantic_file_search',
+    durationMs: Date.now() - startedAt,
+    metadata: {
+      resultCount: result.rows.length,
+      model: embedding.model,
+      dimensions: embedding.dimensions,
+    },
+  });
+
+  return result.rows
+    .filter((row) => Number(row.semantic_score ?? 0) > 0.08 || row.context_boost > 0)
+    .map((row) => {
+      const semanticScore = Number(row.semantic_score ?? 0);
+      const recency = recencyScore(row.updated_at);
+      return {
+        sourceType: 'file',
+        sourceId: row.source_id,
+        title: row.title,
+        url: row.document_id ? `/documents/${row.document_id}` : `/api/files/${row.source_id}/serve`,
+        excerpt: clampText(row.text, 900),
+        score: (row.context_boost ?? 0) + semanticScore * 180 + recency,
+        retrievalStrategy: 'semantic',
+        retrievalSignals: {
+          semanticScore,
+          contextBoost: row.context_boost ?? 0,
+          recencyScore: recency,
+        },
+      };
+    });
 }
 
 async function searchDocuments(
@@ -299,6 +414,7 @@ async function buildProjectTimelineSource(input: {
     url: `/documents/${input.projectId}/timeline`,
     excerpt,
     score: input.score + timeline.summary.blocked_count * 12 + timeline.summary.at_risk_count * 8 + timeline.summary.overdue_count * 6,
+    retrievalStrategy: 'structured',
   };
 }
 
@@ -316,6 +432,12 @@ function documentRowToSource(row: DocumentSearchRow): AssistantRetrievedSource {
     url: `/documents/${row.id}`,
     excerpt,
     score: (row.context_boost ?? 0) + Number(row.rank ?? 0) * 100 + recencyScore(row.updated_at),
+    retrievalStrategy: 'lexical',
+    retrievalSignals: {
+      lexicalScore: Number(row.rank ?? 0),
+      contextBoost: row.context_boost ?? 0,
+      recencyScore: recencyScore(row.updated_at),
+    },
   };
 }
 
@@ -379,17 +501,31 @@ const STOP_WORDS = new Set([
 ]);
 
 function dedupeSources(sources: AssistantRetrievedSource[]): AssistantRetrievedSource[] {
-  const seen = new Set<string>();
-  const unique: AssistantRetrievedSource[] = [];
+  const byKey = new Map<string, AssistantRetrievedSource>();
 
   for (const source of sources) {
     const key = `${source.sourceType}:${source.sourceId}:${source.url}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(source);
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, source);
+      continue;
+    }
+
+    byKey.set(key, {
+      ...existing,
+      excerpt: existing.excerpt.length >= source.excerpt.length ? existing.excerpt : source.excerpt,
+      score: Math.max(existing.score, source.score) + Math.min(existing.score, source.score) * 0.15,
+      retrievalStrategy: existing.retrievalStrategy === source.retrievalStrategy
+        ? existing.retrievalStrategy
+        : 'hybrid',
+      retrievalSignals: {
+        ...existing.retrievalSignals,
+        ...source.retrievalSignals,
+      },
+    });
   }
 
-  return unique;
+  return Array.from(byKey.values());
 }
 
 function recencyScore(updatedAt: Date | string | null): number {

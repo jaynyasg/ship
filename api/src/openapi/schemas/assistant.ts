@@ -18,6 +18,16 @@ const AssistantStatusSchema = z.object({
   provider: AssistantProviderSchema,
   model: z.string().nullable(),
   missingConfiguration: z.array(z.string()),
+  embeddings: z.object({
+    enabled: z.boolean(),
+    provider: z.enum(['openai', 'mock', 'disabled']),
+    model: z.string().nullable(),
+    dimensions: z.number(),
+    missingConfiguration: z.array(z.string()),
+  }).optional(),
+  observability: z.object({
+    tracesEnabled: z.boolean(),
+  }).optional(),
   uploadIndexing: z.object({
     enabled: z.boolean(),
     supportedMimeTypes: z.array(z.string()),
@@ -76,6 +86,7 @@ const AssistantChatResponseSchema = z.object({
     files: z.number(),
     total: z.number(),
   }),
+  traceId: z.string().optional(),
   error: z.object({
     code: AssistantErrorCodeSchema,
     message: z.string(),

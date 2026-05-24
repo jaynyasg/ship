@@ -12,6 +12,10 @@ Configure these variables on the API/web service:
 | `SHIP_ASSISTANT_ENABLED` | No | Defaults to enabled unless set to `false`. |
 | `SHIP_ASSISTANT_PROVIDER` | No | `openai`, `bedrock`, or `mock`. Defaults to `openai` when `OPENAI_API_KEY` is present. |
 | `SHIP_ASSISTANT_MODEL` | No | Defaults to `gpt-4o-mini` for OpenAI. |
+| `SHIP_ASSISTANT_EMBEDDINGS_ENABLED` | No | Set to `true` to generate embeddings with the configured OpenAI key, or `mock` for deterministic local/eval vectors. Defaults to disabled. |
+| `SHIP_ASSISTANT_EMBEDDING_MODEL` | No | Defaults to `text-embedding-3-small`. |
+| `SHIP_ASSISTANT_EMBEDDING_DIMENSIONS` | No | Defaults to `1536`; smaller values are accepted for mock/local evals. |
+| `SHIP_ASSISTANT_TRACING_ENABLED` | No | Defaults to enabled unless set to `false`. Records assistant run/tool/retrieval/model/extraction metadata without storing full prompts. |
 | `SHIP_ASSISTANT_UPLOAD_INDEXING` | No | Defaults to enabled unless set to `false`. |
 | `SHIP_UPLOAD_STORAGE` | No | Set to `local` for the Render demo path without S3. Use S3/object storage for durable production uploads. |
 | `SHIP_UPLOADS_DIR` | No | Optional local upload directory override. |
@@ -23,6 +27,14 @@ GET /api/assistant/status
 ```
 
 It reports whether the assistant is available, which provider/model is selected, missing server configuration, supported upload types, and message/context limits.
+
+## Hybrid Retrieval, Traces, and Evals
+
+Ask Ship uses a bounded retrieval loop: gather Ship context, blend lexical/structured/semantic signals, rerank the candidate sources, then send the final context pack to the model. Semantic retrieval is additive; if embeddings are disabled or unavailable, Ask Ship continues to use PostgreSQL full-text search and structured project/timeline context.
+
+Assistant runs are recorded in `assistant_runs`, with supporting events in `assistant_trace_events`. These rows capture request IDs, retrieval/tool/model/extraction timings, source counts, embedding failures, and indexing metadata. They intentionally avoid storing raw prompts, full extracted content, provider secrets, or model output.
+
+The eval harness in `api/src/services/assistant/eval-harness.ts` scores deterministic cases for expected citations and required answer terms. Use it for local regression tests and future CI artifacts before changing retrieval or prompt behavior.
 
 ## Indexed Uploads
 

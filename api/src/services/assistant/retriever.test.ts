@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { pool } from '../../db/client.js';
+import { generateAssistantEmbedding } from './embeddings.js';
 import { retrieveAssistantSources } from './retriever.js';
 
 describe('retrieveAssistantSources', () => {
@@ -13,6 +14,10 @@ describe('retrieveAssistantSources', () => {
   let userOneId: string;
   let userTwoId: string;
   let projectId: string;
+  const originalEmbeddingEnv = {
+    SHIP_ASSISTANT_EMBEDDINGS_ENABLED: process.env.SHIP_ASSISTANT_EMBEDDINGS_ENABLED,
+    SHIP_ASSISTANT_EMBEDDING_DIMENSIONS: process.env.SHIP_ASSISTANT_EMBEDDING_DIMENSIONS,
+  };
 
   beforeAll(async () => {
     const workspaceResult = await pool.query(
@@ -151,6 +156,8 @@ describe('retrieveAssistantSources', () => {
     await pool.query('DELETE FROM workspace_memberships WHERE workspace_id = $1', [workspaceId]);
     await pool.query('DELETE FROM users WHERE id IN ($1, $2)', [userOneId, userTwoId]);
     await pool.query('DELETE FROM workspaces WHERE id = $1', [workspaceId]);
+    restoreEnv('SHIP_ASSISTANT_EMBEDDINGS_ENABLED', originalEmbeddingEnv.SHIP_ASSISTANT_EMBEDDINGS_ENABLED);
+    restoreEnv('SHIP_ASSISTANT_EMBEDDING_DIMENSIONS', originalEmbeddingEnv.SHIP_ASSISTANT_EMBEDDING_DIMENSIONS);
   });
 
   it('returns workspace-visible sources but excludes another user private document', async () => {
@@ -224,4 +231,58 @@ describe('retrieveAssistantSources', () => {
     expect(weekSource).toBeDefined();
     expect(weekSource?.excerpt).toContain(`assistant rollout and citation verification ${uniqueTerm}`);
   });
+
+  it('retrieves semantically similar uploaded chunks when lexical terms do not match', async () => {
+    process.env.SHIP_ASSISTANT_EMBEDDINGS_ENABLED = 'mock';
+    process.env.SHIP_ASSISTANT_EMBEDDING_DIMENSIONS = '64';
+    const semanticQuery = `semantic launch dependency ${uniqueTerm}`;
+    const embedding = await generateAssistantEmbedding(semanticQuery);
+    expect(embedding).toBeDefined();
+
+    const fileResult = await pool.query<{ id: string }>(
+      `INSERT INTO files
+        (workspace_id, uploaded_by, filename, mime_type, size_bytes, s3_key, status, assistant_indexing_status, assistant_indexed_at)
+       VALUES ($1, $2, $3, 'text/plain', 42, $4, 'uploaded', 'indexed', now())
+       RETURNING id`,
+      [workspaceId, userOneId, `Opaque Evidence ${uniqueTerm}.txt`, `assistant-tests/${uniqueTerm}.txt`],
+    );
+    const fileId = fileResult.rows[0]!.id;
+
+    await pool.query(
+      `INSERT INTO assistant_search_chunks
+        (workspace_id, source_type, source_id, file_id, chunk_index, title, text, metadata,
+         embedding, embedding_model, embedding_dimensions, embedding_created_at)
+       VALUES ($1, 'file', $2, $2, 0, $3, $4, '{}', $5, $6, $7, now())`,
+      [
+        workspaceId,
+        fileId,
+        `Opaque Evidence ${uniqueTerm}.txt`,
+        'Alpha beta gamma without the query vocabulary.',
+        embedding?.embedding,
+        embedding?.model,
+        embedding?.dimensions,
+      ],
+    );
+
+    const sources = await retrieveAssistantSources({
+      userId: userOneId,
+      workspaceId,
+      workspaceRole: 'member',
+      message: semanticQuery,
+      maxSources: 8,
+    });
+
+    const semanticSource = sources.find((source) => source.title === `Opaque Evidence ${uniqueTerm}.txt`);
+    expect(semanticSource).toBeDefined();
+    expect(semanticSource?.retrievalStrategy).toBe('semantic');
+    expect(semanticSource?.retrievalSignals?.semanticScore).toBeGreaterThan(0.9);
+  });
 });
+
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key];
+    return;
+  }
+  process.env[key] = value;
+}

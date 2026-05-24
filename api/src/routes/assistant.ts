@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
+import { ensureAssistantUploadSchema } from '../db/assistant-upload-schema.js';
 import { getAssistantStatus, ASSISTANT_LIMITS } from '../services/assistant/config.js';
 import { answerAssistantQuestion } from '../services/assistant/chat.js';
 import type {
@@ -45,11 +46,13 @@ function assistantResponse(
   };
 }
 
-router.get('/status', authMiddleware, (_req: Request, res: Response) => {
+router.get('/status', authMiddleware, async (_req: Request, res: Response) => {
+  await ensureAssistantUploadSchema();
   res.json(getAssistantStatus());
 });
 
 router.post('/chat', authMiddleware, async (req: Request, res: Response) => {
+  await ensureAssistantUploadSchema();
   const body = req.body as Partial<AssistantChatRequest>;
   const message = typeof body.message === 'string' ? body.message.trim() : '';
 

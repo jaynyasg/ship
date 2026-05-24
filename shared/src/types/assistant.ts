@@ -39,6 +39,16 @@ export interface AssistantStatusResponse {
   provider: AssistantProvider;
   model: string | null;
   missingConfiguration: string[];
+  embeddings?: {
+    enabled: boolean;
+    provider: 'openai' | 'mock' | 'disabled';
+    model: string | null;
+    dimensions: number;
+    missingConfiguration: string[];
+  };
+  observability?: {
+    tracesEnabled: boolean;
+  };
   uploadIndexing: {
     enabled: boolean;
     supportedMimeTypes: string[];
@@ -112,5 +122,6 @@ export interface AssistantChatResponse {
   message: AssistantMessage;
   citations: AssistantCitation[];
   sourceCounts: AssistantSourceCounts;
+  traceId?: string;
   error?: AssistantError;
 }

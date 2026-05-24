@@ -18,12 +18,21 @@ export interface AssistantRetrievedSource {
   url: string;
   excerpt: string;
   score: number;
+  retrievalStrategy?: 'structured' | 'lexical' | 'semantic' | 'hybrid';
+  retrievalSignals?: {
+    lexicalScore?: number;
+    semanticScore?: number;
+    contextBoost?: number;
+    recencyScore?: number;
+    rerankScore?: number;
+  };
 }
 
 export interface AssistantRetrievalInput extends AssistantRequestContext {
   message: string;
   routeContext?: AssistantRouteContext;
   maxSources?: number;
+  runId?: string;
 }
 
 export interface PromptBuildResult {

@@ -91,6 +91,7 @@ async function buildStructuredProjectSource(
     url: `/documents/${projectId}/timeline`,
     excerpt,
     score: 240 + blockedRows.length * 15 + atRiskRows.length * 10 + overdueRows.length * 8,
+    retrievalStrategy: 'structured',
   };
 }
 
@@ -150,6 +151,7 @@ async function buildWeeklyPlanRetroSources(
       url: `/documents/${row.id}`,
       excerpt: clampText(`Weekly ${kind}: ${title}.\n${contentText}`, 900),
       score: 180 + recencyScore(row.updated_at),
+      retrievalStrategy: 'structured',
     });
   }
 
