@@ -19,6 +19,18 @@ services:
         sync: false
       - key: RENDER_SECURITY_PROBE_CRON_JOB_ID
         sync: false
+      - key: SHIP_ASSISTANT_ENABLED
+        value: "true"
+      - key: SHIP_ASSISTANT_PROVIDER
+        value: openai
+      - key: SHIP_ASSISTANT_MODEL
+        value: gpt-4o-mini
+      - key: SHIP_ASSISTANT_UPLOAD_INDEXING
+        value: "true"
+      - key: SHIP_UPLOAD_STORAGE
+        value: local
+      - key: OPENAI_API_KEY
+        sync: false
 
   - type: cron
     name: ship-security-probe

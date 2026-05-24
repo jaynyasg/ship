@@ -47,6 +47,12 @@ Ship has four main views, each designed for different questions:
 
 Everyone on the team can edit documents at the same time. You'll see other people's cursors as they type.
 
+### Ask Ship
+
+Ask Ship is the in-app assistant in the left icon rail below Teams. With server-side model configuration, it can answer workspace-scoped questions from documents, projects, issues, weeks, timelines, and uploaded documentation, then cite the records it used.
+
+For setup details, supported upload formats, and Render notes, see [`docs/assistant.md`](docs/assistant.md).
+
 ---
 
 ## The Ship Philosophy

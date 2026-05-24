@@ -3,18 +3,25 @@ import express from 'express';
 import { pool } from '../db/client.js';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
-import { mkdir, writeFile, unlink } from 'fs/promises';
+import { mkdir, readFile, writeFile, unlink } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { Readable } from 'stream';
 import { authMiddleware } from '../middleware/auth.js';
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { getVisibilityContext, VISIBILITY_FILTER_SQL } from '../middleware/visibility.js';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import {
+  getFileAssistantIndexStatus,
+  indexUploadedFileForAssistant,
+} from '../services/assistant/indexer.js';
+import { isSupportedAssistantFile } from '../services/assistant/extractors.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Local uploads directory (for development)
-const UPLOADS_DIR = join(__dirname, '../../uploads');
+// Local uploads directory. Render can opt into this for demo uploads with SHIP_UPLOAD_STORAGE=local.
+const UPLOADS_DIR = process.env.SHIP_UPLOADS_DIR || join(__dirname, '../../uploads');
 
 // S3 configuration
 const S3_BUCKET_NAME = process.env.S3_UPLOADS_BUCKET || '';
@@ -38,7 +45,7 @@ function getS3Client(): S3Client {
 // UUID validation regex - prevents path traversal by ensuring ID is valid UUID
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function isValidUUID(id: string | string[] | undefined): boolean {
+function isValidUUID(id: string | string[] | undefined): id is string {
   if (!id || Array.isArray(id)) return false;
   return UUID_REGEX.test(id);
 }
@@ -53,6 +60,7 @@ const uploadRequestSchema = z.object({
   sizeBytes: z.number().int().positive().max(MAX_FILE_SIZE, {
     message: `File size exceeds maximum allowed (${MAX_FILE_SIZE / (1024 * 1024 * 1024)}GB)`,
   }),
+  documentId: z.string().uuid().nullable().optional(),
 });
 
 /**
@@ -94,7 +102,7 @@ filesRouter.post('/upload', authMiddleware, async (req: Request, res: Response) 
       return;
     }
 
-    const { filename, mimeType, sizeBytes } = validation.data;
+    const { filename, mimeType, sizeBytes, documentId } = validation.data;
     const workspaceId = req.workspaceId;
     const userId = req.userId;
 
@@ -104,30 +112,44 @@ filesRouter.post('/upload', authMiddleware, async (req: Request, res: Response) 
       return;
     }
 
+    if (documentId && !(await canAssociateFileWithDocument(
+      documentId,
+      workspaceId!,
+      userId!,
+      req.workspaceRole,
+      req.isSuperAdmin,
+    ))) {
+      res.status(403).json({ error: 'Document not found or inaccessible' });
+      return;
+    }
+
     // Generate unique S3 key / local path
     const fileId = randomUUID();
     const ext = filename.slice(filename.lastIndexOf('.'));
     const s3Key = `${workspaceId}/${fileId}${ext}`;
 
+    const assistantIndexingStatus = isSupportedAssistantFile(filename, mimeType) ? 'not_indexed' : 'unsupported';
+
     // Create file record with 'pending' status
     const result = await pool.query(
-      `INSERT INTO files (id, workspace_id, uploaded_by, filename, mime_type, size_bytes, s3_key, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
-       RETURNING id`,
-      [fileId, workspaceId, userId, filename, mimeType, sizeBytes, s3Key]
+      `INSERT INTO files
+        (id, workspace_id, uploaded_by, filename, mime_type, size_bytes, s3_key, status, document_id, assistant_indexing_status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9)
+       RETURNING id, assistant_indexing_status`,
+      [fileId, workspaceId, userId, filename, mimeType, sizeBytes, s3Key, documentId ?? null, assistantIndexingStatus]
     );
 
     // For local development: use a local upload endpoint
     // For production: generate S3 presigned URL for direct browser upload
-    const isProduction = process.env.NODE_ENV === 'production';
-    const uploadUrl = isProduction
-      ? await generateS3PresignedUrl(s3Key, mimeType, sizeBytes)
-      : `/api/files/${fileId}/local-upload`;
+    const uploadUrl = shouldUseLocalUploads()
+      ? `/api/files/${fileId}/local-upload`
+      : await generateS3PresignedUrl(s3Key, mimeType, sizeBytes);
 
     res.json({
       fileId: result.rows[0].id,
       uploadUrl,
       s3Key,
+      assistantIndexingStatus: result.rows[0].assistant_indexing_status,
     });
   } catch (error) {
     console.error('Error creating upload:', error);
@@ -209,7 +231,13 @@ filesRouter.post('/:id/local-upload', rawBodyParser, authMiddleware, async (req:
       [cdnUrl, fileId]
     );
 
-    res.json({ success: true });
+    await indexUploadedFileForAssistant({ fileId, workspaceId: workspaceId!, buffer });
+    const indexStatus = await getFileAssistantIndexStatus(fileId, workspaceId!);
+
+    res.json({
+      success: true,
+      assistantIndexingStatus: indexStatus?.assistant_indexing_status ?? file.assistant_indexing_status,
+    });
   } catch (error) {
     console.error('Error uploading file locally:', error);
     res.status(500).json({ error: 'Failed to upload file' });
@@ -247,16 +275,15 @@ filesRouter.post('/:id/confirm', authMiddleware, async (req: Request, res: Respo
     // For local dev: file was already saved in local-upload
 
     // Generate CDN URL
-    const isProduction = process.env.NODE_ENV === 'production';
     let cdnUrl: string;
-    if (isProduction) {
+    if (shouldUseLocalUploads()) {
+      cdnUrl = `/api/files/${fileId}/serve`;
+    } else {
       const cdnDomain = process.env.CDN_DOMAIN;
       if (!cdnDomain) {
         throw new Error('CDN_DOMAIN environment variable is required in production');
       }
       cdnUrl = `https://${cdnDomain}/${file.s3_key}`;
-    } else {
-      cdnUrl = `/api/files/${fileId}/serve`;
     }
 
     // Update file status
@@ -265,10 +292,17 @@ filesRouter.post('/:id/confirm', authMiddleware, async (req: Request, res: Respo
       [cdnUrl, fileId]
     );
 
+    if (isSupportedAssistantFile(file.filename, file.mime_type)) {
+      const buffer = await loadUploadedFileBuffer(file);
+      await indexUploadedFileForAssistant({ fileId, workspaceId: workspaceId!, buffer });
+    }
+    const indexStatus = await getFileAssistantIndexStatus(fileId, workspaceId!);
+
     res.json({
       fileId,
       cdnUrl,
       status: 'uploaded',
+      assistantIndexingStatus: indexStatus?.assistant_indexing_status ?? file.assistant_indexing_status,
     });
   } catch (error) {
     console.error('Error confirming upload:', error);
@@ -303,6 +337,11 @@ filesRouter.get('/:id/serve', authMiddleware, async (req: Request, res: Response
     }
 
     const file = fileResult.rows[0];
+    if (!shouldUseLocalUploads()) {
+      res.redirect(file.cdn_url);
+      return;
+    }
+
     const filePath = join(UPLOADS_DIR, file.s3_key);
 
     // Set content type and serve file
@@ -330,7 +369,8 @@ filesRouter.get('/:id', authMiddleware, async (req: Request, res: Response) => {
     const workspaceId = req.workspaceId;
 
     const result = await pool.query(
-      `SELECT id, filename, mime_type, size_bytes, cdn_url, status, created_at
+      `SELECT id, filename, mime_type, size_bytes, cdn_url, status, document_id,
+              assistant_indexing_status, assistant_indexed_at, assistant_index_error, created_at
        FROM files WHERE id = $1 AND workspace_id = $2`,
       [fileId, workspaceId]
     );
@@ -344,6 +384,58 @@ filesRouter.get('/:id', authMiddleware, async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error getting file:', error);
     res.status(500).json({ error: 'Failed to get file' });
+  }
+});
+
+// GET /api/files/:id/assistant-index - Get Ask Ship indexing status for a file
+filesRouter.get('/:id/assistant-index', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const fileId = req.params.id;
+    if (!fileId || !isValidUUID(fileId)) {
+      res.status(400).json({ error: 'Invalid file ID format' });
+      return;
+    }
+
+    const status = await getFileAssistantIndexStatus(fileId, req.workspaceId!);
+    if (!status) {
+      res.status(404).json({ error: 'File not found' });
+      return;
+    }
+
+    res.json(status);
+  } catch (error) {
+    console.error('Error getting file assistant index status:', error);
+    res.status(500).json({ error: 'Failed to get file assistant index status' });
+  }
+});
+
+// POST /api/files/:id/reindex - Rebuild Ask Ship chunks for an uploaded file
+filesRouter.post('/:id/reindex', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const fileId = req.params.id;
+    if (!fileId || !isValidUUID(fileId)) {
+      res.status(400).json({ error: 'Invalid file ID format' });
+      return;
+    }
+
+    const fileResult = await pool.query(
+      `SELECT * FROM files WHERE id = $1 AND workspace_id = $2 AND status = 'uploaded'`,
+      [fileId, req.workspaceId]
+    );
+
+    if (fileResult.rows.length === 0) {
+      res.status(404).json({ error: 'File not found' });
+      return;
+    }
+
+    const buffer = await loadUploadedFileBuffer(fileResult.rows[0]);
+    await indexUploadedFileForAssistant({ fileId, workspaceId: req.workspaceId!, buffer });
+    const status = await getFileAssistantIndexStatus(fileId, req.workspaceId!);
+
+    res.json(status);
+  } catch (error) {
+    console.error('Error reindexing file for assistant:', error);
+    res.status(500).json({ error: 'Failed to reindex file' });
   }
 });
 
@@ -375,8 +467,7 @@ filesRouter.delete('/:id', authMiddleware, async (req: Request, res: Response) =
     const file = fileResult.rows[0];
 
     // Delete from storage (local or S3)
-    const isProduction = process.env.NODE_ENV === 'production';
-    if (isProduction && S3_BUCKET_NAME) {
+    if (!shouldUseLocalUploads() && S3_BUCKET_NAME) {
       const client = getS3Client();
       const command = new DeleteObjectCommand({
         Bucket: S3_BUCKET_NAME,
@@ -427,4 +518,78 @@ async function generateS3PresignedUrl(s3Key: string, contentType: string, sizeBy
   });
 
   return presignedUrl;
+}
+
+function shouldUseLocalUploads(): boolean {
+  return process.env.SHIP_UPLOAD_STORAGE === 'local' || !S3_BUCKET_NAME || process.env.NODE_ENV !== 'production';
+}
+
+async function canAssociateFileWithDocument(
+  documentId: string,
+  workspaceId: string,
+  userId: string,
+  workspaceRole?: string | null,
+  isSuperAdmin = false,
+): Promise<boolean> {
+  const { isAdmin } = await getVisibilityContext(userId, workspaceId, workspaceRole, isSuperAdmin);
+  const result = await pool.query(
+    `SELECT d.id
+     FROM documents d
+     WHERE d.id = $1
+       AND d.workspace_id = $2
+       AND d.archived_at IS NULL
+       AND d.deleted_at IS NULL
+       AND ${VISIBILITY_FILTER_SQL('d', '$3', '$4')}
+     LIMIT 1`,
+    [documentId, workspaceId, userId, isAdmin],
+  );
+
+  return result.rows.length > 0;
+}
+
+async function loadUploadedFileBuffer(file: { s3_key: string }): Promise<Buffer> {
+  if (shouldUseLocalUploads()) {
+    return readFile(join(UPLOADS_DIR, file.s3_key));
+  }
+
+  const response = await getS3Client().send(new GetObjectCommand({
+    Bucket: S3_BUCKET_NAME,
+    Key: file.s3_key,
+  }));
+
+  return s3BodyToBuffer(response.Body);
+}
+
+async function s3BodyToBuffer(body: unknown): Promise<Buffer> {
+  if (!body) {
+    throw new Error('Uploaded file body was empty');
+  }
+
+  if (body instanceof Uint8Array) {
+    return Buffer.from(body);
+  }
+
+  const transformable = body as { transformToByteArray?: () => Promise<Uint8Array> };
+  if (typeof transformable.transformToByteArray === 'function') {
+    return Buffer.from(await transformable.transformToByteArray());
+  }
+
+  if (body instanceof Readable) {
+    const chunks: Buffer[] = [];
+    for await (const chunk of body) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+  }
+
+  const asyncIterable = body as AsyncIterable<Uint8Array>;
+  if (typeof asyncIterable[Symbol.asyncIterator] === 'function') {
+    const chunks: Buffer[] = [];
+    for await (const chunk of asyncIterable) {
+      chunks.push(Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+  }
+
+  throw new Error('Unsupported uploaded file body type');
 }

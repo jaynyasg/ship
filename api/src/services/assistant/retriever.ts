@@ -17,6 +17,16 @@ interface DocumentSearchRow {
   context_boost: number;
 }
 
+interface FileChunkSearchRow {
+  source_id: string;
+  document_id: string | null;
+  title: string;
+  text: string;
+  updated_at: Date | string | null;
+  rank: number | null;
+  context_boost: number;
+}
+
 const WORK_INTENT_PATTERN = /\b(blocked|blocker|blocking|risk|at risk|overdue|timeline|dependency|dependencies|project|projects|issue|issues|week|weeks)\b/i;
 
 export async function retrieveAssistantSources(input: AssistantRetrievalInput): Promise<AssistantRetrievedSource[]> {
@@ -57,11 +67,77 @@ export async function retrieveAssistantSources(input: AssistantRetrievalInput): 
     }
   }
 
+  sources.push(...await searchFileChunks(input, isAdmin, contextProjectId));
   sources.push(...await searchDocuments(input, isAdmin, contextProjectId));
 
   return dedupeSources(sources)
     .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title))
     .slice(0, maxSources);
+}
+
+async function searchFileChunks(
+  input: AssistantRetrievalInput,
+  isAdmin: boolean,
+  contextProjectId: string | null,
+): Promise<AssistantRetrievedSource[]> {
+  const normalizedQuery = normalizeQuery(input.message);
+  const contextIds = [
+    input.routeContext?.documentId,
+    input.routeContext?.projectId,
+    contextProjectId,
+  ].filter((id): id is string => typeof id === 'string' && id.length > 0);
+
+  const result = await pool.query<FileChunkSearchRow>(
+    `WITH query AS (SELECT plainto_tsquery('simple', $4) AS q)
+     SELECT c.source_id,
+            c.document_id,
+            c.title,
+            c.text,
+            c.updated_at,
+            ts_rank_cd(c.search_vector, query.q) AS rank,
+            CASE WHEN c.document_id = ANY($6::uuid[]) THEN 90 ELSE 0 END AS context_boost
+     FROM assistant_search_chunks c
+     JOIN files f ON f.id = c.file_id AND f.workspace_id = c.workspace_id
+     LEFT JOIN documents d ON d.id = c.document_id
+     CROSS JOIN query
+     WHERE c.workspace_id = $1
+       AND c.source_type = 'file'
+       AND f.status = 'uploaded'
+       AND (
+         c.document_id IS NULL
+         OR (
+           d.workspace_id = $1
+           AND d.archived_at IS NULL
+           AND d.deleted_at IS NULL
+           AND ${VISIBILITY_FILTER_SQL('d', '$2', '$3')}
+         )
+       )
+       AND (
+         c.document_id = ANY($6::uuid[])
+         OR c.search_vector @@ query.q
+         OR c.title ILIKE $5
+         OR c.text ILIKE $5
+       )
+     ORDER BY context_boost DESC, rank DESC NULLS LAST, c.updated_at DESC
+     LIMIT 10`,
+    [
+      input.workspaceId,
+      input.userId,
+      isAdmin,
+      normalizedQuery,
+      `%${normalizedQuery}%`,
+      contextIds,
+    ],
+  );
+
+  return result.rows.map((row) => ({
+    sourceType: 'file',
+    sourceId: row.source_id,
+    title: row.title,
+    url: row.document_id ? `/documents/${row.document_id}` : `/api/files/${row.source_id}/serve`,
+    excerpt: clampText(row.text, 900),
+    score: (row.context_boost ?? 0) + Number(row.rank ?? 0) * 100 + recencyScore(row.updated_at),
+  }));
 }
 
 async function searchDocuments(

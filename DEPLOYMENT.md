@@ -30,9 +30,23 @@ Although the frontend is still a static React/Vite build, the Render deployment 
    - Web service: `ship`
    - Database: `ship-db`
 3. Let Render create `SESSION_SECRET` and inject `DATABASE_URL` from the managed database.
-4. Deploy the Blueprint.
+4. Add `OPENAI_API_KEY` to the `ship` web service if Ask Ship should be available in the deployed app.
+5. Deploy the Blueprint.
 
 The web service should use Render's default `PORT` environment variable. Render also provides `RENDER_EXTERNAL_URL`; the API uses that value for same-origin production defaults when AWS SSM parameters are not present.
+
+The Blueprint declares Ask Ship assistant defaults:
+
+| Variable | Value |
+|---|---|
+| `SHIP_ASSISTANT_ENABLED` | `true` |
+| `SHIP_ASSISTANT_PROVIDER` | `openai` |
+| `SHIP_ASSISTANT_MODEL` | `gpt-4o-mini` |
+| `SHIP_ASSISTANT_UPLOAD_INDEXING` | `true` |
+| `SHIP_UPLOAD_STORAGE` | `local` |
+| `OPENAI_API_KEY` | Add manually in Render; declared with `sync: false` |
+
+`SHIP_UPLOAD_STORAGE=local` is the current demo path for upload-backed Ask Ship answers on Render. It is suitable for demonstration, but it is not durable across rebuilds unless a persistent disk is added. For durable production uploads, configure object storage instead.
 
 ### Render Verification
 
@@ -50,6 +64,9 @@ Then verify in a browser:
 - Creating/opening a document connects `/collaboration/*` over `wss`.
 - `/events` connects after login.
 - Render logs show migrations applied and no startup errors.
+- `GET /api/assistant/status` returns `available: true` after login when `OPENAI_API_KEY` is set.
+- The Ask Ship rail button opens the assistant panel below Teams.
+- Uploading a supported `.txt`, `.md`, `.csv`, `.pdf`, or `.docx` file from a document page reaches `indexed` status and can be cited by Ask Ship.
 
 ### Render Security Probe Trigger
 
@@ -105,6 +122,10 @@ To write the report onto this local checkout instead, run the probe from your ma
 ```powershell
 pnpm security:audit -- --mode remote --web-url https://<render-app-url> --api-url https://<render-app-url> --non-interactive --report-name security-audit-render
 ```
+
+### Ask Ship Assistant
+
+Ask Ship configuration, supported indexed file types, storage notes, and the demo flow are documented in `docs/assistant.md`.
 
 ### Optional Production Features
 

@@ -11,9 +11,10 @@ const API_BASE = import.meta.env.VITE_API_URL ?? '';
 export const MAX_FILE_SIZE = 1073741824; // 1GB in bytes
 export const MAX_FILE_SIZE_DISPLAY = '1GB';
 
-interface UploadResult {
+export interface UploadResult {
   fileId: string;
   cdnUrl: string;
+  assistantIndexingStatus?: 'not_indexed' | 'indexing' | 'indexed' | 'unsupported' | 'failed';
 }
 
 interface UploadProgress {
@@ -24,6 +25,10 @@ interface UploadProgress {
 }
 
 type ProgressCallback = (progress: UploadProgress) => void;
+
+interface UploadOptions {
+  documentId?: string;
+}
 
 /**
  * Get CSRF token for API requests
@@ -45,7 +50,8 @@ async function getCsrfToken(): Promise<string> {
 export async function uploadFile(
   file: File,
   onProgress?: ProgressCallback,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: UploadOptions
 ): Promise<UploadResult> {
   // Check if already aborted
   if (signal?.aborted) {
@@ -83,6 +89,7 @@ export async function uploadFile(
         filename: file.name,
         mimeType: effectiveMimeType,
         sizeBytes: file.size,
+        documentId: options?.documentId,
       }),
       signal,
     });
@@ -141,6 +148,7 @@ export async function uploadFile(
       return {
         fileId,
         cdnUrl: fileData.cdn_url,
+        assistantIndexingStatus: fileData.assistant_indexing_status,
       };
     } else {
       // Production: upload directly to S3
@@ -174,10 +182,10 @@ export async function uploadFile(
         throw new Error(error.error || 'Failed to confirm upload');
       }
 
-      const { cdnUrl } = await confirmRes.json();
+      const { cdnUrl, assistantIndexingStatus } = await confirmRes.json();
       updateProgress({ status: 'complete', progress: 100 });
 
-      return { fileId, cdnUrl };
+      return { fileId, cdnUrl, assistantIndexingStatus };
     }
   } catch (error) {
     updateProgress({

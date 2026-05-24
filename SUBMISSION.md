@@ -124,6 +124,12 @@ Manual browser verification on 2026-05-23 confirmed the deployed app uses secure
 
 This Render run also satisfies the manual review requirements for CORS/CSP configuration, environment/secret exposure, rate limiting, and error verbosity. The report ends in the Render logs with `--- End Ship Security Probe Markdown Report ---`.
 
+## Phase 19 Ask Ship Assistant MVP
+
+Ship now includes an in-app Ask Ship assistant in the left icon rail below Teams. The MVP adds authenticated assistant status and chat endpoints, a server-side OpenAI provider path, visibility-aware retrieval over Ship documents/projects/issues/weeks/timelines, grounded citations, assistant-specific rate limiting, and an upload-to-current-document path for indexed `.txt`, `.md`, `.csv`, `.pdf`, and `.docx` documentation.
+
+Render configuration now declares non-secret assistant defaults and expects `OPENAI_API_KEY` on the `ship` web service. Setup and demo steps are documented in `docs/assistant.md`.
+
 ## Files To Read
 
 - `AUDIT.md` - full audit narrative with baseline, severity, and after status.
@@ -133,6 +139,7 @@ This Render run also satisfies the manual review requirements for CORS/CSP confi
 - `DEPLOYMENT_DECISION.md` - AWS cost finding and rationale for choosing Render as the submission deployment target.
 - `DEPLOYMENT.md` - Render deployment, security probe trigger, and public verification evidence.
 - `DEPLOYMENT_CHECKLIST.md` - Render submission checklist with captured public security-probe evidence.
+- `docs/assistant.md` - Ask Ship assistant setup, supported upload formats, storage notes, and demo flow.
 - `demo-script-final.md` - 5-minute demo script with step-by-step show-and-tell guidance.
 - `THREAT_MODEL.md` - dependency security status, Phase 06 remediation, and residual risk.
 - `eval/results/phase2-implementation-notes.md` - concise implementation and measurement log.

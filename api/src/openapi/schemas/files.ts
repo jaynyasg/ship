@@ -20,19 +20,35 @@ export const UploadRequestSchema = z.object({
     description: 'File size in bytes (max 1GB)',
     example: 1024000,
   }),
+  documentId: UuidSchema.nullable().optional().openapi({
+    description: 'Document to associate with the uploaded file for Ask Ship indexing',
+  }),
 }).openapi('UploadRequest');
 
 registry.register('UploadRequest', UploadRequestSchema);
 
+const AssistantIndexingStatusSchema = z.enum([
+  'not_indexed',
+  'indexing',
+  'indexed',
+  'unsupported',
+  'failed',
+]).openapi('AssistantIndexingStatus');
+
+registry.register('AssistantIndexingStatus', AssistantIndexingStatusSchema);
+
 export const UploadResponseSchema = z.object({
-  uploadUrl: z.string().url().openapi({
-    description: 'Presigned URL to PUT the file (expires in 15 minutes)',
+  uploadUrl: z.string().openapi({
+    description: 'Presigned URL or local upload endpoint for the file',
   }),
   fileId: UuidSchema.openapi({
     description: 'File ID to use when referencing this file',
   }),
-  publicUrl: z.string().url().openapi({
-    description: 'URL where the file will be accessible after upload',
+  s3Key: z.string().openapi({
+    description: 'Storage key for the uploaded file',
+  }),
+  assistantIndexingStatus: AssistantIndexingStatusSchema.optional().openapi({
+    description: 'Ask Ship indexing status for supported documentation files',
   }),
 }).openapi('UploadResponse');
 
@@ -41,17 +57,30 @@ registry.register('UploadResponse', UploadResponseSchema);
 export const FileMetadataSchema = z.object({
   id: UuidSchema,
   filename: z.string(),
-  mimeType: z.string(),
-  sizeBytes: z.number().int(),
-  uploadedBy: UuidSchema,
-  documentId: UuidSchema.nullable().openapi({
+  mime_type: z.string(),
+  size_bytes: z.number().int(),
+  document_id: UuidSchema.nullable().openapi({
     description: 'Document this file is attached to',
   }),
-  publicUrl: z.string().url(),
-  createdAt: DateTimeSchema,
+  cdn_url: z.string().nullable(),
+  status: z.enum(['pending', 'uploaded', 'failed']),
+  assistant_indexing_status: AssistantIndexingStatusSchema,
+  assistant_indexed_at: DateTimeSchema.nullable(),
+  assistant_index_error: z.string().nullable(),
+  created_at: DateTimeSchema,
 }).openapi('FileMetadata');
 
 registry.register('FileMetadata', FileMetadataSchema);
+
+export const FileAssistantIndexStatusSchema = z.object({
+  id: UuidSchema,
+  assistant_indexing_status: AssistantIndexingStatusSchema,
+  assistant_indexed_at: DateTimeSchema.nullable(),
+  assistant_index_error: z.string().nullable(),
+  document_id: UuidSchema.nullable(),
+}).openapi('FileAssistantIndexStatus');
+
+registry.register('FileAssistantIndexStatus', FileAssistantIndexStatusSchema);
 
 // ============== Register File Endpoints ==============
 
@@ -89,6 +118,56 @@ registry.registerPath({
           }),
         },
       },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/files/{fileId}/assistant-index',
+  tags: ['Files'],
+  summary: 'Get Ask Ship indexing status',
+  request: {
+    params: z.object({
+      fileId: UuidSchema,
+    }),
+  },
+  responses: {
+    200: {
+      description: 'File indexing status',
+      content: {
+        'application/json': {
+          schema: FileAssistantIndexStatusSchema,
+        },
+      },
+    },
+    404: {
+      description: 'File not found',
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/files/{fileId}/reindex',
+  tags: ['Files'],
+  summary: 'Rebuild Ask Ship file index',
+  request: {
+    params: z.object({
+      fileId: UuidSchema,
+    }),
+  },
+  responses: {
+    200: {
+      description: 'File indexing status after reindex',
+      content: {
+        'application/json': {
+          schema: FileAssistantIndexStatusSchema,
+        },
+      },
+    },
+    404: {
+      description: 'File not found',
     },
   },
 });

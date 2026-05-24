@@ -16,6 +16,7 @@ describe('Files API', () => {
   let testWorkspaceId: string;
   let testUserId: string;
   let testFileId: string;
+  let testDocumentId: string;
 
   beforeAll(async () => {
     // Create test workspace
@@ -42,6 +43,21 @@ describe('Files API', () => {
       [testWorkspaceId, testUserId]
     );
 
+    const documentResult = await pool.query(
+      `INSERT INTO documents (workspace_id, document_type, title, content, properties, created_by, visibility)
+       VALUES ($1, 'wiki', 'Files API Test Doc', $2, '{}', $3, 'workspace')
+       RETURNING id`,
+      [
+        testWorkspaceId,
+        JSON.stringify({
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'File upload test document' }] }],
+        }),
+        testUserId,
+      ],
+    );
+    testDocumentId = documentResult.rows[0].id;
+
     // Create session (sessions.id is TEXT not UUID, generated from crypto.randomBytes)
     const sessionId = crypto.randomBytes(32).toString('hex');
     await pool.query(
@@ -66,6 +82,7 @@ describe('Files API', () => {
   afterAll(async () => {
     // Clean up test data in correct order (foreign keys)
     await pool.query('DELETE FROM files WHERE workspace_id = $1', [testWorkspaceId]);
+    await pool.query('DELETE FROM documents WHERE workspace_id = $1', [testWorkspaceId]);
     await pool.query('DELETE FROM sessions WHERE user_id = $1', [testUserId]);
     await pool.query('DELETE FROM workspace_memberships WHERE user_id = $1', [testUserId]);
     await pool.query('DELETE FROM users WHERE id = $1', [testUserId]);
@@ -117,6 +134,52 @@ describe('Files API', () => {
     expect(dbResult.rows[0].status).toBe('pending');
     expect(dbResult.rows[0].filename).toBe('test.png');
     expect(dbResult.rows[0].mime_type).toBe('image/png');
+    expect(dbResult.rows[0].assistant_indexing_status).toBe('unsupported');
+  });
+
+  it('indexes uploaded documentation attached to a document for Ask Ship', async () => {
+    const body = Buffer.from('Launch readiness notes\n\nProject Calypso depends on the compliance checklist.');
+    const uploadRes = await request(app)
+      .post('/api/files/upload')
+      .set('Cookie', sessionCookie)
+      .set('x-csrf-token', csrfToken)
+      .send({
+        filename: 'launch-notes.md',
+        mimeType: 'text/markdown',
+        sizeBytes: body.byteLength,
+        documentId: testDocumentId,
+      });
+
+    expect(uploadRes.status).toBe(200);
+    expect(uploadRes.body.assistantIndexingStatus).toBe('not_indexed');
+
+    const fileId = uploadRes.body.fileId;
+    const localUploadRes = await request(app)
+      .post(`/api/files/${fileId}/local-upload`)
+      .set('Cookie', sessionCookie)
+      .set('x-csrf-token', csrfToken)
+      .set('Content-Type', 'text/markdown')
+      .send(body);
+
+    expect(localUploadRes.status).toBe(200);
+    expect(localUploadRes.body.assistantIndexingStatus).toBe('indexed');
+
+    const statusRes = await request(app)
+      .get(`/api/files/${fileId}/assistant-index`)
+      .set('Cookie', sessionCookie);
+
+    expect(statusRes.status).toBe(200);
+    expect(statusRes.body.assistant_indexing_status).toBe('indexed');
+    expect(statusRes.body.document_id).toBe(testDocumentId);
+
+    const chunks = await pool.query(
+      `SELECT text
+       FROM assistant_search_chunks
+       WHERE workspace_id = $1 AND source_type = 'file' AND source_id = $2`,
+      [testWorkspaceId, fileId],
+    );
+    expect(chunks.rows.length).toBeGreaterThan(0);
+    expect(chunks.rows[0].text).toContain('Project Calypso');
   });
 
   it('POST /api/files/upload rejects blocked file types', async () => {

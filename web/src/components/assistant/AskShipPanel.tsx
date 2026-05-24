@@ -4,6 +4,7 @@ import { useAssistant } from '@/hooks/useAssistant';
 import { cn } from '@/lib/cn';
 import { AssistantComposer } from './AssistantComposer';
 import { AssistantMessages } from './AssistantMessages';
+import { AssistantUpload } from './AssistantUpload';
 
 interface AskShipPanelProps {
   open: boolean;
@@ -72,6 +73,9 @@ export function AskShipPanel({ open, onOpenChange, context }: AskShipPanelProps)
 
       <div className={cn('flex min-h-0 flex-1 flex-col', assistant.messages.length === 0 && 'justify-end')}>
         <AssistantMessages messages={assistant.messages} sending={assistant.sending} />
+        {assistant.status?.uploadIndexing.enabled ? (
+          <AssistantUpload documentId={context?.documentId} disabled={disabled} />
+        ) : null}
         <AssistantComposer
           disabled={disabled}
           maxLength={assistant.status?.limits.maxMessageChars}
