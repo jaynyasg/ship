@@ -25,7 +25,6 @@ const __dirname = dirname(__filename);
 const UPLOADS_DIR = process.env.SHIP_UPLOADS_DIR || join(__dirname, '../../uploads');
 
 // S3 configuration
-const S3_BUCKET_NAME = process.env.S3_UPLOADS_BUCKET || '';
 const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
 
 // Max file size: 1GB (1073741824 bytes)
@@ -107,6 +106,11 @@ filesRouter.post('/upload', authMiddleware, async (req: Request, res: Response) 
     const workspaceId = req.workspaceId;
     const userId = req.userId;
 
+    if (!workspaceId || !userId) {
+      res.status(400).json({ error: 'Select a workspace before uploading files' });
+      return;
+    }
+
     // Validate file type
     if (!isAllowedFile(filename)) {
       res.status(400).json({ error: 'File type not allowed' });
@@ -115,8 +119,8 @@ filesRouter.post('/upload', authMiddleware, async (req: Request, res: Response) 
 
     if (documentId && !(await canAssociateFileWithDocument(
       documentId,
-      workspaceId!,
-      userId!,
+      workspaceId,
+      userId,
       req.workspaceRole,
       req.isSuperAdmin,
     ))) {
@@ -131,6 +135,12 @@ filesRouter.post('/upload', authMiddleware, async (req: Request, res: Response) 
 
     const assistantIndexingStatus = isSupportedAssistantFile(filename, mimeType) ? 'not_indexed' : 'unsupported';
 
+    // Build the storage URL before creating the DB row so misconfigured storage
+    // does not leave an orphaned pending file record.
+    const uploadUrl = shouldUseLocalUploads()
+      ? `/api/files/${fileId}/local-upload`
+      : await generateS3PresignedUrl(s3Key, mimeType, sizeBytes);
+
     // Create file record with 'pending' status
     const result = await pool.query(
       `INSERT INTO files
@@ -140,12 +150,6 @@ filesRouter.post('/upload', authMiddleware, async (req: Request, res: Response) 
       [fileId, workspaceId, userId, filename, mimeType, sizeBytes, s3Key, documentId ?? null, assistantIndexingStatus]
     );
 
-    // For local development: use a local upload endpoint
-    // For production: generate S3 presigned URL for direct browser upload
-    const uploadUrl = shouldUseLocalUploads()
-      ? `/api/files/${fileId}/local-upload`
-      : await generateS3PresignedUrl(s3Key, mimeType, sizeBytes);
-
     res.json({
       fileId: result.rows[0].id,
       uploadUrl,
@@ -154,7 +158,7 @@ filesRouter.post('/upload', authMiddleware, async (req: Request, res: Response) 
     });
   } catch (error) {
     console.error('Error creating upload:', error);
-    res.status(500).json({ error: 'Failed to create upload' });
+    res.status(500).json({ error: createUploadErrorMessage(error) });
   }
 });
 
@@ -465,10 +469,11 @@ filesRouter.delete('/:id', authMiddleware, async (req: Request, res: Response) =
     const file = fileResult.rows[0];
 
     // Delete from storage (local or S3)
-    if (!shouldUseLocalUploads() && S3_BUCKET_NAME) {
+    const s3BucketName = getS3BucketName();
+    if (!shouldUseLocalUploads() && s3BucketName) {
       const client = getS3Client();
       const command = new DeleteObjectCommand({
-        Bucket: S3_BUCKET_NAME,
+        Bucket: s3BucketName,
         Key: file.s3_key,
       });
       await client.send(command);
@@ -499,13 +504,14 @@ filesRouter.delete('/:id', authMiddleware, async (req: Request, res: Response) =
  * @returns Presigned URL valid for 15 minutes
  */
 async function generateS3PresignedUrl(s3Key: string, contentType: string, sizeBytes: number): Promise<string> {
-  if (!S3_BUCKET_NAME) {
+  const s3BucketName = getS3BucketName();
+  if (!s3BucketName) {
     throw new Error('S3_UPLOADS_BUCKET environment variable is not configured');
   }
 
   const client = getS3Client();
   const command = new PutObjectCommand({
-    Bucket: S3_BUCKET_NAME,
+    Bucket: s3BucketName,
     Key: s3Key,
     ContentType: contentType,
     ContentLength: sizeBytes,
@@ -519,10 +525,11 @@ async function generateS3PresignedUrl(s3Key: string, contentType: string, sizeBy
 }
 
 function shouldUseLocalUploads(): boolean {
-  if (process.env.SHIP_UPLOAD_STORAGE === 's3') return false;
-  if (process.env.SHIP_UPLOAD_STORAGE === 'local') return true;
+  const storageMode = process.env.SHIP_UPLOAD_STORAGE?.trim().toLowerCase();
+  if (storageMode === 's3') return false;
+  if (storageMode === 'local') return true;
 
-  return !S3_BUCKET_NAME || !process.env.CDN_DOMAIN || process.env.NODE_ENV !== 'production';
+  return !getS3BucketName() || !process.env.CDN_DOMAIN || process.env.NODE_ENV !== 'production';
 }
 
 async function canAssociateFileWithDocument(
@@ -554,7 +561,7 @@ async function loadUploadedFileBuffer(file: { s3_key: string }): Promise<Buffer>
   }
 
   const response = await getS3Client().send(new GetObjectCommand({
-    Bucket: S3_BUCKET_NAME,
+    Bucket: getS3BucketName(),
     Key: file.s3_key,
   }));
 
@@ -613,4 +620,29 @@ async function s3BodyToBuffer(body: unknown): Promise<Buffer> {
   }
 
   throw new Error('Unsupported uploaded file body type');
+}
+
+function getS3BucketName(): string {
+  return process.env.S3_UPLOADS_BUCKET || '';
+}
+
+function createUploadErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const code = typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code?: unknown }).code)
+    : '';
+
+  if (message.includes('S3_UPLOADS_BUCKET')) {
+    return 'Upload storage is configured for S3, but S3_UPLOADS_BUCKET is not configured. Set SHIP_UPLOAD_STORAGE=local for Render demo uploads or configure S3.';
+  }
+
+  if (code === '42703') {
+    return 'Upload database schema is missing file assistant columns. Run database migrations and retry.';
+  }
+
+  if (code === '42P01') {
+    return 'Upload database schema is missing assistant upload tables. Run database migrations and retry.';
+  }
+
+  return 'Failed to create upload';
 }

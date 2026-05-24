@@ -137,6 +137,40 @@ describe('Files API', () => {
     expect(dbResult.rows[0].assistant_indexing_status).toBe('unsupported');
   });
 
+  it('POST /api/files/upload reports S3 storage misconfiguration before creating a file row', async () => {
+    const previousStorage = process.env.SHIP_UPLOAD_STORAGE;
+    const previousBucket = process.env.S3_UPLOADS_BUCKET;
+    const previousCdnDomain = process.env.CDN_DOMAIN;
+    process.env.SHIP_UPLOAD_STORAGE = 's3';
+    delete process.env.S3_UPLOADS_BUCKET;
+    delete process.env.CDN_DOMAIN;
+
+    try {
+      const res = await request(app)
+        .post('/api/files/upload')
+        .set('Cookie', sessionCookie)
+        .set('x-csrf-token', csrfToken)
+        .send({
+          filename: 's3-missing-bucket.pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 1024,
+        });
+
+      expect(res.status).toBe(500);
+      expect(res.body.error).toContain('S3_UPLOADS_BUCKET');
+
+      const dbResult = await pool.query(
+        'SELECT COUNT(*)::int AS count FROM files WHERE workspace_id = $1 AND filename = $2',
+        [testWorkspaceId, 's3-missing-bucket.pdf'],
+      );
+      expect(dbResult.rows[0].count).toBe(0);
+    } finally {
+      restoreEnv('SHIP_UPLOAD_STORAGE', previousStorage);
+      restoreEnv('S3_UPLOADS_BUCKET', previousBucket);
+      restoreEnv('CDN_DOMAIN', previousCdnDomain);
+    }
+  });
+
   it('indexes uploaded documentation attached to a document for Ask Ship', async () => {
     const body = Buffer.from('Launch readiness notes\n\nProject Calypso depends on the compliance checklist.');
     const uploadRes = await request(app)
@@ -180,6 +214,43 @@ describe('Files API', () => {
     );
     expect(chunks.rows.length).toBeGreaterThan(0);
     expect(chunks.rows[0].text).toContain('Project Calypso');
+  });
+
+  it('indexes uploaded PDF documentation attached to a document for Ask Ship', async () => {
+    const body = buildPdfWithText('PDF launch notes mention blocked items.');
+    const uploadRes = await request(app)
+      .post('/api/files/upload')
+      .set('Cookie', sessionCookie)
+      .set('x-csrf-token', csrfToken)
+      .send({
+        filename: 'launch-notes.pdf',
+        mimeType: 'application/pdf',
+        sizeBytes: body.byteLength,
+        documentId: testDocumentId,
+      });
+
+    expect(uploadRes.status).toBe(200);
+    expect(uploadRes.body.assistantIndexingStatus).toBe('not_indexed');
+
+    const fileId = uploadRes.body.fileId;
+    const localUploadRes = await request(app)
+      .post(`/api/files/${fileId}/local-upload`)
+      .set('Cookie', sessionCookie)
+      .set('x-csrf-token', csrfToken)
+      .set('Content-Type', 'application/pdf')
+      .send(body);
+
+    expect(localUploadRes.status).toBe(200);
+    expect(localUploadRes.body.assistantIndexingStatus).toBe('indexed');
+
+    const chunks = await pool.query(
+      `SELECT text
+       FROM assistant_search_chunks
+       WHERE workspace_id = $1 AND source_type = 'file' AND source_id = $2`,
+      [testWorkspaceId, fileId],
+    );
+    expect(chunks.rows.length).toBeGreaterThan(0);
+    expect(chunks.rows[0].text).toContain('PDF launch notes mention blocked items');
   });
 
   it('POST /api/files/upload rejects blocked file types', async () => {
@@ -309,3 +380,34 @@ describe('Files API', () => {
     expect(dbResult.rows.length).toBe(0);
   });
 });
+
+function buildPdfWithText(text: string): Buffer {
+  const escapedText = text
+    .replace(/\\/g, '\\\\')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)');
+  const stream = `BT /F1 24 Tf 72 720 Td (${escapedText}) Tj ET`;
+
+  return Buffer.from(
+    `%PDF-1.4
+1 0 obj <</Type /Catalog /Pages 2 0 R>> endobj
+2 0 obj <</Type /Pages /Kids [3 0 R] /Count 1>> endobj
+3 0 obj <</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources <</Font <</F1 4 0 R>>>> /Contents 5 0 R>> endobj
+4 0 obj <</Type /Font /Subtype /Type1 /BaseFont /Helvetica>> endobj
+5 0 obj <</Length ${Buffer.byteLength(stream)}>> stream
+${stream}
+endstream endobj
+trailer <</Root 1 0 R>>
+%%EOF`,
+    'binary',
+  );
+}
+
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key];
+    return;
+  }
+
+  process.env[key] = value;
+}

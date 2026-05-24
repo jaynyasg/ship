@@ -20,7 +20,7 @@ export async function extractTextFromFile(input: {
   }
 
   if (mimeType === 'application/pdf' || extension === '.pdf') {
-    const parser = new PDFParse({ data: input.buffer });
+    const parser = new PDFParse({ data: toUint8Array(input.buffer) });
     try {
       const parsed = await parser.getText();
       return { supported: true, text: parsed.text ?? '' };
@@ -61,4 +61,8 @@ export function isSupportedAssistantFile(filename: string, mimeType: string): bo
 function getExtension(filename: string): string {
   const index = filename.lastIndexOf('.');
   return index >= 0 ? filename.slice(index).toLowerCase() : '';
+}
+
+function toUint8Array(buffer: Buffer): Uint8Array {
+  return new Uint8Array(buffer);
 }
