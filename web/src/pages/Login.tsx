@@ -54,9 +54,13 @@ export function LoginPage() {
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
+    if (isCheckingSetup) {
+      return;
+    }
+
     const timeout = window.setTimeout(() => emailInputRef.current?.focus(), 0);
     return () => window.clearTimeout(timeout);
-  }, []);
+  }, [isCheckingSetup]);
 
   // Check if session expired
   const sessionExpired = searchParams.get('expired') === 'true';
