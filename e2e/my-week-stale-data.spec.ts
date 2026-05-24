@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures/isolated-env'
+import type { Page } from '@playwright/test'
 
 /**
  * Tests that /my-week reflects plan/retro edits after navigating back.
@@ -6,15 +7,49 @@ import { test, expect } from './fixtures/isolated-env'
  * Bug: The my-week query had a 5-minute staleTime and content edits go through
  * Yjs WebSocket (no client-side mutation), so navigating back showed stale data.
  * Fix: staleTime set to 0 so every mount refetches fresh data from the API.
- *
- * KNOWN FLAKY: The retro test fails on first attempt but passes on retry.
- * The retro document IS created (shows as a link), but its Yjs content isn't
- * persisted to the `content` column by the time the /my-week API reads it —
- * even with a 10s wait. The plan test (same pattern, runs first) always passes.
- * Root cause is likely in how the Yjs collaboration server handles JSON-to-Yjs
- * conversion for newly created documents (no yjs_state yet, only template JSON
- * in the content column). Needs investigation on a separate branch.
  */
+
+async function currentDocumentId(page: Page): Promise<string> {
+  const documentId = new URL(page.url()).pathname.match(/\/documents\/([a-f0-9-]+)/i)?.[1]
+  if (!documentId) {
+    throw new Error('Expected to be on a document page')
+  }
+  return documentId
+}
+
+async function waitForDocumentContent(
+  page: Page,
+  endpoint: 'weekly-plans' | 'weekly-retros',
+  documentId: string,
+  expectedText: string
+): Promise<void> {
+  let lastContent = ''
+  const deadline = Date.now() + 30000
+
+  while (Date.now() < deadline) {
+    const result = await page.evaluate(
+      async ({ endpointName, id }) => {
+        const response = await fetch(`/api/${endpointName}/${id}`, { credentials: 'include' })
+        if (!response.ok) {
+          return { contentText: '', status: response.status }
+        }
+
+        const data = await response.json() as { content?: unknown }
+        return { contentText: JSON.stringify(data.content ?? ''), status: response.status }
+      },
+      { endpointName: endpoint, id: documentId }
+    )
+
+    lastContent = result.contentText
+    if (lastContent.includes(expectedText)) {
+      return
+    }
+
+    await page.waitForTimeout(500)
+  }
+
+  expect(lastContent, `${endpoint}/${documentId} should include persisted editor content`).toContain(expectedText)
+}
 
 test.describe('My Week - stale data after editing plan/retro', () => {
   test.beforeEach(async ({ page }) => {
@@ -46,9 +81,11 @@ test.describe('My Week - stale data after editing plan/retro', () => {
     await page.keyboard.type('1. Ship the new dashboard feature')
 
     // 6. Wait for the collaboration server to persist the content
-    // "Saved" means WebSocket synced; add extra time for DB write completion
+    // The regression lives at the API boundary: /my-week reads from the persisted
+    // content column, while the editor writes through Yjs WebSocket persistence.
+    const planId = await currentDocumentId(page)
     await expect(page.getByText('Saved')).toBeVisible({ timeout: 10000 })
-    await page.waitForTimeout(3000)
+    await waitForDocumentContent(page, 'weekly-plans', planId, 'Ship the new dashboard feature')
 
     // 7. Navigate back to /my-week using client-side navigation (Dashboard icon in rail)
     await page.getByRole('button', { name: 'Dashboard' }).click()
@@ -80,8 +117,9 @@ test.describe('My Week - stale data after editing plan/retro', () => {
     await page.keyboard.type('1. Completed the API refactoring')
 
     // 6. Wait for the collaboration server to persist the content
+    const retroId = await currentDocumentId(page)
     await expect(page.getByText('Saved')).toBeVisible({ timeout: 10000 })
-    await page.waitForTimeout(3000)
+    await waitForDocumentContent(page, 'weekly-retros', retroId, 'Completed the API refactoring')
 
     // 7. Navigate back to /my-week using client-side navigation
     await page.getByRole('button', { name: 'Dashboard' }).click()
