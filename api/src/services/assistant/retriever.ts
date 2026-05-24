@@ -32,6 +32,8 @@ interface FileChunkSearchRow {
 }
 
 const WORK_INTENT_PATTERN = /\b(blocked|blocker|blocking|risk|at risk|overdue|timeline|dependency|dependencies|project|projects|issue|issues|week|weeks)\b/i;
+const FILE_CHUNK_EXCERPT_CHARS = 1400;
+const DOCUMENT_EXCERPT_CHARS = 1400;
 
 export async function retrieveAssistantSources(input: AssistantRetrievalInput): Promise<AssistantRetrievedSource[]> {
   const maxSources = input.maxSources ?? ASSISTANT_LIMITS.maxContextChunks;
@@ -142,7 +144,7 @@ async function searchFileChunks(
     sourceId: row.source_id,
     title: row.title,
     url: row.document_id ? `/documents/${row.document_id}` : `/api/files/${row.source_id}/serve`,
-    excerpt: clampText(row.text, 900),
+    excerpt: clampText(row.text, FILE_CHUNK_EXCERPT_CHARS),
     score: (row.context_boost ?? 0) + Number(row.rank ?? 0) * 100 + recencyScore(row.updated_at),
     retrievalStrategy: 'lexical',
     retrievalSignals: {
@@ -246,7 +248,7 @@ async function searchSemanticFileChunks(
         sourceId: row.source_id,
         title: row.title,
         url: row.document_id ? `/documents/${row.document_id}` : `/api/files/${row.source_id}/serve`,
-        excerpt: clampText(row.text, 900),
+        excerpt: clampText(row.text, FILE_CHUNK_EXCERPT_CHARS),
         score: (row.context_boost ?? 0) + semanticScore * 180 + recency,
         retrievalStrategy: 'semantic',
         retrievalSignals: {
@@ -422,7 +424,7 @@ function documentRowToSource(row: DocumentSearchRow): AssistantRetrievedSource {
   const sourceType = documentTypeToSourceType(row.document_type);
   const bodyText = extractText(row.content).trim();
   const propertiesText = summarizeProperties(row.properties);
-  const excerpt = clampText([bodyText, propertiesText].filter(Boolean).join('\n'), 900)
+  const excerpt = clampText([bodyText, propertiesText].filter(Boolean).join('\n'), DOCUMENT_EXCERPT_CHARS)
     || `${row.title} is a ${row.document_type} document.`;
 
   return {

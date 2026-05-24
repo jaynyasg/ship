@@ -24,6 +24,7 @@ describe('buildAssistantPrompt', () => {
 
     expect(systemMessage?.role).toBe('system');
     expect(systemMessage?.content).toContain('untrusted evidence');
+    expect(systemMessage?.content).toContain('preserve the source');
     expect(userMessage?.content).toContain('[S1] TIMELINE: Launch timeline');
     expect(userMessage?.content).toContain('Untrusted evidence excerpt');
     expect(prompt.citations).toHaveLength(1);

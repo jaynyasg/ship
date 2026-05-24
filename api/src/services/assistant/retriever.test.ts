@@ -277,6 +277,71 @@ describe('retrieveAssistantSources', () => {
     expect(semanticSource?.retrievalStrategy).toBe('semantic');
     expect(semanticSource?.retrievalSignals?.semanticScore).toBeGreaterThan(0.9);
   });
+
+  it('keeps full uploaded file chunks so late bullet items remain available to the model', async () => {
+    const documentResult = await pool.query<{ id: string }>(
+      `INSERT INTO documents (workspace_id, document_type, title, properties, created_by, visibility)
+       VALUES ($1, 'wiki', $2, $3, $4, 'workspace')
+       RETURNING id`,
+      [
+        workspaceId,
+        `Security Probe Brief ${uniqueTerm}.pdf`,
+        JSON.stringify({ source: 'assistant_upload' }),
+        userOneId,
+      ],
+    );
+    const documentId = documentResult.rows[0]!.id;
+
+    const fileResult = await pool.query<{ id: string }>(
+      `INSERT INTO files
+        (workspace_id, uploaded_by, filename, mime_type, size_bytes, s3_key, status, document_id, assistant_indexing_status, assistant_indexed_at)
+       VALUES ($1, $2, $3, 'application/pdf', 1400, $4, 'uploaded', $5, 'indexed', now())
+       RETURNING id`,
+      [
+        workspaceId,
+        userOneId,
+        `Security Probe Brief ${uniqueTerm}.pdf`,
+        `assistant-tests/${uniqueTerm}.pdf`,
+        documentId,
+      ],
+    );
+    const fileId = fileResult.rows[0]!.id;
+    const lateBullet = `Dependency vulnerabilities ${uniqueTerm}`;
+    const longChunk = [
+      'The security probe must actively test at least four attack surfaces:',
+      `Authentication and session handling ${uniqueTerm}.`,
+      `WebSocket message validation ${uniqueTerm}.`,
+      'filler '.repeat(150),
+      `Input sanitization ${uniqueTerm}.`,
+      lateBullet,
+    ].join('\n');
+
+    await pool.query(
+      `INSERT INTO assistant_search_chunks
+        (workspace_id, source_type, source_id, document_id, file_id, chunk_index, title, text, metadata)
+       VALUES ($1, 'file', $2, $3, $2, 0, $4, $5, '{}')`,
+      [
+        workspaceId,
+        fileId,
+        documentId,
+        `Security Probe Brief ${uniqueTerm}.pdf`,
+        longChunk,
+      ],
+    );
+
+    const sources = await retrieveAssistantSources({
+      userId: userOneId,
+      workspaceId,
+      workspaceRole: 'member',
+      message: 'What four attack surfaces must the security probe test?',
+      routeContext: { documentId },
+      maxSources: 8,
+    });
+
+    const fileSource = sources.find((source) => source.sourceType === 'file' && source.sourceId === fileId);
+    expect(fileSource).toBeDefined();
+    expect(fileSource?.excerpt).toContain(lateBullet);
+  });
 });
 
 function restoreEnv(key: string, value: string | undefined): void {
