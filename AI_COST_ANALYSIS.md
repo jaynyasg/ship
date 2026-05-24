@@ -2,31 +2,29 @@
 
 ## Summary
 
-This audit used Codex as the primary AI engineering assistant for codebase comprehension, implementation, verification, and submission synthesis. The work also used local command-line tools from the repository: `pnpm`, TypeScript, ESLint, Vitest, Playwright through the compact runner, PostgreSQL, and Git.
+This audit used Codex as the primary AI engineering assistant for codebase comprehension, implementation, verification, deployment support, and submission synthesis. The work also used local command-line tools from the repository: `pnpm`, TypeScript, ESLint, Vitest, Playwright through the compact runner, PostgreSQL, and Git.
 
-The exact billable AI dollar spend is not stored in this repository and was not exposed by the local Codex workspace during the audit. The final submission should fill the billing amount from the account or provider dashboard used to run the sessions.
+The exact billable AI dollar spend is not stored in this repository and was not exposed by the local Codex workspace during the audit. For final submission, this report uses a conservative projected usage-equivalent estimate. If provider billing data is available, replace the projection with the exact billing-dashboard number.
 
 | Cost item | Amount | Source |
 |---|---:|---|
-| AI assistant billable usage | TBD | Fill from Codex/OpenAI billing or subscription records |
+| AI assistant projected usage-equivalent | ~$50 working estimate; plausible range ~$25-$75 | Projection based on several multi-hour Codex sessions covering audit synthesis, implementation, verification, Render deployment support, and final documentation |
 | Added third-party SaaS tools | $0 | No new paid telemetry, analytics, security, or hosted test services were added |
 | Local development tools | $0 incremental | Existing local Node, pnpm, PostgreSQL, Docker, and Git tooling |
 | New dependency cost | $0 | Added packages are open-source dev/runtime dependencies installed through pnpm |
 | Deployment infrastructure | Render billing dashboard required for exact spend | Public submission deployment is live on Render; AWS application deployment was deferred due cost. See `DEPLOYMENT_DECISION.md` for the `$220-$300/month` AWS estimate and Render decision |
 
-## How to Complete the Dollar Figure
+## Projection Basis
 
-Use the AI provider billing dashboard for the audit date range and record the actual spend here before final submission:
+The `$50` working estimate is intentionally labeled as a projection, not an invoice. It assumes several extended assistant sessions across the audit lifecycle:
 
-```text
-AI provider:
-Billing date range:
-Total billable usage:
-Pricing basis:
-Notes:
-```
+- codebase orientation and architecture tracing
+- Phase 2 implementation planning and evidence stitching
+- focused code edits across API, web, shared, scripts, CI, and deployment docs
+- repeated verification using type-checks, builds, tests, lint, E2E runner evidence, and the security probe
+- Render deployment support, security-probe operations, and final submission documentation
 
-If the work was performed under a flat monthly subscription instead of usage-based billing, use a pro-rated estimate:
+If exact billing data is available, use the provider dashboard number instead. If the work was performed under a flat monthly subscription instead of usage-based billing, a pro-rated estimate is also acceptable:
 
 ```text
 Pro-rated AI cost = monthly subscription price * (audit work days / billing-cycle days)
@@ -44,7 +42,7 @@ Pro-rated AI cost = monthly subscription price * (audit work days / billing-cycl
 
 ## Where AI Needed Guardrails
 
-**Exact cost accounting.** The assistant could not derive exact AI billing from repository state. Any exact dollar number must come from the user's billing dashboard.
+**Exact cost accounting.** The assistant could not derive exact AI billing from repository state. The `$50` value is a projection for submission purposes; any exact dollar number must come from the user's billing dashboard.
 
 **Deployment authority.** The assistant can inspect deployment scripts and readiness, but it should not deploy without explicit approval and credentials. The original Ship deploy path touches AWS, Terraform state, SSM parameters, S3, CloudFront, Elastic Beanstalk, and Docker. The final public submission deploy used Render instead; exact infrastructure spend should come from Render billing.
 
