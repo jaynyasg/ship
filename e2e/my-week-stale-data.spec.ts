@@ -51,6 +51,12 @@ async function waitForDocumentContent(
   expect(lastContent, `${endpoint}/${documentId} should include persisted editor content`).toContain(expectedText)
 }
 
+async function typeNumberedListItem(page: Page, text: string): Promise<void> {
+  await page.keyboard.type('1. ')
+  await page.waitForTimeout(250)
+  await page.keyboard.type(text)
+}
+
 test.describe('My Week - stale data after editing plan/retro', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/login')
@@ -78,7 +84,7 @@ test.describe('My Week - stale data after editing plan/retro', () => {
     // 5. Type a list item into the editor
     // Use "1. " prefix to create a numbered list (orderedList with listItem nodes)
     await editor.click()
-    await page.keyboard.type('1. Ship the new dashboard feature')
+    await typeNumberedListItem(page, 'Ship the new dashboard feature')
 
     // 6. Wait for the collaboration server to persist the content
     // The regression lives at the API boundary: /my-week reads from the persisted
@@ -114,7 +120,7 @@ test.describe('My Week - stale data after editing plan/retro', () => {
 
     // 5. Type a list item into the editor
     await editor.click()
-    await page.keyboard.type('1. Completed the API refactoring')
+    await typeNumberedListItem(page, 'Completed the API refactoring')
 
     // 6. Wait for the collaboration server to persist the content
     const retroId = await currentDocumentId(page)
