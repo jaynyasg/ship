@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import { pool } from '../../db/client.js';
+import { invalidateDocumentCache } from '../../collaboration/index.js';
 import { ASSISTANT_LIMITS } from './config.js';
 import { extractTextFromFile, isSupportedAssistantFile } from './extractors.js';
 
@@ -52,6 +53,7 @@ export async function indexUploadedFileForAssistant(input: {
     }
 
     const chunks = chunkText(text);
+    const contentHash = createHash('sha256').update(text).digest('hex');
     for (const [index, chunk] of chunks.entries()) {
       await pool.query(
         `INSERT INTO assistant_search_chunks
@@ -75,12 +77,13 @@ export async function indexUploadedFileForAssistant(input: {
           JSON.stringify({
             mime_type: file.mime_type,
             filename: file.filename,
-            content_hash: createHash('sha256').update(text).digest('hex'),
+            content_hash: contentHash,
           }),
         ],
       );
     }
 
+    await updateAssistantUploadDocumentContent(file, chunks);
     await updateIndexStatus(file.id, file.workspace_id, 'indexed', null);
   } catch (error) {
     await updateIndexStatus(
@@ -90,6 +93,46 @@ export async function indexUploadedFileForAssistant(input: {
       error instanceof Error ? error.message.slice(0, 500) : 'File indexing failed',
     );
   }
+}
+
+async function updateAssistantUploadDocumentContent(file: FileRow, chunks: string[]): Promise<void> {
+  if (!file.document_id || chunks.length === 0) return;
+
+  const content = buildDocumentContentFromChunks(chunks);
+  const result = await pool.query(
+    `UPDATE documents
+     SET content = $1,
+         yjs_state = NULL,
+         updated_at = now()
+     WHERE id = $2
+       AND workspace_id = $3
+       AND document_type = 'wiki'
+       AND properties->>'source' = 'assistant_upload'
+       AND properties->>'file_id' = $4
+     RETURNING id`,
+    [JSON.stringify(content), file.document_id, file.workspace_id, file.id],
+  );
+
+  if (result.rows.length > 0) {
+    invalidateDocumentCache(file.document_id);
+  }
+}
+
+function buildDocumentContentFromChunks(chunks: string[]) {
+  const paragraphs = chunks
+    .flatMap(chunk => chunk.split(/\n{2,}/))
+    .map(paragraph => paragraph.trim())
+    .filter(Boolean);
+
+  return {
+    type: 'doc',
+    content: paragraphs.length > 0
+      ? paragraphs.map(paragraph => ({
+        type: 'paragraph',
+        content: [{ type: 'text', text: paragraph }],
+      }))
+      : [{ type: 'paragraph' }],
+  };
 }
 
 export async function markFileAssistantIndexFailed(

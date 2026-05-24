@@ -250,7 +250,7 @@ describe('Files API', () => {
     expect(fileResult.rows[0].document_id).toBe(localUploadRes.body.documentId);
 
     const documentResult = await pool.query(
-      `SELECT title, document_type, visibility, properties
+      `SELECT title, document_type, visibility, properties, content
        FROM documents
        WHERE id = $1 AND workspace_id = $2`,
       [localUploadRes.body.documentId, testWorkspaceId],
@@ -261,6 +261,7 @@ describe('Files API', () => {
     expect(documentResult.rows[0].visibility).toBe('workspace');
     expect(documentResult.rows[0].properties.source).toBe('assistant_upload');
     expect(documentResult.rows[0].properties.file_id).toBe(fileId);
+    expect(documentResult.rows[0].content.content[0].content[0].text).toContain('Workspace source notes');
 
     const chunks = await pool.query(
       `SELECT document_id, text
