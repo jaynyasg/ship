@@ -62,6 +62,7 @@ export async function runAssistantToolLoop(input: {
       outputCount: reranked.sources.length,
       strategy: reranked.strategy,
       sourceTypes: reranked.sources.map((source) => source.sourceType),
+      selectedSources: reranked.sources.map(traceSourceSummary),
     },
   });
 
@@ -73,4 +74,33 @@ export async function runAssistantToolLoop(input: {
       durationMs: searchDurationMs,
     }],
   };
+}
+
+function traceSourceSummary(source: AssistantRetrievedSource): Record<string, unknown> {
+  return {
+    sourceType: source.sourceType,
+    sourceId: source.sourceId,
+    title: source.title,
+    url: source.url,
+    retrievalStrategy: source.retrievalStrategy ?? null,
+    score: roundTraceNumber(source.score),
+    excerptChars: source.excerpt.length,
+    signals: summarizeTraceSignals(source.retrievalSignals),
+  };
+}
+
+function summarizeTraceSignals(
+  signals: AssistantRetrievedSource['retrievalSignals'],
+): Record<string, number> {
+  if (!signals) return {};
+
+  return Object.fromEntries(
+    Object.entries(signals)
+      .filter(([, value]) => typeof value === 'number' && Number.isFinite(value))
+      .map(([key, value]) => [key, roundTraceNumber(value as number)]),
+  );
+}
+
+function roundTraceNumber(value: number): number {
+  return Number(value.toFixed(3));
 }

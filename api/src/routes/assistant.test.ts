@@ -205,7 +205,7 @@ describe('Assistant API', () => {
     expect(Number(runResult.rows[0].total_sources)).toBeGreaterThan(0);
 
     const traceResult = await pool.query(
-      `SELECT event_type, event_name
+      `SELECT event_type, event_name, metadata
        FROM assistant_trace_events
        WHERE run_id = (SELECT id FROM assistant_runs WHERE request_id = $1)
        ORDER BY created_at`,
@@ -215,6 +215,16 @@ describe('Assistant API', () => {
       expect.objectContaining({ event_type: 'tool', event_name: 'search_ship_context' }),
       expect.objectContaining({ event_type: 'rerank', event_name: 'score_blend_rerank' }),
       expect.objectContaining({ event_type: 'model', event_name: 'answer_generated' }),
+    ]));
+
+    const rerankTrace = traceResult.rows.find((row) => row.event_name === 'score_blend_rerank');
+    expect(rerankTrace?.metadata.selectedSources).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        sourceType: 'document',
+        title: 'Launch Risk Brief',
+        retrievalStrategy: expect.any(String),
+        excerptChars: expect.any(Number),
+      }),
     ]));
   });
 

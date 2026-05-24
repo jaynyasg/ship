@@ -5,6 +5,7 @@ export interface AssistantEvalCase {
   question: string;
   expectedCitationTitles?: string[];
   requiredAnswerTerms?: string[];
+  requiredCitationExcerptTerms?: string[];
 }
 
 export interface AssistantEvalCaseResult {
@@ -15,9 +16,11 @@ export interface AssistantEvalCaseResult {
     cited: boolean;
     expectedCitations: boolean;
     requiredTerms: boolean;
+    citationExcerptTerms: boolean;
   };
   missingCitationTitles: string[];
   missingTerms: string[];
+  missingCitationExcerptTerms: string[];
 }
 
 export interface AssistantEvalReport {
@@ -50,23 +53,35 @@ export function evaluateAssistantResponse(
   response: AssistantChatResponse | undefined,
 ): AssistantEvalCaseResult {
   const citationTitles = new Set((response?.citations ?? []).map((citation) => citation.title.toLowerCase()));
+  const citationExcerpts = (response?.citations ?? [])
+    .map((citation) => citation.excerpt)
+    .join('\n')
+    .toLowerCase();
   const answer = response?.message.content.toLowerCase() ?? '';
   const expectedTitles = testCase.expectedCitationTitles ?? [];
   const requiredTerms = testCase.requiredAnswerTerms ?? [];
+  const requiredCitationExcerptTerms = testCase.requiredCitationExcerptTerms ?? [];
 
   const missingCitationTitles = expectedTitles
     .filter((title) => !citationTitles.has(title.toLowerCase()));
   const missingTerms = requiredTerms
     .filter((term) => !answer.includes(term.toLowerCase()));
+  const missingCitationExcerptTerms = requiredCitationExcerptTerms
+    .filter((term) => !citationExcerpts.includes(term.toLowerCase()));
 
   const cited = (response?.citations.length ?? 0) > 0;
   const expectedCitations = missingCitationTitles.length === 0;
   const requiredAnswerTerms = missingTerms.length === 0;
-  const score = [
+  const citationExcerptTerms = missingCitationExcerptTerms.length === 0;
+  const scoredChecks = [
     cited,
     expectedCitations,
     requiredAnswerTerms,
-  ].filter(Boolean).length / 3;
+  ];
+  if (requiredCitationExcerptTerms.length > 0) {
+    scoredChecks.push(citationExcerptTerms);
+  }
+  const score = scoredChecks.filter(Boolean).length / scoredChecks.length;
 
   return {
     id: testCase.id,
@@ -76,8 +91,10 @@ export function evaluateAssistantResponse(
       cited,
       expectedCitations,
       requiredTerms: requiredAnswerTerms,
+      citationExcerptTerms,
     },
     missingCitationTitles,
     missingTerms,
+    missingCitationExcerptTerms,
   };
 }
