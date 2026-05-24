@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import express from 'express';
 import { pool } from '../db/client.js';
+import { ensureAssistantUploadSchema } from '../db/assistant-upload-schema.js';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { mkdir, readFile, writeFile, unlink } from 'fs/promises';
@@ -140,6 +141,8 @@ filesRouter.post('/upload', authMiddleware, async (req: Request, res: Response) 
     const uploadUrl = shouldUseLocalUploads()
       ? `/api/files/${fileId}/local-upload`
       : await generateS3PresignedUrl(s3Key, mimeType, sizeBytes);
+
+    await ensureAssistantUploadSchema();
 
     // Create file record with 'pending' status
     const result = await pool.query(
