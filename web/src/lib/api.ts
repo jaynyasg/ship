@@ -328,6 +328,7 @@ export interface SecurityProbeTriggerResponse {
 
 export interface TimelineDemoSeedResponse {
   created: boolean;
+  refreshed?: boolean;
   projectId: string;
   programId: string | null;
   timelineUrl: string;

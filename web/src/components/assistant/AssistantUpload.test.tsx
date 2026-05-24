@@ -53,4 +53,17 @@ describe('AssistantUpload', () => {
     });
     expect(await screen.findByText('Indexed')).toBeInTheDocument();
   });
+
+  it('shows the upload error returned by the upload service', async () => {
+    uploadFileMock.mockRejectedValue(new Error('Failed to upload file'));
+
+    const { container } = render(<AssistantUpload />);
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(['bad'], 'broken.pdf', { type: 'application/pdf' });
+
+    fireEvent.change(input, { target: { files: [file] } });
+
+    expect(await screen.findByText('Failed')).toBeInTheDocument();
+    expect(await screen.findByText('Failed to upload file')).toBeInTheDocument();
+  });
 });

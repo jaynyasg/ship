@@ -40,6 +40,19 @@ async function getCsrfToken(): Promise<string> {
   return token;
 }
 
+async function errorMessageFromResponse(res: Response, fallback: string): Promise<string> {
+  try {
+    const body = await res.json();
+    if (typeof body?.error === 'string') return body.error;
+    if (typeof body?.error?.message === 'string') return body.error.message;
+    if (typeof body?.message === 'string') return body.message;
+  } catch {
+    // Some storage providers return empty or non-JSON error bodies.
+  }
+
+  return fallback;
+}
+
 /**
  * Upload a file to the server
  * @param file - The file to upload
@@ -95,8 +108,7 @@ export async function uploadFile(
     });
 
     if (!uploadReqRes.ok) {
-      const error = await uploadReqRes.json();
-      throw new Error(error.error || 'Failed to create upload request');
+      throw new Error(await errorMessageFromResponse(uploadReqRes, 'Failed to create upload request'));
     }
 
     const { fileId, uploadUrl } = await uploadReqRes.json();
@@ -125,8 +137,7 @@ export async function uploadFile(
       });
 
       if (!uploadRes.ok) {
-        const error = await uploadRes.json();
-        throw new Error(error.error || 'Failed to upload file');
+        throw new Error(await errorMessageFromResponse(uploadRes, 'Failed to upload file'));
       }
 
       updateProgress({ progress: 90 });
@@ -139,7 +150,7 @@ export async function uploadFile(
       });
 
       if (!fileRes.ok) {
-        throw new Error('Failed to get file metadata');
+        throw new Error(await errorMessageFromResponse(fileRes, 'Failed to get file metadata'));
       }
 
       const fileData = await fileRes.json();
@@ -178,8 +189,7 @@ export async function uploadFile(
       });
 
       if (!confirmRes.ok) {
-        const error = await confirmRes.json();
-        throw new Error(error.error || 'Failed to confirm upload');
+        throw new Error(await errorMessageFromResponse(confirmRes, 'Failed to confirm upload'));
       }
 
       const { cdnUrl, assistantIndexingStatus } = await confirmRes.json();

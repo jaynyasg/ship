@@ -13,12 +13,14 @@ const DEMO_PROGRAM_TITLE = 'Treasury Modernization Demo';
 const DEMO_PROJECT_TITLE = 'Public Submission Launch Demo';
 
 type DemoDocumentType = 'program' | 'project' | 'sprint' | 'issue';
+type DemoAuxDocumentType = 'person' | 'weekly_plan' | 'weekly_retro';
 
 interface DemoDocumentSeed {
   key: string;
   type: DemoDocumentType;
   title: string;
   properties: Record<string, unknown>;
+  content?: Record<string, unknown>;
   baseline: {
     plannedStart: string | null;
     plannedEnd: string | null;
@@ -30,6 +32,18 @@ interface DemoDocumentSeed {
 }
 
 interface DemoDocumentRecord extends DemoDocumentSeed {
+  id: string;
+}
+
+interface DemoAuxDocumentSeed {
+  key: string;
+  type: DemoAuxDocumentType;
+  title: string;
+  properties: Record<string, unknown>;
+  content: Record<string, unknown>;
+}
+
+interface DemoAuxDocumentRecord extends DemoAuxDocumentSeed {
   id: string;
 }
 
@@ -111,6 +125,41 @@ function demoContent(title: string, summary: string) {
   };
 }
 
+function demoListContent(title: string, sections: Array<{ heading: string; items: string[] }>) {
+  return {
+    type: 'doc',
+    content: [
+      {
+        type: 'heading',
+        attrs: { level: 2 },
+        content: [{ type: 'text', text: title }],
+      },
+      ...sections.flatMap(section => [
+        {
+          type: 'heading',
+          attrs: { level: 3 },
+          content: [{ type: 'text', text: section.heading }],
+        },
+        {
+          type: 'bulletList',
+          content: section.items.map(item => ({
+            type: 'listItem',
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: item }] }],
+          })),
+        },
+      ]),
+    ],
+  };
+}
+
+function withDemoProperties(key: string, properties: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...properties,
+    demo_seed_key: key,
+    created_via: 'demo_timeline_seed',
+  };
+}
+
 function createDemoSeeds(nextTicketNumber: number): DemoDocumentSeed[] {
   const programStart = dateOnlyFromOffset(-12);
   const programEnd = dateOnlyFromOffset(24);
@@ -149,6 +198,24 @@ function createDemoSeeds(nextTicketNumber: number): DemoDocumentSeed[] {
         planned_end_date: projectEnd,
         plan: 'Launch the public submission target with deployment evidence, probe coverage, and reviewer-ready demo data.',
       },
+      content: demoListContent(DEMO_PROJECT_TITLE, [
+        {
+          heading: 'Launch Goal',
+          items: [
+            'Deploy the public Render submission target and keep API, React, and WebSocket traffic on one origin.',
+            'Capture security probe evidence with authenticated WebSocket and input validation checks.',
+            'Prepare a reviewer-ready timeline with blocked items, dependencies, weeks, issues, and baseline variance.',
+          ],
+        },
+        {
+          heading: 'Demo Talking Points',
+          items: [
+            'Timeline shows three blocked launch items and four dependency links.',
+            'Weeks shows one reviewer lead with plan and retro status across the launch window.',
+            'Ask Ship can answer questions about blocked work using live project context.',
+          ],
+        },
+      ]),
       baseline: {
         plannedStart: shiftDateOnly(projectStart, -2),
         plannedEnd: shiftDateOnly(projectEnd, -4),
@@ -377,12 +444,62 @@ function buildDemoBaseline(
   };
 }
 
-async function createDemoDocument(
+async function upsertDemoDocument(
   client: PoolClient,
   workspaceId: string,
   userId: string,
   seed: DemoDocumentSeed
-): Promise<DemoDocumentRecord> {
+): Promise<{ record: DemoDocumentRecord; created: boolean }> {
+  const properties = withDemoProperties(seed.key, seed.properties);
+  const content = seed.content ?? demoContent(seed.title, 'Demo data for the Ship timeline view.');
+
+  const existing = await client.query<{ id: string }>(
+    `SELECT id
+     FROM documents
+     WHERE workspace_id = $1
+       AND document_type = $2
+       AND archived_at IS NULL
+       AND deleted_at IS NULL
+       AND (
+         properties->>'demo_seed_key' = $3
+         OR title = $4
+       )
+     ORDER BY
+       CASE WHEN properties->>'demo_seed_key' = $3 THEN 0 ELSE 1 END,
+       created_at DESC
+     LIMIT 1`,
+    [workspaceId, seed.type, seed.key, seed.title]
+  );
+
+  if (existing.rows[0]) {
+    await client.query(
+      `UPDATE documents
+       SET title = $1,
+           properties = COALESCE(properties, '{}'::jsonb) || $2::jsonb,
+           content = $3,
+           started_at = $4,
+           completed_at = $5,
+           ticket_number = COALESCE(ticket_number, $6),
+           visibility = 'workspace',
+           updated_at = NOW()
+       WHERE id = $7`,
+      [
+        seed.title,
+        JSON.stringify(properties),
+        JSON.stringify(content),
+        seed.startedAt ?? null,
+        seed.completedAt ?? null,
+        seed.ticketNumber ?? null,
+        existing.rows[0].id,
+      ]
+    );
+
+    return {
+      record: { ...seed, properties, id: existing.rows[0].id },
+      created: false,
+    };
+  }
+
   const result = await client.query(
     `INSERT INTO documents (
        workspace_id,
@@ -401,16 +518,91 @@ async function createDemoDocument(
       workspaceId,
       seed.type,
       seed.title,
-      JSON.stringify(seed.properties),
+      JSON.stringify(properties),
       userId,
-      JSON.stringify(demoContent(seed.title, 'Demo data for the Ship timeline view.')),
+      JSON.stringify(content),
       seed.startedAt ?? null,
       seed.completedAt ?? null,
       seed.ticketNumber ?? null,
     ]
   );
 
-  return { ...seed, id: result.rows[0].id };
+  return {
+    record: { ...seed, properties, id: result.rows[0].id },
+    created: true,
+  };
+}
+
+async function upsertDemoAuxDocument(
+  client: PoolClient,
+  workspaceId: string,
+  userId: string,
+  seed: DemoAuxDocumentSeed,
+  options: { matchByTitle?: boolean } = {}
+): Promise<{ record: DemoAuxDocumentRecord; created: boolean }> {
+  const properties = withDemoProperties(seed.key, seed.properties);
+  const existing = await client.query<{ id: string }>(
+    `SELECT id
+     FROM documents
+     WHERE workspace_id = $1
+       AND document_type = $2
+       AND archived_at IS NULL
+       AND deleted_at IS NULL
+       AND (
+         properties->>'demo_seed_key' = $3
+         OR ($4::boolean AND title = $5)
+       )
+     ORDER BY
+       CASE WHEN properties->>'demo_seed_key' = $3 THEN 0 ELSE 1 END,
+       created_at DESC
+     LIMIT 1`,
+    [workspaceId, seed.type, seed.key, Boolean(options.matchByTitle), seed.title]
+  );
+
+  if (existing.rows[0]) {
+    await client.query(
+      `UPDATE documents
+       SET title = $1,
+           properties = COALESCE(properties, '{}'::jsonb) || $2::jsonb,
+           content = $3,
+           visibility = 'workspace',
+           updated_at = NOW()
+       WHERE id = $4`,
+      [seed.title, JSON.stringify(properties), JSON.stringify(seed.content), existing.rows[0].id]
+    );
+
+    return {
+      record: { ...seed, properties, id: existing.rows[0].id },
+      created: false,
+    };
+  }
+
+  const result = await client.query(
+    `INSERT INTO documents (
+       workspace_id,
+       document_type,
+       title,
+       properties,
+       created_by,
+       content,
+       visibility
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, 'workspace')
+     RETURNING id`,
+    [
+      workspaceId,
+      seed.type,
+      seed.title,
+      JSON.stringify(properties),
+      userId,
+      JSON.stringify(seed.content),
+    ]
+  );
+
+  return {
+    record: { ...seed, properties, id: result.rows[0].id },
+    created: true,
+  };
 }
 
 async function addDemoAssociation(
@@ -428,36 +620,171 @@ async function addDemoAssociation(
   );
 }
 
+async function refreshDemoWeekAllocations(
+  client: PoolClient,
+  weeks: DemoDocumentRecord[],
+  projectId: string,
+  personId: string
+): Promise<void> {
+  for (const week of weeks) {
+    await client.query(
+      `UPDATE documents
+       SET properties = COALESCE(properties, '{}'::jsonb) || $1::jsonb,
+           updated_at = NOW()
+       WHERE id = $2`,
+      [
+        JSON.stringify({
+          project_id: projectId,
+          assignee_ids: [personId],
+        }),
+        week.id,
+      ]
+    );
+  }
+}
+
+function weeklyDemoContent(title: string, items: string[]) {
+  return demoListContent(title, [
+    {
+      heading: title.includes('Retro') ? 'What I delivered this week' : 'What I plan to accomplish this week',
+      items,
+    },
+  ]);
+}
+
+async function seedDemoWeeklyDocs(
+  client: PoolClient,
+  workspaceId: string,
+  userId: string,
+  project: DemoDocumentRecord,
+  weeks: DemoDocumentRecord[]
+): Promise<{ records: DemoAuxDocumentRecord[]; createdCount: number }> {
+  const personResult = await upsertDemoAuxDocument(
+    client,
+    workspaceId,
+    userId,
+    {
+      key: 'person-reviewer-demo-lead',
+      type: 'person',
+      title: 'Reviewer Demo Lead',
+      properties: {
+        email: 'reviewer-demo-lead@example.com',
+        capacity_hours: 32,
+        skills: ['deployment', 'security review', 'documentation'],
+      },
+      content: demoContent('Reviewer Demo Lead', 'Demo owner for public submission launch readiness.'),
+    },
+    { matchByTitle: true }
+  );
+
+  await refreshDemoWeekAllocations(client, weeks, project.id, personResult.record.id);
+
+  const weeklySeeds: DemoAuxDocumentSeed[] = [
+    {
+      key: 'weekly-plan-foundations',
+      type: 'weekly_plan',
+      title: 'Week 1 Plan',
+      properties: {
+        person_id: personResult.record.id,
+        week_number: 1,
+        project_id: project.id,
+        submitted_at: dateTimeFromOffset(-11),
+      },
+      content: weeklyDemoContent('Week 1 Plan', [
+        'Prepare Render Blueprint and verify the combined API and web deployment starts cleanly.',
+        'Document the deployment decision and update the submission packet.',
+        'Confirm initial timeline rows load for project and program scopes.',
+      ]),
+    },
+    {
+      key: 'weekly-retro-foundations',
+      type: 'weekly_retro',
+      title: 'Week 1 Retro',
+      properties: {
+        person_id: personResult.record.id,
+        week_number: 1,
+        project_id: project.id,
+        submitted_at: dateTimeFromOffset(-4),
+      },
+      content: weeklyDemoContent('Week 1 Retro', [
+        'Render Blueprint deployed successfully with the web service and managed PostgreSQL database.',
+        'Deployment documentation now explains why Render was selected over the deferred AWS plan.',
+        'Timeline migration issue was closed after dependency associations were restored.',
+      ]),
+    },
+    {
+      key: 'weekly-plan-risk',
+      type: 'weekly_plan',
+      title: 'Week 2 Plan',
+      properties: {
+        person_id: personResult.record.id,
+        week_number: 2,
+        project_id: project.id,
+        submitted_at: dateTimeFromOffset(-3),
+      },
+      content: weeklyDemoContent('Week 2 Plan', [
+        'Configure the Render security probe credentials and trigger path.',
+        'Run the security probe with authenticated checks and capture report evidence.',
+        'Seed reviewer demo data for the timeline, weeks, issues, and assistant walkthrough.',
+      ]),
+    },
+    {
+      key: 'weekly-retro-risk',
+      type: 'weekly_retro',
+      title: 'Week 2 Retro',
+      properties: {
+        person_id: personResult.record.id,
+        week_number: 2,
+        project_id: project.id,
+        submitted_at: dateTimeFromOffset(0),
+      },
+      content: weeklyDemoContent('Week 2 Retro', [
+        'Security probe trigger is available from the Operations dashboard.',
+        'Authenticated WebSocket checks passed and the report is visible in Render logs.',
+        'Timeline demo data now includes blockers, dependencies, and baseline variance.',
+      ]),
+    },
+    {
+      key: 'weekly-plan-review',
+      type: 'weekly_plan',
+      title: 'Week 3 Plan',
+      properties: {
+        person_id: personResult.record.id,
+        week_number: 3,
+        project_id: project.id,
+        submitted_at: dateTimeFromOffset(4),
+      },
+      content: weeklyDemoContent('Week 3 Plan', [
+        'Finalize the submission packet and public URL verification evidence.',
+        'Rehearse the reviewer walkthrough with Ask Ship, Timeline, Weeks, Issues, and Retro.',
+        'Resolve the remaining blocked launch items before the final demo recording.',
+      ]),
+    },
+  ];
+
+  const records: DemoAuxDocumentRecord[] = [personResult.record];
+  let createdCount = personResult.created ? 1 : 0;
+
+  for (const seed of weeklySeeds) {
+    const result = await upsertDemoAuxDocument(client, workspaceId, userId, seed);
+    records.push(result.record);
+    if (result.created) createdCount += 1;
+
+    await addDemoAssociation(client, result.record.id, project.id, 'project', { created_via: 'demo_timeline_seed' });
+    const week = weeks.find(candidate => candidate.properties.sprint_number === seed.properties.week_number);
+    if (week) {
+      await addDemoAssociation(client, result.record.id, week.id, 'sprint', { created_via: 'demo_timeline_seed' });
+    }
+  }
+
+  return { records, createdCount };
+}
+
 async function seedTimelineDemo(workspaceId: string, userId: string) {
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
-
-    const existing = await client.query(
-      `SELECT d.id as project_id, da.related_id as program_id
-       FROM documents d
-       LEFT JOIN document_associations da
-         ON da.document_id = d.id
-        AND da.relationship_type = 'program'
-       WHERE d.workspace_id = $1
-         AND d.document_type = 'project'
-         AND d.title = $2
-         AND d.deleted_at IS NULL
-       ORDER BY d.created_at DESC
-       LIMIT 1`,
-      [workspaceId, DEMO_PROJECT_TITLE]
-    );
-
-    if (existing.rows[0]) {
-      await client.query('COMMIT');
-      return {
-        created: false,
-        projectId: existing.rows[0].project_id as string,
-        programId: existing.rows[0].program_id as string | null,
-        timelineUrl: `/documents/${existing.rows[0].project_id}/timeline`,
-      };
-    }
 
     const ticketResult = await client.query(
       `SELECT COALESCE(MAX(ticket_number), 0) + 1 as next_ticket_number
@@ -468,10 +795,12 @@ async function seedTimelineDemo(workspaceId: string, userId: string) {
     );
     const nextTicketNumber = Number(ticketResult.rows[0]?.next_ticket_number ?? 1);
     const records = new Map<string, DemoDocumentRecord>();
+    let createdCount = 0;
 
     for (const seed of createDemoSeeds(nextTicketNumber)) {
-      const record = await createDemoDocument(client, workspaceId, userId, seed);
-      records.set(seed.key, record);
+      const result = await upsertDemoDocument(client, workspaceId, userId, seed);
+      records.set(seed.key, result.record);
+      if (result.created) createdCount += 1;
     }
 
     const program = records.get('program')!;
@@ -514,6 +843,9 @@ async function seedTimelineDemo(workspaceId: string, userId: string) {
     await addDemoAssociation(client, records.get('issue-walkthrough')!.id, records.get('issue-submission')!.id, 'depends_on');
     await addDemoAssociation(client, records.get('issue-demo-data')!.id, records.get('issue-timeline-fix')!.id, 'depends_on');
 
+    const weeklyDocs = await seedDemoWeeklyDocs(client, workspaceId, userId, project, weeks);
+    createdCount += weeklyDocs.createdCount;
+
     const allRecords = Array.from(records.values());
     const projectBaseline = buildDemoBaseline(
       { id: project.id, type: 'project', title: project.title },
@@ -544,10 +876,11 @@ async function seedTimelineDemo(workspaceId: string, userId: string) {
     await client.query('COMMIT');
 
     return {
-      created: true,
+      created: createdCount > 0,
       projectId: project.id,
       programId: program.id,
       timelineUrl: `/documents/${project.id}/timeline`,
+      refreshed: true,
     };
   } catch (error) {
     await client.query('ROLLBACK');

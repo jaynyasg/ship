@@ -147,7 +147,7 @@ export function AdminDashboardPage() {
       if (res.success && res.data) {
         setDemoMessage({
           tone: 'success',
-          text: res.data.created ? 'Timeline demo data created.' : 'Timeline demo data already exists.',
+          text: res.data.created ? 'Timeline demo data created.' : 'Timeline demo data refreshed.',
         });
         navigate(res.data.timelineUrl);
       } else {

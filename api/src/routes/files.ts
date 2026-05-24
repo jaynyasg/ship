@@ -519,7 +519,10 @@ async function generateS3PresignedUrl(s3Key: string, contentType: string, sizeBy
 }
 
 function shouldUseLocalUploads(): boolean {
-  return process.env.SHIP_UPLOAD_STORAGE === 'local' || !S3_BUCKET_NAME || process.env.NODE_ENV !== 'production';
+  if (process.env.SHIP_UPLOAD_STORAGE === 's3') return false;
+  if (process.env.SHIP_UPLOAD_STORAGE === 'local') return true;
+
+  return !S3_BUCKET_NAME || !process.env.CDN_DOMAIN || process.env.NODE_ENV !== 'production';
 }
 
 async function canAssociateFileWithDocument(

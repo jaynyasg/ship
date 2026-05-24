@@ -88,6 +88,15 @@ function CalendarIcon({ className }: { className?: string }) {
   );
 }
 
+function TimelineIcon({ className }: { className?: string }) {
+  return (
+    <svg className={cn('h-3.5 w-3.5', className)} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 4v4m8 2v4m-5 2v4" />
+    </svg>
+  );
+}
+
 function RetroIcon({ className }: { className?: string }) {
   return (
     <svg className={cn('h-3.5 w-3.5', className)} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -206,6 +215,20 @@ export function ProjectContextSidebar({ projectId, activeDocumentId }: ProjectCo
                 >
                   <DocumentIcon className="text-muted" />
                   <span>Details</span>
+                </Link>
+              </li>
+
+              {/* Timeline tab */}
+              <li role="treeitem" aria-selected={false}>
+                <Link
+                  to={`/documents/${projectId}/timeline`}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm transition-colors',
+                    'text-muted hover:bg-border/30 hover:text-foreground'
+                  )}
+                >
+                  <TimelineIcon className="text-muted" />
+                  <span>Timeline</span>
                 </Link>
               </li>
 

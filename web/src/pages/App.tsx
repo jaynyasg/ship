@@ -1166,7 +1166,7 @@ function ProjectsList({
   const { showToast } = useToast();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; project: Project } | null>(null);
 
-  // Determine if we're viewing a project's tab (details/weeks/issues/retro)
+  // Determine if we're viewing a project's tab (details/timeline/weeks/issues/retro)
   const getActiveProjectTab = (): string | null => {
     const path = location.pathname;
     if (!activeId) return null;
@@ -1174,6 +1174,7 @@ function ProjectsList({
     const projectIds = projects.map(p => p.id);
     if (!projectIds.includes(activeId)) return null;
     if (path === `/documents/${activeId}`) return 'details';
+    if (path === `/documents/${activeId}/timeline`) return 'timeline';
     if (path === `/documents/${activeId}/weeks`) return 'weeks';
     if (path === `/documents/${activeId}/issues`) return 'issues';
     if (path === `/documents/${activeId}/retro`) return 'retro';
@@ -1227,10 +1228,11 @@ function ProjectsList({
     });
   }, []);
 
-  // Determine current tab from URL (weeks, issues, retro, or details)
+  // Determine current tab from URL (timeline, weeks, issues, retro, or details)
   const getCurrentTab = (projectId: string): string | null => {
     const path = location.pathname;
     if (path === `/documents/${projectId}`) return 'details';
+    if (path === `/documents/${projectId}/timeline`) return 'timeline';
     if (path === `/documents/${projectId}/weeks`) return 'weeks';
     if (path === `/documents/${projectId}/issues`) return 'issues';
     if (path === `/documents/${projectId}/retro`) return 'retro';
@@ -1344,6 +1346,20 @@ function ProjectsList({
                       <span>Details</span>
                     </Link>
                   </li>
+                  <li role="treeitem" aria-selected={currentTab === 'timeline'}>
+                    <Link
+                      to={`/documents/${project.id}/timeline`}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors",
+                        currentTab === 'timeline'
+                          ? 'bg-border/50 text-foreground'
+                          : 'text-muted hover:bg-border/30 hover:text-foreground'
+                      )}
+                    >
+                      <TimelineIcon />
+                      <span>Timeline</span>
+                    </Link>
+                  </li>
                   <li role="treeitem" aria-selected={currentTab === 'weeks'}>
                     <Link
                       to={`/documents/${project.id}/weeks`}
@@ -1409,6 +1425,15 @@ function CalendarIcon() {
   return (
     <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  );
+}
+
+function TimelineIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 4v4m8 2v4m-5 2v4" />
     </svg>
   );
 }

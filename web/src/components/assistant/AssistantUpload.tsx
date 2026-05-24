@@ -39,9 +39,9 @@ export function AssistantUpload({ documentId, disabled = false }: AssistantUploa
     try {
       const result = await uploadFile(file, undefined, undefined, { documentId });
       setStatus(result.assistantIndexingStatus ?? 'indexed');
-    } catch {
+    } catch (uploadError) {
       setStatus('failed');
-      setError('Upload failed');
+      setError(uploadError instanceof Error ? uploadError.message : 'Upload failed');
     }
   };
 
