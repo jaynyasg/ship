@@ -208,6 +208,22 @@ async function resolveContextProjectId(
   const documentId = input.routeContext?.documentId;
   if (!documentId) return null;
 
+  const documentResult = await pool.query<{ document_type: string }>(
+    `SELECT d.document_type
+     FROM documents d
+     WHERE d.id = $1
+       AND d.workspace_id = $2
+       AND d.archived_at IS NULL
+       AND d.deleted_at IS NULL
+       AND ${VISIBILITY_FILTER_SQL('d', '$3', '$4')}
+     LIMIT 1`,
+    [documentId, input.workspaceId, input.userId, isAdmin],
+  );
+
+  if (documentResult.rows[0]?.document_type === 'project') {
+    return documentId;
+  }
+
   const result = await pool.query<{ related_id: string }>(
     `SELECT da.related_id
      FROM document_associations da
@@ -264,12 +280,13 @@ async function buildProjectTimelineSource(input: {
   const dependencyLines = timeline.dependencies
     .filter((edge) => edge.is_blocking)
     .slice(0, 4)
-    .map((edge) => `${edge.source_title ?? edge.source_id} blocks ${edge.target_title ?? edge.target_id}`);
+    .map((edge) => `${edge.source_title ?? edge.source_id} is blocked by ${edge.target_title ?? edge.target_id}`);
 
   const excerpt = [
     `Project timeline: ${timeline.scope.title}.`,
     `Rows: ${timeline.summary.total_rows}. Dependencies: ${timeline.summary.dependency_count}.`,
-    `Blocked: ${formatTitles(blockedRows.map((row) => row.title))}.`,
+    `Blocked count: ${timeline.summary.blocked_count}.`,
+    `Blocked items: ${formatTitles(blockedRows.map((row) => row.title))}.`,
     `Overdue: ${formatTitles(overdueRows.map((row) => row.title))}.`,
     `At risk: ${formatTitles(atRiskRows.map((row) => row.title))}.`,
     dependencyLines.length > 0 ? `Blocking dependencies: ${dependencyLines.join('; ')}.` : 'Blocking dependencies: none.',

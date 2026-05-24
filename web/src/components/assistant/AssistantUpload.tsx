@@ -27,8 +27,6 @@ export function AssistantUpload({ documentId, disabled = false }: AssistantUploa
   const [status, setStatus] = useState<AssistantIndexingStatus | 'uploading' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  if (!documentId) return null;
-
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -61,6 +59,7 @@ export function AssistantUpload({ documentId, disabled = false }: AssistantUploa
           type="button"
           disabled={disabled || status === 'uploading'}
           onClick={() => inputRef.current?.click()}
+          title={documentId ? 'Upload documentation for this document' : 'Upload workspace documentation for Ask Ship'}
           className="flex h-8 items-center gap-2 rounded-md border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-border/50 disabled:cursor-not-allowed disabled:text-muted"
         >
           <UploadIcon />

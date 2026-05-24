@@ -188,6 +188,25 @@ describe('retrieveAssistantSources', () => {
     expect(projectSource?.excerpt).toContain('Blocking dependencies:');
   });
 
+  it('uses the active project document when the frontend route context has no loaded document type yet', async () => {
+    const sources = await retrieveAssistantSources({
+      userId: userOneId,
+      workspaceId,
+      workspaceRole: 'member',
+      message: 'Are any items blocked?',
+      routeContext: {
+        documentId: projectId,
+        path: `/documents/${projectId}/timeline`,
+      },
+      maxSources: 8,
+    });
+
+    const projectSource = sources.find((source) => source.title === `Assistant Launch ${uniqueTerm} work summary`);
+    expect(projectSource).toBeDefined();
+    expect(projectSource?.excerpt).toContain('Timeline summary: 1 blocked');
+    expect(projectSource?.excerpt).toContain(`Launch feature rollout ${uniqueTerm} is blocked by Complete security review ${uniqueTerm}`);
+  });
+
   it('adds associated weekly plan and retro content as week sources', async () => {
     const sources = await retrieveAssistantSources({
       userId: userOneId,

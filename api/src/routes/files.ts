@@ -14,6 +14,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
   getFileAssistantIndexStatus,
   indexUploadedFileForAssistant,
+  markFileAssistantIndexFailed,
 } from '../services/assistant/indexer.js';
 import { isSupportedAssistantFile } from '../services/assistant/extractors.js';
 
@@ -231,7 +232,7 @@ filesRouter.post('/:id/local-upload', rawBodyParser, authMiddleware, async (req:
       [cdnUrl, fileId]
     );
 
-    await indexUploadedFileForAssistant({ fileId, workspaceId: workspaceId!, buffer });
+    await indexUploadedFileWithoutFailingUpload(file, workspaceId!, buffer);
     const indexStatus = await getFileAssistantIndexStatus(fileId, workspaceId!);
 
     res.json({
@@ -292,10 +293,7 @@ filesRouter.post('/:id/confirm', authMiddleware, async (req: Request, res: Respo
       [cdnUrl, fileId]
     );
 
-    if (isSupportedAssistantFile(file.filename, file.mime_type)) {
-      const buffer = await loadUploadedFileBuffer(file);
-      await indexUploadedFileForAssistant({ fileId, workspaceId: workspaceId!, buffer });
-    }
+    await indexUploadedFileWithoutFailingUpload(file, workspaceId!);
     const indexStatus = await getFileAssistantIndexStatus(fileId, workspaceId!);
 
     res.json({
@@ -558,6 +556,26 @@ async function loadUploadedFileBuffer(file: { s3_key: string }): Promise<Buffer>
   }));
 
   return s3BodyToBuffer(response.Body);
+}
+
+async function indexUploadedFileWithoutFailingUpload(
+  file: { id: string; filename: string; mime_type: string; s3_key: string },
+  workspaceId: string,
+  buffer?: Buffer,
+): Promise<void> {
+  if (!isSupportedAssistantFile(file.filename, file.mime_type)) return;
+
+  try {
+    const indexBuffer = buffer ?? await loadUploadedFileBuffer(file);
+    await indexUploadedFileForAssistant({ fileId: file.id, workspaceId, buffer: indexBuffer });
+  } catch (error) {
+    console.error('Assistant file indexing failed:', {
+      fileId: file.id,
+      filename: file.filename,
+      error,
+    });
+    await markFileAssistantIndexFailed(file.id, workspaceId, error);
+  }
 }
 
 async function s3BodyToBuffer(body: unknown): Promise<Buffer> {

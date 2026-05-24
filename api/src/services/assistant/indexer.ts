@@ -20,21 +20,20 @@ export async function indexUploadedFileForAssistant(input: {
   const file = await getFile(input.fileId, input.workspaceId);
   if (!file) return;
 
-  await deleteFileChunks(file.id, file.workspace_id);
-
-  if (!isSupportedAssistantFile(file.filename, file.mime_type)) {
-    await updateIndexStatus(file.id, file.workspace_id, 'unsupported', 'File type is not supported for Ask Ship indexing');
-    return;
-  }
-
-  if (input.buffer.byteLength > ASSISTANT_LIMITS.maxExtractionBytes) {
-    await updateIndexStatus(file.id, file.workspace_id, 'failed', `File exceeds Ask Ship extraction limit of ${ASSISTANT_LIMITS.maxExtractionBytes} bytes`);
-    return;
-  }
-
-  await updateIndexStatus(file.id, file.workspace_id, 'indexing', null);
-
   try {
+    await deleteFileChunks(file.id, file.workspace_id);
+
+    if (!isSupportedAssistantFile(file.filename, file.mime_type)) {
+      await updateIndexStatus(file.id, file.workspace_id, 'unsupported', 'File type is not supported for Ask Ship indexing');
+      return;
+    }
+
+    if (input.buffer.byteLength > ASSISTANT_LIMITS.maxExtractionBytes) {
+      await updateIndexStatus(file.id, file.workspace_id, 'failed', `File exceeds Ask Ship extraction limit of ${ASSISTANT_LIMITS.maxExtractionBytes} bytes`);
+      return;
+    }
+
+    await updateIndexStatus(file.id, file.workspace_id, 'indexing', null);
     const extracted = await extractTextFromFile({
       buffer: input.buffer,
       mimeType: file.mime_type,
@@ -91,6 +90,19 @@ export async function indexUploadedFileForAssistant(input: {
       error instanceof Error ? error.message.slice(0, 500) : 'File indexing failed',
     );
   }
+}
+
+export async function markFileAssistantIndexFailed(
+  fileId: string,
+  workspaceId: string,
+  error: unknown,
+): Promise<void> {
+  await updateIndexStatus(
+    fileId,
+    workspaceId,
+    'failed',
+    error instanceof Error ? error.message.slice(0, 500) : 'File indexing failed',
+  );
 }
 
 export async function getFileAssistantIndexStatus(fileId: string, workspaceId: string) {

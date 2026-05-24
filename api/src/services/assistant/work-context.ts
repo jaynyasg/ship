@@ -30,14 +30,16 @@ export async function retrieveStructuredWorkSources(
     : await getVisibleProjectIds(input.workspaceId, input.userId, isAdmin);
 
   const sources: AssistantRetrievedSource[] = [];
-  for (const projectId of projectIds.slice(0, 3)) {
+  for (const projectId of projectIds) {
     const projectSource = await buildStructuredProjectSource(input, isAdmin, projectId);
     if (projectSource) sources.push(projectSource);
 
     sources.push(...await buildWeeklyPlanRetroSources(input, isAdmin, projectId));
   }
 
-  return sources;
+  return sources
+    .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title))
+    .slice(0, 6);
 }
 
 async function buildStructuredProjectSource(
@@ -54,16 +56,28 @@ async function buildStructuredProjectSource(
   const overdueRows = timeline.rows.filter((row) => row.overdue);
   const atRiskRows = timeline.rows.filter((row) => row.at_risk);
   const criticalRows = timeline.rows.filter((row) => row.critical_path);
+  const rowById = new Map(timeline.rows.map((row) => [row.id, row]));
   const dependencyLines = timeline.dependencies
     .filter((edge) => edge.is_blocking)
     .slice(0, 8)
     .map((edge) => `${edge.source_title ?? edge.source_id} depends on ${edge.target_title ?? edge.target_id}`);
+  const blockedLines = blockedRows
+    .slice(0, 8)
+    .map((row) => {
+      const blockers = row.blocker_ids
+        .map((id) => rowById.get(id)?.title)
+        .filter((title): title is string => Boolean(title));
+      return blockers.length > 0
+        ? `${row.title} is blocked by ${blockers.join(', ')}`
+        : row.title;
+    });
 
   const excerpt = [
     `Structured project context: ${timeline.scope.title}.`,
+    `Timeline summary: ${timeline.summary.blocked_count} blocked, ${timeline.summary.dependency_count} dependencies, ${timeline.summary.at_risk_count} at risk, ${timeline.summary.overdue_count} overdue.`,
     `Issue states: ${summarizeIssueStates(issueRows.map((row) => row.status))}.`,
     `Weeks in scope: ${formatRows(weekRows)}.`,
-    `Blocked items: ${formatRows(blockedRows)}.`,
+    `Blocked items: ${blockedLines.length > 0 ? blockedLines.join('; ') : 'none'}.`,
     `Overdue items: ${formatRows(overdueRows)}.`,
     `At-risk items: ${formatRows(atRiskRows)}.`,
     `Critical path: ${formatRows(criticalRows)}.`,
@@ -156,7 +170,7 @@ async function getVisibleProjectIds(
        AND d.deleted_at IS NULL
        AND ${VISIBILITY_FILTER_SQL('d', '$2', '$3')}
      ORDER BY d.updated_at DESC
-     LIMIT 3`,
+     LIMIT 6`,
     [workspaceId, userId, isAdmin],
   );
 

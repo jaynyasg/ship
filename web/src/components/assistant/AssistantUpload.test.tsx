@@ -14,9 +14,24 @@ describe('AssistantUpload', () => {
     uploadFileMock.mockReset();
   });
 
-  it('does not render without a document context', () => {
+  it('renders as a workspace upload without a document context', async () => {
+    uploadFileMock.mockResolvedValue({
+      fileId: 'file-1',
+      cdnUrl: '/api/files/file-1/serve',
+      assistantIndexingStatus: 'indexed',
+    });
+
     const { container } = render(<AssistantUpload />);
-    expect(container).toBeEmptyDOMElement();
+    expect(screen.getByRole('button', { name: 'Upload Doc' })).toBeInTheDocument();
+
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(['Workspace notes'], 'workspace-notes.md', { type: 'text/markdown' });
+
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(uploadFileMock).toHaveBeenCalledWith(file, undefined, undefined, { documentId: undefined });
+    });
   });
 
   it('uploads files with the current document context', async () => {
