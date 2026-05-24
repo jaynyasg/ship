@@ -12,7 +12,7 @@ The exact billable AI dollar spend is not stored in this repository and was not 
 | Added third-party SaaS tools | $0 | No new paid telemetry, analytics, security, or hosted test services were added |
 | Local development tools | $0 incremental | Existing local Node, pnpm, PostgreSQL, Docker, and Git tooling |
 | New dependency cost | $0 | Added packages are open-source dev/runtime dependencies installed through pnpm |
-| Deployment infrastructure | Not yet deployed | AWS application deployment was deferred due cost; see `DEPLOYMENT_DECISION.md` for the `$220-$300/month` AWS estimate and Render decision |
+| Deployment infrastructure | Render billing dashboard required for exact spend | Public submission deployment is live on Render; AWS application deployment was deferred due cost. See `DEPLOYMENT_DECISION.md` for the `$220-$300/month` AWS estimate and Render decision |
 
 ## How to Complete the Dollar Figure
 
@@ -46,7 +46,7 @@ Pro-rated AI cost = monthly subscription price * (audit work days / billing-cycl
 
 **Exact cost accounting.** The assistant could not derive exact AI billing from repository state. Any exact dollar number must come from the user's billing dashboard.
 
-**Deployment authority.** The assistant can inspect deployment scripts and readiness, but it should not deploy without explicit approval and credentials. The Ship deploy path touches AWS, Terraform state, SSM parameters, S3, CloudFront, Elastic Beanstalk, and Docker.
+**Deployment authority.** The assistant can inspect deployment scripts and readiness, but it should not deploy without explicit approval and credentials. The original Ship deploy path touches AWS, Terraform state, SSM parameters, S3, CloudFront, Elastic Beanstalk, and Docker. The final public submission deploy used Render instead; exact infrastructure spend should come from Render billing.
 
 **Cloud cost estimation.** AWS pricing depends on region, resource uptime, traffic, log volume, and managed service request volume. The repository can support a bounded estimate from Terraform, but exact monthly spend must come from AWS Pricing Calculator and billing data after deployment.
 

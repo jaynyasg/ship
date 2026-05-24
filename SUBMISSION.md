@@ -133,6 +133,7 @@ This Render run also satisfies the manual review requirements for CORS/CSP confi
 - `DEPLOYMENT_DECISION.md` - AWS cost finding and rationale for choosing Render as the submission deployment target.
 - `DEPLOYMENT.md` - Render deployment, security probe trigger, and public verification evidence.
 - `DEPLOYMENT_CHECKLIST.md` - Render submission checklist with captured public security-probe evidence.
+- `demo-script-final.md` - 5-minute demo script with step-by-step show-and-tell guidance.
 - `THREAT_MODEL.md` - dependency security status, Phase 06 remediation, and residual risk.
 - `eval/results/phase2-implementation-notes.md` - concise implementation and measurement log.
 - `docs/brainstorms/2026-05-20-phase-04-ms-project-inspired-improvements.md` - Phase 04 implementation evidence for Microsoft Project-inspired timeline/dependency improvements.
