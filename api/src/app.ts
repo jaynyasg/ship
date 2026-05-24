@@ -34,6 +34,7 @@ import dashboardRoutes from './routes/dashboard.js';
 import associationsRoutes from './routes/associations.js';
 import accountabilityRoutes from './routes/accountability.js';
 import aiRoutes from './routes/ai.js';
+import assistantRoutes from './routes/assistant.js';
 import weeklyPlansRoutes, { weeklyRetrosRouter } from './routes/weekly-plans.js';
 import { documentCommentsRouter, commentsRouter } from './routes/comments.js';
 import { setupSwagger } from './swagger.js';
@@ -91,6 +92,15 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests. Please slow down.' },
+});
+
+// Assistant requests can trigger model spend, so they get their own tighter bucket.
+const assistantLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: isTestEnv ? 1000 : isDevEnv ? 120 : 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: { code: 'RATE_LIMITED', message: 'Too many Ask Ship requests. Please slow down.' } },
 });
 
 function getWebDistPath(): string {
@@ -223,6 +233,9 @@ export function createApp(corsOrigin: string = 'http://localhost:5173'): express
 
   // AI analysis routes - plan and retro quality feedback (CSRF protected)
   app.use('/api/ai', conditionalCsrf, aiRoutes);
+
+  // Ask Ship assistant routes - workspace-scoped AI surface (CSRF protected)
+  app.use('/api/assistant', assistantLimiter, conditionalCsrf, assistantRoutes);
 
   // Weekly plans routes - per-person accountability documents (CSRF protected)
   app.use('/api/weekly-plans', conditionalCsrf, weeklyPlansRoutes);

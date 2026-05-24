@@ -33,6 +33,8 @@ import { SelectionPersistenceProvider } from '@/contexts/SelectionPersistenceCon
 import { ActionItemsModal } from '@/components/ActionItemsModal';
 import { AccountabilityBanner } from '@/components/AccountabilityBanner';
 import { ProjectContextSidebar } from '@/components/sidebars/ProjectContextSidebar';
+import { AskShipButton } from '@/components/assistant/AskShipButton';
+import { AskShipPanel } from '@/components/assistant/AskShipPanel';
 
 type Mode = 'docs' | 'issues' | 'projects' | 'programs' | 'sprints' | 'team' | 'settings' | 'dashboard' | 'project-context';
 
@@ -52,6 +54,7 @@ export function AppLayout() {
   const [workspaceSwitcherOpen, setWorkspaceSwitcherOpen] = useState(false);
   const [projectSetupWizardOpen, setProjectSetupWizardOpen] = useState(false);
   const [actionItemsModalOpen, setActionItemsModalOpen] = useState(false);
+  const [askShipOpen, setAskShipOpen] = useState(false);
   const [actionItemsModalShownOnLoad, setActionItemsModalShownOnLoad] = useState(false);
 
   // Session timeout handling
@@ -201,6 +204,12 @@ export function AppLayout() {
   };
 
   const activeDocumentId = getActiveDocumentId();
+  const assistantContext = useMemo(() => ({
+    path: location.pathname,
+    documentId: activeDocumentId,
+    documentType: currentDocumentType ?? undefined,
+    projectId: currentDocumentProjectId ?? undefined,
+  }), [activeDocumentId, currentDocumentProjectId, currentDocumentType, location.pathname]);
 
   const handleModeClick = (mode: Mode) => {
     switch (mode) {
@@ -387,6 +396,10 @@ export function AppLayout() {
               active={activeMode === 'team'}
               onClick={() => handleModeClick('team')}
               showBadge={standupDue}
+            />
+            <AskShipButton
+              active={askShipOpen}
+              onClick={() => setAskShipOpen((open) => !open)}
             />
           </div>
 
@@ -578,6 +591,12 @@ export function AppLayout() {
       <ActionItemsModal
         open={actionItemsModalOpen}
         onClose={() => setActionItemsModalOpen(false)}
+      />
+
+      <AskShipPanel
+        open={askShipOpen}
+        onOpenChange={setAskShipOpen}
+        context={assistantContext}
       />
     </div>
     </SelectionPersistenceProvider>
