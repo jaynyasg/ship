@@ -51,6 +51,37 @@ async function waitForDocumentContent(
   expect(lastContent, `${endpoint}/${documentId} should include persisted editor content`).toContain(expectedText)
 }
 
+async function waitForMyWeekItem(page: Page, kind: 'plan' | 'retro', expectedText: string): Promise<void> {
+  let lastItems = ''
+  const deadline = Date.now() + 30000
+
+  while (Date.now() < deadline) {
+    const result = await page.evaluate(async (targetKind) => {
+      const response = await fetch('/api/dashboard/my-week', { credentials: 'include' })
+      if (!response.ok) {
+        return { itemsText: '', status: response.status }
+      }
+
+      const data = await response.json() as {
+        plan?: { items?: Array<{ text?: string }> } | null
+        retro?: { items?: Array<{ text?: string }> } | null
+      }
+      const target = data[targetKind]
+      const itemsText = JSON.stringify((target?.items ?? []).map((item) => item.text ?? ''))
+      return { itemsText, status: response.status }
+    }, kind)
+
+    lastItems = result.itemsText
+    if (lastItems.includes(expectedText)) {
+      return
+    }
+
+    await page.waitForTimeout(500)
+  }
+
+  expect(lastItems, `/api/dashboard/my-week ${kind} items should include persisted editor content`).toContain(expectedText)
+}
+
 async function typeNumberedListItem(page: Page, text: string): Promise<void> {
   await page.keyboard.type('1. ')
   await page.waitForTimeout(250)
@@ -92,6 +123,7 @@ test.describe('My Week - stale data after editing plan/retro', () => {
     const planId = await currentDocumentId(page)
     await expect(page.getByText('Saved')).toBeVisible({ timeout: 10000 })
     await waitForDocumentContent(page, 'weekly-plans', planId, 'Ship the new dashboard feature')
+    await waitForMyWeekItem(page, 'plan', 'Ship the new dashboard feature')
 
     // 7. Navigate back to /my-week using client-side navigation (Dashboard icon in rail)
     await page.getByRole('button', { name: 'Dashboard' }).click()
@@ -126,6 +158,7 @@ test.describe('My Week - stale data after editing plan/retro', () => {
     const retroId = await currentDocumentId(page)
     await expect(page.getByText('Saved')).toBeVisible({ timeout: 10000 })
     await waitForDocumentContent(page, 'weekly-retros', retroId, 'Completed the API refactoring')
+    await waitForMyWeekItem(page, 'retro', 'Completed the API refactoring')
 
     // 7. Navigate back to /my-week using client-side navigation
     await page.getByRole('button', { name: 'Dashboard' }).click()

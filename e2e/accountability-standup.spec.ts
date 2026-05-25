@@ -24,9 +24,36 @@ async function getCsrfToken(page: import('@playwright/test').Page, apiUrl: strin
   return token;
 }
 
+const FEDERAL_HOLIDAYS = new Set([
+  '2025-01-01',
+  '2025-01-20',
+  '2025-02-17',
+  '2025-05-26',
+  '2025-06-19',
+  '2025-07-04',
+  '2025-09-01',
+  '2025-10-13',
+  '2025-11-11',
+  '2025-11-27',
+  '2025-12-25',
+  '2026-01-01',
+  '2026-01-19',
+  '2026-02-16',
+  '2026-05-25',
+  '2026-06-19',
+  '2026-07-03',
+  '2026-09-07',
+  '2026-10-12',
+  '2026-11-11',
+  '2026-11-26',
+  '2026-12-25',
+]);
+
 function isBusinessDay(): boolean {
-  const day = new Date().getUTCDay();
-  return day >= 1 && day <= 5; // Mon=1 through Fri=5
+  const today = new Date();
+  const day = today.getUTCDay();
+  const todayStr = today.toISOString().split('T')[0];
+  return day >= 1 && day <= 5 && !FEDERAL_HOLIDAYS.has(todayStr);
 }
 
 test.describe('Standup Accountability Flow', () => {
